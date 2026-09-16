@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2b1055"/>
+      <stop offset="55%" stop-color="#7597de"/>
+      <stop offset="100%" stop-color="#0ea5e9"/>
+    </linearGradient>
+    <linearGradient id="play" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#c7f9ff"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="104" fill="url(#bg)"/>
+  <g stroke="#ffffff" stroke-opacity="0.28" stroke-width="14" fill="none">
+    <path d="M64 372c60-70 118-70 178 0s118 70 178 0"/>
+    <path d="M64 424c60-70 118-70 178 0s118 70 178 0"/>
+  </g>
+  <path d="M196 132l158 92-158 92z" fill="url(#play)"/>
+  <text x="256" y="486" font-family="DejaVu Sans, Arial, sans-serif" font-size="58" font-weight="700"
+        fill="#ffffff" text-anchor="middle" letter-spacing="2">WISE&#8594;M3U</text>
+</svg>

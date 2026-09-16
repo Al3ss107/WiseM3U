@@ -1,0 +1,1660 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>WiseM3U — configurazione</title>
+<style>
+  /* ============ token di design ============ */
+  :root{
+    --bg:#0b1020; --card:#151d38; --card2:#1a2342;
+    --line:#2a3763; --line2:#3a4c85; --txt:#e8edff; --mut:#93a0c9;
+    --acc:#4f8cff; --ok:#22c55e; --warn:#f59e0b; --err:#ef4444; --chip:#22305c;
+    color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+  body{margin:0;color:var(--txt);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Ubuntu,sans-serif;
+       background:radial-gradient(1100px 650px at 12% -10%,#1c2a5e 0%,transparent 55%),
+                  radial-gradient(900px 550px at 105% 0%,#16224e 0%,transparent 50%),
+                  var(--bg);
+       background-attachment:fixed;
+       padding-bottom:calc(90px + env(safe-area-inset-bottom))}
+  ::selection{background:rgba(79,140,255,.4)}
+  /* ---------- barra superiore ---------- */
+  header{position:sticky;top:0;z-index:20;background:rgba(11,16,32,.82);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+         border-bottom:1px solid var(--line);padding:10px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  header img{width:38px;height:38px;border-radius:10px;box-shadow:0 2px 12px rgba(0,0,0,.4)}
+  header h1{font-size:17px;margin:0;letter-spacing:.2px}
+  header .sub{color:var(--mut);font-size:12.5px}
+  .spacer{flex:1}
+  main{max-width:1180px;margin:0 auto;padding:16px}
+  .links{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  a.lnk{color:#a9e8ff;text-decoration:none;font-size:12.5px;background:#131c38;border:1px solid var(--line);
+        padding:4px 11px;border-radius:999px;transition:border-color .15s,background .15s}
+  a.lnk:hover{border-color:var(--line2);background:#182346}
+  /* ---------- card e sezioni ---------- */
+  .card{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--line);
+        border-radius:16px;padding:16px;margin-bottom:16px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+  h2{font-size:15px;margin:0 0 12px;letter-spacing:.4px;color:#c6d6ff;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  h2 .n{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 5px;border-radius:7px;
+        background:linear-gradient(180deg,#3b76e8,#2b5cc4);color:#fff;font-size:12px;font-weight:800;flex:0 0 auto}
+  .secttl{margin:22px 2px 12px}
+  label{display:block;font-size:12px;color:var(--mut);margin-bottom:4px}
+  .hint{color:var(--mut);font-size:12.5px;margin-top:6px}
+  .hint b{color:#cdd9ff}
+  code{background:#0e1530;border:1px solid var(--line);border-radius:7px;padding:2px 7px;font-size:12.5px;
+       color:#a9e8ff;word-break:break-all}
+  .sep{height:1px;background:var(--line);margin:12px 0}
+  .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(225px,1fr));gap:12px}
+  .kv{font-size:12.5px;color:var(--mut)}
+  .kv b{color:var(--txt)}
+  .dim{opacity:.75}
+  /* ---------- controlli ---------- */
+  input[type=text],input[type=url],input[type=number],input[type=password],select,textarea{
+    width:100%;background:#0e1530;border:1px solid var(--line);color:var(--txt);
+    border-radius:10px;padding:9px 11px;font:inherit;outline:none;
+    transition:border-color .15s,box-shadow .15s}
+  input:focus,select:focus,textarea:focus{border-color:var(--acc);box-shadow:0 0 0 3px rgba(79,140,255,.18)}
+  input::placeholder,textarea::placeholder{color:#5d6b96}
+  textarea{resize:vertical}
+  button{background:linear-gradient(180deg,#4f8cff,#3a6fe0);color:#fff;border:1px solid #3a6fe0;border-radius:10px;
+         padding:9px 15px;font:inherit;font-weight:600;cursor:pointer;
+         transition:filter .15s,transform .05s,box-shadow .15s;box-shadow:0 2px 10px rgba(58,111,224,.25)}
+  button:hover{filter:brightness(1.12)}
+  button:active{transform:translateY(1px)}
+  button.ghost{background:#1d2849;color:#cfe0ff;border:1px solid var(--line);box-shadow:none}
+  button.ghost:hover{border-color:var(--line2);background:#22305a}
+  button.danger{background:#3a1220;color:#ffb3c0;border:1px solid #5c1d2c;box-shadow:none}
+  button.danger:hover{background:#4a1828}
+  button.small{padding:6px 11px;font-size:12.5px;border-radius:9px}
+  button:disabled{opacity:.5;cursor:progress}
+  :where(button,a,input,select,textarea,summary):focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+  .chk{display:flex;align-items:center;gap:8px;background:#0e1530;border:1px solid var(--line);
+       border-radius:10px;padding:8px 11px;cursor:pointer;user-select:none;transition:border-color .15s,background .15s}
+  .chk:hover{border-color:var(--line2)}
+  .chk input{width:17px;height:17px;accent-color:var(--acc);flex:0 0 auto}
+  .chk.on{border-color:#3c6bd6;background:#14213f}
+  /* ---------- feedback e badge ---------- */
+  .badge{display:inline-flex;align-items:center;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;
+         background:var(--chip);color:#cfe0ff;margin-left:6px;white-space:nowrap}
+  .badge.ready{background:#123324;color:#7ef0ac}
+  .badge.error{background:#3a1220;color:#ff9aa8}
+  .badge.fetching{background:#3a2c0d;color:#ffd479;animation:pulse 1.6s ease-in-out infinite}
+  .badge.idle{background:#242c4a;color:#a9b6dd}
+  @keyframes pulse{50%{opacity:.55}}
+  .cnt{color:var(--mut);font-size:11.5px;white-space:nowrap}
+  .pill{display:inline-flex;gap:6px;align-items:center;background:#0e1530;border:1px solid var(--line);
+        border-radius:999px;padding:3px 10px;font-size:12px;color:var(--mut)}
+  .err{color:#ff9aa8;font-size:12.5px;background:#2a1220;border:1px solid #5c1d2c;border-radius:9px;padding:8px 11px;margin-top:8px}
+  .warn{color:#ffd28a;font-size:12.5px;background:#2a2012;border:1px solid #5c4a1d;border-radius:9px;padding:8px 11px;margin-top:8px}
+  .url{font-size:12px;color:var(--mut);word-break:break-all}
+  .row{display:flex;gap:12px;flex-wrap:wrap}
+  .row>*{flex:1 1 180px}
+  .btns{display:flex;gap:8px;align-items:flex-end;flex:0 0 auto;flex-wrap:wrap}
+  /* ---------- pannelli richiudibili ---------- */
+  details.fold{border:1px solid var(--line);border-radius:12px;margin-top:12px;background:rgba(14,21,48,.55)}
+  details.fold>summary{cursor:pointer;list-style:none;padding:11px 13px;font-weight:700;font-size:13.5px;color:#c6d6ff;
+    display:flex;align-items:center;gap:8px;user-select:none;border-radius:12px}
+  details.fold>summary::-webkit-details-marker{display:none}
+  details.fold>summary::before{content:"\25B8";color:var(--acc);transition:transform .15s;flex:0 0 auto}
+  details.fold[open]>summary::before{transform:rotate(90deg)}
+  details.fold[open]>summary{border-radius:12px 12px 0 0}
+  details.fold>summary:hover{background:rgba(79,140,255,.07)}
+  details.fold .foldbody{padding:4px 13px 13px}
+  details.help{margin-top:8px}
+  details.help>summary{cursor:pointer;color:var(--mut);font-size:12.5px;user-select:none}
+  details.help>summary:hover{color:#cfe0ff}
+  details.help .hint{margin:6px 0 2px;padding:9px 11px;background:rgba(14,21,48,.6);border:1px solid var(--line);border-radius:9px}
+  /* ---------- card lista ---------- */
+  .listcard{border-left:3px solid var(--acc)}
+  .listhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+  .listhead .name{font-weight:800;font-size:16.5px;letter-spacing:.2px}
+  .acts{display:flex;gap:6px;flex-wrap:wrap}
+  /* ---------- intestazione playlist ---------- */
+  .plhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:16px}
+  .plhead h2{margin:0}
+  .pltools{display:flex;gap:6px;flex-wrap:wrap;align-items:center;flex:1 1 330px;justify-content:flex-end}
+  .pltools input{flex:1 1 150px;max-width:230px}
+  .pltools button{flex:0 0 auto}
+  /* ---------- rami ---------- */
+  .branches{max-height:min(520px,62vh);overflow:auto;background:#0b1129;border:1px solid var(--line);
+            border-radius:12px;padding:8px;margin-top:10px;scrollbar-width:thin}
+  .branches::-webkit-scrollbar{width:9px}
+  .branches::-webkit-scrollbar-thumb{background:#26335e;border-radius:9px;border:2px solid #0b1129}
+  .brow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 8px;border-radius:10px;transition:background .12s}
+  .brow:hover{background:#131d3d}
+  .brow.off{opacity:.45}
+  .brow input[type=checkbox]{width:16px;height:16px;accent-color:var(--acc);cursor:pointer;flex:0 0 auto}
+  .brow .bname{flex:1 1 150px;min-width:0}
+  .brow .bname.renamed{border-color:#3c6bd6}
+  .bcount{flex:0 0 auto}
+  .bhandle{cursor:grab;color:var(--mut);padding:2px 4px;flex:0 0 auto;user-select:none;font-size:15px;line-height:1}
+  .bhandle:active{cursor:grabbing}
+  .expbtn{background:#1d2849;border:1px solid var(--line);color:#cfe0ff;border-radius:8px;
+          padding:4px 10px;font-size:11.5px;cursor:pointer;flex:0 0 auto;white-space:nowrap;transition:border-color .15s,background .15s}
+  .expbtn:hover{border-color:var(--line2);background:#22305a}
+  /* ---------- canali di un ramo ---------- */
+  .chans{margin:2px 0 8px 26px;border-left:2px solid #2c3d74;padding:6px 8px;
+         background:#0d1430;border-radius:0 10px 10px 0}
+  .chead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:2px 4px 6px}
+  .chead .cfilter{flex:1 1 170px;max-width:250px;padding:6px 10px;font-size:12.5px}
+  .chead input[data-cadd]{flex:1 1 220px}
+  .chead button[data-caddbtn]{flex:0 0 auto}
+  .crow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:5px 6px;border-radius:8px;transition:background .12s}
+  .crow:hover{background:#131d3d}
+  .crow.off{opacity:.45}
+  .crow .cname{flex:1 1 150px;min-width:0;padding:6px 10px;font-size:12.5px}
+  .crow .cname.renamed{border-color:#3c6bd6}
+  .crow .cmove{flex:1 1 130px;max-width:200px;background:#101a3a;color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-size:11.5px}
+  .crow .cmove.renamed{border-color:#3c6bd6}
+  .crow input[type=checkbox]{width:15px;height:15px;accent-color:var(--acc);cursor:pointer;flex:0 0 auto}
+  /* ---------- drag & drop ---------- */
+  .brow.dragging,.crow.dragging{opacity:.35}
+  .drag-before{box-shadow:0 -3px 0 var(--acc)}
+  .drag-after{box-shadow:0 3px 0 var(--acc)}
+  .drag-into{outline:2px dashed var(--acc);outline-offset:-2px;background:rgba(76,127,255,.10)}
+  @keyframes sdflash{0%{box-shadow:0 0 0 4px var(--acc)}100%{box-shadow:0 0 0 0 rgba(79,140,255,0)}}
+  .flash{animation:sdflash 1.4s ease-out}
+  /* ---------- cestino ---------- */
+  .trash{margin-top:10px;border:1px dashed var(--line2);border-radius:12px;padding:10px;background:rgba(14,21,48,.4)}
+  .trashrow{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:6px 2px}
+  .trashrow+.trashrow{border-top:1px solid rgba(255,255,255,.05)}
+  /* ---------- menu laterale liste ---------- */
+  #sdToggle{position:fixed;right:12px;top:64px;z-index:60;box-shadow:0 4px 14px rgba(0,0,0,.4)}
+  #sidemenu{position:fixed;right:12px;top:100px;width:224px;max-height:calc(100vh - 130px);overflow:auto;
+    background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px;z-index:60;
+    box-shadow:0 8px 24px rgba(0,0,0,.4);scrollbar-width:thin}
+  #sidemenu[hidden]{display:none}
+  .sdtitle{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.8px;padding:4px 6px 8px}
+  .sditem{display:flex;gap:4px;align-items:center;margin:2px 0}
+  .sditem .sdname{flex:1 1 auto;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    background:var(--card2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:6px 9px;cursor:pointer;
+    font:inherit;font-size:12.5px;transition:border-color .15s,background .15s}
+  .sditem .sdname:hover{border-color:var(--line2);background:#22305a}
+  .sditem .updn{background:var(--card2);border:1px solid var(--line);color:var(--mut);border-radius:7px;
+    padding:4px 6px;cursor:pointer;font-size:10px;min-height:0}
+  .sditem .updn:hover{color:#cfe0ff;border-color:var(--line2)}
+  /* ---------- righe dei link ---------- */
+  .linkrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .linkrow .lk{font-size:12.5px;color:var(--mut);flex:0 0 auto;min-width:118px}
+  .linkrow code{flex:1 1 220px}
+  .linkrow button{flex:0 0 auto}
+  /* ---------- footer e toast ---------- */
+  footer{position:fixed;left:0;right:0;bottom:0;background:rgba(11,16,32,.92);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+         border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom));
+         display:flex;gap:10px;align-items:center;flex-wrap:wrap;z-index:30}
+  footer #status{margin-left:auto}
+  .toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translate(-50%,8px);background:#0f1a38;
+         border:1px solid var(--line2);border-radius:12px;padding:11px 18px;z-index:50;opacity:0;
+         transition:.25s;pointer-events:none;max-width:90vw;box-shadow:0 8px 26px rgba(0,0,0,.5)}
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+  /* le tendine aperte usano il fondo chiaro di sistema: forza il contrasto */
+  select option, datalist option{background:#101725;color:#e8eef7}
+  /* ---------- tablet ---------- */
+  @media (max-width:760px){
+    main{padding:12px}
+    .card{padding:13px;border-radius:14px}
+    .chans{margin-left:14px}
+    .pltools{justify-content:flex-start;flex:1 1 100%}
+    .pltools input{max-width:none}
+  }
+  /* ---------- smartphone ---------- */
+  @media (max-width:560px){
+    /* 16px: evita lo zoom automatico di iOS al focus degli input */
+    input[type=text],input[type=url],input[type=number],input[type=password],select,textarea,
+    .crow .cname,.crow .cmove,.chead .cfilter{font-size:16px}
+    .row>*{flex:1 1 100%}
+    .btns{flex:1 1 100%}
+    .btns button{flex:1 1 auto}
+    button{min-height:44px}
+    button.small{min-height:38px;padding:7px 12px}
+    .expbtn{min-height:38px;padding:7px 12px}
+    .bhandle{padding:8px 6px}
+    .grid2{grid-template-columns:1fr}
+    .listhead .name{font-size:16px}
+    .plhead h2{flex:1 1 100%}
+    footer{gap:8px}
+    footer #btnSave{flex:1 1 100%;min-height:46px}
+    footer #btnReload{flex:1 1 auto}
+    footer #status,footer #appVersion{flex:1 1 auto;text-align:center;font-size:12px}
+    footer #status{margin-left:0}
+    #sidemenu{left:8px;right:8px;top:auto;bottom:calc(78px + env(safe-area-inset-bottom));width:auto;max-height:55vh}
+    .sditem .sdname{padding:9px 11px}
+    .sditem .updn{padding:9px 10px;font-size:11px}
+    #sdToggle{top:58px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+    html{scroll-behavior:auto}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <img src="/logo.svg" alt="logo">
+  <div>
+    <h1>WiseM3U <span class="sub">addon Stremio &amp; Nuvio</span></h1>
+    <div class="sub">Liste WisePlay → playlist M3U + cataloghi</div>
+  </div>
+  <div class="spacer"></div>
+  <div class="links">
+    <a class="lnk" href="/manifest.json" target="_blank">manifest.json</a>
+    <a class="lnk" id="m3uLink" href="/playlist.m3u" target="_blank">playlist.m3u</a>
+    <a class="lnk" href="/channels.json" target="_blank">channels.json</a>
+    <a class="lnk" href="/healthz" target="_blank">healthz</a>
+  </div>
+</header>
+
+<main>
+
+  <!-- ============ AGGIUNGI LISTA ============ -->
+  <section class="card">
+    <h2><span class="n">1</span> Aggiungi una lista (WisePlay o M3U)</h2>
+    <div class="row">
+      <div style="flex:3 1 320px">
+        <label>URL della lista (WisePlay JSON o playlist M3U)</label>
+        <input id="newUrl" type="url" placeholder="https://esempio.it/lista.json oppure https://esempio.it/lista.m3u">
+      </div>
+      <div style="flex:2 1 200px">
+        <label>Nome (opzionale)</label>
+        <input id="newName" type="text" placeholder="es. La mia lista">
+      </div>
+      <div class="btns">
+        <button class="ghost" id="btnProbe">Test</button>
+        <button id="btnAdd">Aggiungi</button>
+        <button class="ghost" id="btnNewPList" title="Crea una lista vuota da comporre con canali e playlist delle tue liste">⭐ Crea lista personalizzata</button>
+      </div>
+    </div>
+    <details class="help">
+      <summary>ℹ️ Quali link funzionano e come</summary>
+      <div class="hint">Accetta sia le catene JSON WisePlay (link accorciati, gist, php…) sia un normale
+        <b>link M3U/M3U8</b>: i <code>group-title</code> della playlist diventano i rami/generi.
+        L'addon segue i redirect, scarica i JSON annidati e importa anche i rami
+        <code>isHost</code> che puntano a file <code>.m3u</code>. Lo scaricamento avviene in
+        background: puoi continuare a usare la pagina mentre lavora.
+        Nota: se l'URL sorgente e' servito da un altro addon/container sullo stesso server
+        (es. un altro addon), quel servizio lavorera' a ogni scaricamento/aggiornamento: e' il
+        comportamento atteso, perche' WiseM3U deve scaricare la sorgente.</div>
+    </details>
+    <div id="probeBox"></div>
+  </section>
+
+  <!-- ============ IMPOSTAZIONI GLOBALI ============ -->
+  <section class="card">
+    <h2><span class="n">2</span> Impostazioni generali</h2>
+    <div class="grid2">
+      <div>
+        <label>Nome dell'addon</label>
+        <input id="s_addonName" type="text">
+      </div>
+      <div>
+        <label>ID addon</label>
+        <input id="s_addonId" type="text">
+      </div>
+      <div>
+        <label>Auto-aggiornamento liste (minuti)</label>
+        <input id="s_autoRefreshMinutes" type="number" min="0">
+        <div class="hint">1440 = ogni giorno (default). 0 = disattivato.</div>
+      </div>
+      <div>
+        <label>Validità cache (minuti)</label>
+        <input id="s_cacheTtlMinutes" type="number" min="1">
+      </div>
+      <div>
+        <label>Profondità massima analisi</label>
+        <input id="s_maxDepth" type="number" min="1" max="12">
+      </div>
+      <div>
+        <label>Token di accesso (vuoto = pubblico)</label>
+        <input id="s_token" type="text" placeholder="es. m1o2n3d4">
+      </div>
+      <div>
+        <label>URL pubblico (nginx / dominio personale)</label>
+        <input id="s_publicBaseUrl" type="text" placeholder="https://mio.dominio">
+        <div class="hint">Se l'addon sta dietro nginx con dominio + certificato, scrivi qui la base
+          pubblica (es. <code>https://tv.miodominio.it</code>): i link mostrati useranno quella.</div>
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <label class="chk on" style="flex:0 0 auto"><input type="checkbox" id="s_dedupeGlobal"> Rimuovi i duplicati globali (stesso URL)</label>
+      <label class="chk on" style="flex:0 0 auto"><input type="checkbox" id="s_fitLogos"> Loghi proporzionati nei cataloghi</label>
+      <div class="spacer"></div>
+      <button class="ghost small" id="btnClearCache" style="flex:0 0 auto">Svuota cache</button>
+    </div>
+    <div class="hint">Se imposti un <b>token</b>, manifest/playlist/cataloghi richiederanno
+      <code>?token=...</code>: la pagina di configurazione mostra già gli URL completi da incollare in
+      Nuvio e Stremio.</div>
+  </section>
+
+  <!-- ============ COLLEGA I CLIENT ============ -->
+  <section class="card">
+    <h2><span class="n">3</span> Collega Nuvio, Stremio o un'app IPTV</h2>
+    <div class="linkrow">
+      <span class="lk">Nuvio / Stremio →</span>
+      <code id="manifestUrl">…</code>
+      <button class="ghost small" id="btnCopyManifest" title="Copia l'URL del manifest negli appunti">⧉ copia</button>
+    </div>
+    <div class="linkrow">
+      <span class="lk">App IPTV →</span>
+      <code id="m3uUrl">…</code>
+      <button class="ghost small" id="btnCopyM3u" title="Copia l'URL della playlist M3U negli appunti">⧉ copia</button>
+    </div>
+    <div class="hint">In <b>Nuvio</b>: Impostazioni → Contenuti e scoperta → Componenti aggiuntivi, incolla l'URL del manifest.
+      In <b>Stremio</b>: Addon → Community, incolla lo stesso URL.
+      L'URL <b>M3U</b> funziona in qualsiasi lettore IPTV (contiene solo le liste attive).</div>
+  </section>
+
+  <!-- ============ LISTE ============ -->
+  <h2 class="secttl"><span class="n">4</span> Le tue liste</h2>
+  <section id="lists"></section>
+
+</main>
+
+<button class="ghost small" id="sdToggle" title="Mostra/nascondi l'elenco delle liste">☰ Liste</button>
+<aside id="sidemenu" hidden></aside>
+
+<footer>
+  <button id="btnSave">💾 Salva configurazione</button>
+  <button class="ghost" id="btnReload">↻ Ricarica</button>
+  <span id="status" class="kv"></span>
+  <span id="appVersion" class="kv dim"></span>
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
+let CFG = null;
+let TREES = {};   // id -> { meta, fetchedAt, branches:[{path,name,displayName,stations,image,enabled}] }
+
+const PROTO_LABEL = { http:'HTTP/HLS', ace:'AceStream', rtmp:'RTMP', rtsp:'RTSP', other:'altri' };
+
+function toast(msg, ms=2600){
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._h); t._h = setTimeout(()=>t.classList.remove('show'), ms);
+}
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function tokenQs(){ const t = CFG && CFG.settings.token; return t ? `?token=${encodeURIComponent(t)}` : ''; }
+function apiUrl(p){
+  const a = localStorage.getItem('wisem3u_admin') || '';
+  const parts = [];
+  if (p.includes('?')) parts.push(p.split('?')[1]);
+  if (a) parts.push(`token=${encodeURIComponent(a)}`);
+  return parts.length ? `${p.split('?')[0]}?${parts.join('&')}` : p;
+}
+const sleep = (ms) => new Promise(r=>setTimeout(r, ms));
+
+/* ---------------- rami: stato locale ---------------- */
+/* L'ordine mostrato è quello del server (già ordinato secondo options.order).
+   Le modifiche locali (attiva/disattiva, rinomina, sposta) aggiornano
+   options.disabledPaths / options.renames / options.order; il salvataggio
+   finale passa da PUT /api/config come tutto il resto. */
+
+function branchesOf(id){ return (TREES[id] && TREES[id].branches) || null; }
+
+function branchEnabled(list, path){
+  return !(list.options.disabledPaths || []).includes(path);
+}
+function setBranchEnabled(list, path, on){
+  const dis = new Set(list.options.disabledPaths || []);
+  if (on) dis.delete(path); else dis.add(path);
+  list.options.disabledPaths = Array.from(dis);
+}
+function setBranchName(list, path, original, value){
+  const v = String(value || '').trim();
+  list.options.renames = list.options.renames || {};
+  if (!v || v === original) delete list.options.renames[path];
+  else list.options.renames[path] = v;
+}
+function branchDisplayName(list, b){
+  return (list.options.renames && list.options.renames[b.path]) || b.name;
+}
+function rebuildOrder(list){
+  const bs = branchesOf(list.id);
+  if (bs) list.options.order = bs.map(b=>b.path);
+}
+/* ---------------- render ---------------- */
+
+const EXPANDED = new Set();  // "listId|path" dei rami con la lista canali aperta
+const CHANS = {};            // "listId|path" -> [{name, shown, enabled}]
+
+function renderBranches(list){
+  const bs = branchesOf(list.id);
+  const st = (list.state && list.state.status) || 'idle';
+  if (!bs){
+    if (st === 'fetching') return '<div class="hint" style="margin-top:10px">⏳ Scaricamento della lista in corso… la sezione delle playlist appare appena è pronto.</div>';
+    if (st === 'error') return `<div class="err">Scaricamento fallito: ${esc((list.state&&list.state.error)||'')} — riprova con <b>Aggiorna</b>.</div>`;
+    return '<div class="hint" style="margin-top:10px">Rami non caricati: premi <b>Aggiorna</b> per scaricare la lista.</div>';
+  }
+  const rows = bs.map((b)=>{
+    const on = branchEnabled(list, b.path);
+    const shown = branchDisplayName(list, b);
+    const renamed = shown !== b.name;
+    const open = EXPANDED.has(`${list.id}|${b.path}`);
+    const custom = !!b.custom;
+    let html = `<div class="brow ${on?'':'off'}" draggable="true" data-path="${esc(b.path)}" data-name="${esc(b.name)}" data-search="${esc((b.name+' '+shown).toLowerCase())}">
+      <span class="bhandle" title="Trascina per riordinare">☰</span>
+      ${custom
+        ? '<input type="checkbox" checked disabled title="Gruppo personale: per svuotarlo riporta altrove i canali">'
+        : `<input type="checkbox" data-cb="${esc(b.path)}" ${on?'checked':''} title="Includi/escludi questo ramo">`}
+      <input class="bname ${renamed?'renamed':''}" type="text" value="${esc(shown)}" placeholder="${esc(b.name)}" title="Nome del ramo (diventa il genere nel catalogo)">
+      ${custom ? '<span class="badge">personale</span>' : ''}
+      <span class="cnt bcount">${b.stations} canali${b.hidden?` <span style="color:var(--warn)">(${b.hidden} esclusi)</span>`:''}</span>
+      <button class="expbtn" data-exp="${esc(b.path)}" title="Gestisci i singoli canali">${open?'▾ canali':'\u25b8 canali'}</button>
+      <button class="ghost small" data-bdel="${esc(b.path)}" title="Elimina questa playlist (recuperabile nel cestino)">✕</button>
+    </div>`;
+    if (open) html += renderChannels(list, b);
+    return html;
+  }).join('');
+
+  const active = bs.filter(b=>branchEnabled(list, b.path)).length;
+  const nTrash = (list.options.deletedChannels || []).length + (list.options.deletedBranches || []).length;
+  return `<div class="plhead">
+    <h2>Playlist della lista <span class="badge">${active}/${bs.length} attive</span></h2>
+    <div class="pltools">
+      <input type="text" data-act="filter" placeholder="🔎 Filtra playlist…">
+      <button class="ghost small" data-act="all" title="Attiva tutte le playlist">✓ Tutto</button>
+      <button class="ghost small" data-act="none" title="Disattiva tutte le playlist">✗ Nulla</button>
+      <button class="ghost small" data-act="trash" title="Canali e playlist eliminati: da qui li ripristini">🗑 Cestino${nTrash ? ` (${nTrash})` : ''}</button>
+    </div>
+  </div>
+  ${bs.length ? '' : '<div class="hint" style="margin-top:10px">Nessuna playlist (ramo con canali) trovata nella lista.</div>'}
+  <details class="help">
+    <summary>ℹ️ Come si usa: rinomina, riordina, canali, spostamenti, cestino</summary>
+    <div class="hint">Ogni riga è una playlist: spuntala per includerla, scrivi nel campo per <b>rinominarla</b>,
+    trascinala dalla maniglia <b>☰</b> per <b>riordinare</b>. Con <b>▸ canali</b> apri la playlist e gestisci i
+    <b>singoli canali</b>: escludi, rinomina, riordina e — col <b>campo gruppo</b> a destra —
+    <b>spostali in un'altra playlist o in un gruppo personale</b>: la tendina suggerisce i gruppi
+    esistenti, ma il campo è sempre libero. Poi premi <b>➜</b> per spostare il canale nel gruppo
+    scritto o scelto (un gruppo inesistente viene creato al volo) oppure <b>↺</b> per riportarlo
+    alla playlist originale (i canali spostati hanno il badge "da …"). Lo spostamento si
+    <b>salva automaticamente</b>; per le altre modifiche ricorda <b>Salva configurazione</b>
+    in fondo alla pagina. In alternativa <b>trascina un canale sopra un'altra playlist</b> per
+    spostarvelo (funziona anche tra liste diverse) e <b>trascina una playlist al centro di
+    un'altra riga</b> per spostarci dentro tutti i suoi canali (ai bordi invece la riordini).
+    Il pulsante <b>✕</b> elimina il canale o l'intera playlist: nulla è perduto,
+    trovi tutto nel <b>🗑 Cestino</b> da cui puoi ripristinare con un clic.</div>
+  </details>
+  <div class="branches">${rows}</div>
+  ${TRASHOPEN.has(list.id) ? renderTrash(list) : ''}
+  <datalist id="dl-${list.id}">${bs.map((b) => `<option value="${esc(b.displayName)}">`).join('')}</datalist>`;
+}
+
+/* ---------------- cestino: eliminati recuperabili ---------------- */
+const TRASHOPEN = new Set(); // id delle liste col cestino aperto
+const TRASH = {};            // id -> {branches:[], channels:[]}
+
+function renderTrash(list){
+  const t = TRASH[list.id];
+  if (!t) return '<div class="trash" data-trash><div class="hint">Caricamento cestino…</div></div>';
+  const br = (t.branches || []).map((b)=>`<div class="trashrow">
+      <span>📁</span><b>${esc(b.name)}</b><span class="cnt">${b.stations} canali</span>
+      <div class="spacer" style="flex:1"></div>
+      <button class="ghost small" data-rbranch="${esc(b.path)}">↩ Ripristina</button>
+    </div>`).join('');
+  const ch = (t.channels || []).map((c)=>`<div class="trashrow">
+      <span>📺</span><b>${esc(c.shown || c.name)}</b><span class="cnt">era in «${esc(c.branch)}»</span>
+      <div class="spacer" style="flex:1"></div>
+      <button class="ghost small" data-rchan="1" data-rpath="${esc(c.path)}" data-rname="${esc(c.name)}">↩ Ripristina</button>
+    </div>`).join('');
+  const empty = !br && !ch ? '<div class="hint">Il cestino è vuoto.</div>' : '';
+  return `<div class="trash" data-trash>
+    <div class="row" style="align-items:center;gap:8px"><b>🗑 Cestino</b><span class="cnt">elementi eliminati da questa lista</span></div>
+    ${empty}${br}${ch}
+  </div>`;
+}
+
+async function refreshTrash(id){
+  try { TRASH[id] = await api(`/api/lists/${id}/deleted`); }
+  catch (_){ TRASH[id] = { branches: [], channels: [] }; }
+}
+
+function renderChannels(list, b){
+  const chans = CHANS[`${list.id}|${b.path}`];
+  if (!chans) return `<div class="chans" data-chans="${esc(b.path)}"><div class="hint">Caricamento canali…</div></div>`;
+  const on = chans.filter(c=>c.enabled).length;
+  const bs = branchesOf(list.id) || [];
+  const rows = chans.map((c, i)=>{
+    const renamed = c.shown !== c.name;
+    const curB = bs.find((x) => x.path === c.cur);
+    const homeB = bs.find((x) => x.path === c.home);
+    const curName = curB ? curB.displayName : (String(c.cur).startsWith('@') ? String(c.cur).slice(1) : c.cur);
+    return `<div class="crow ${c.enabled?'':'off'}" draggable="true" data-ci="${i}" data-cname="${esc(c.name)}" data-csearch="${esc((c.name+' '+c.shown).toLowerCase())}">
+      <span class="bhandle" title="Trascina per riordinare">☰</span>
+      <input type="checkbox" data-cch="${i}" ${c.enabled?'checked':''} title="Includi/escludi questo canale">
+      <input class="cname ${renamed?'renamed':''}" type="text" value="${esc(c.shown)}" placeholder="${esc(c.name)}" title="Nome del canale (come lo vedi in playlist e catalogo)">
+      ${c.from ? `<span class="cnt" style="color:var(--warn)" title="Canale spostato: proviene da &quot;${esc(c.from)}&quot;">da ${esc(c.from)}</span>` : ''}
+      <input class="cmove ${curName !== (homeB ? homeB.displayName : '') ? 'renamed' : ''}" data-cmove="${i}" list="dl-${list.id}" value="${esc(curName)}" placeholder="${esc(homeB ? homeB.displayName : '')}" title="Gruppo del canale: scegli dalla tendina oppure scrivi un nome nuovo">
+      <button class="ghost small" data-capply="${i}" title="Sposta il canale nel gruppo scritto o scelto">➜</button>
+      <button class="ghost small" data-creset="${i}" title="Riporta il canale nella sua playlist originale">↺</button>
+      <button class="ghost small" data-cdel="${i}" title="Elimina il canale (recuperabile nel cestino)">✕</button>
+    </div>`;
+  }).join('');
+  return `<div class="chans" data-chans="${esc(b.path)}">
+    <div class="chead">
+      <input type="text" class="cfilter" placeholder="🔎 Filtra canali…" data-cfilter>
+      <span class="cnt ccount">${on}/${chans.length} attivi</span>
+    </div>
+    <div class="chead">
+      <input type="text" data-cadd list="dladd-${list.id}" placeholder="Aggiungi un canale da un'altra playlist o da un'altra lista…">
+      <button class="ghost small" data-caddbtn="${esc(b.path)}" title="Se il canale e' di un'altra playlist di questa lista viene spostato qui; se e' di un'altra lista viene importato qui e tolto dalla sorgente">➕ Aggiungi</button>
+    </div>
+    <datalist id="dladd-${list.id}" data-dladd></datalist>
+    ${rows}
+  </div>`;
+}
+
+function renderLists(){
+  const root = $('#lists');
+  if (!CFG.lists.length){
+    root.innerHTML = `<section class="card">
+      <div class="hint">Nessuna lista. Aggiungi un URL qui sopra (una lista WisePlay o un link <code>.m3u</code>),
+      oppure premi <b>⭐ Crea lista personalizzata</b> per comporre una lista scegliendo canali e playlist dalle tue liste.</div></section>`;
+    return;
+  }
+  root.innerHTML = CFG.lists.map(renderListCard).join('');
+  bindListEvents();
+  for (const card of document.querySelectorAll('#lists .listcard')) plPopulateBranches(card);
+  renderSideMenu();
+}
+
+/* --------- menu laterale: riordino liste + accesso rapido --------- */
+
+function renderSideMenu(){
+  const el = $('#sidemenu');
+  if (!el) return;
+  const items = CFG.lists.map((l, i) => `<div class="sditem">
+    <button class="updn" data-sdup="${i}" title="Sposta su">▲</button>
+    <button class="updn" data-sddn="${i}" title="Sposta giu">▼</button>
+    <button class="sdname" data-sdgo="${esc(l.id)}" title="Vai alla lista">${l.kind === 'personal' ? '⭐ ' : ''}${esc(l.name || l.url)}</button>
+  </div>`).join('');
+  el.innerHTML = '<div class="sdtitle">Ordine delle liste</div>' + (items || '<div class="hint">Nessuna lista</div>');
+}
+
+
+/* -------- liste personali: tendine a cascata del picker "aggiungi contenuto" -------- */
+
+async function plPopulateBranches(card){
+  const lid = card.querySelector('[data-plsel="list"]').value;
+  if (lid) await loadBranches(lid); // sempre fresco: rinomine e gruppi nuovi
+  const bs = (lid && branchesOf(lid)) || [];
+  card.querySelector('[data-plsel="branch"]').innerHTML =
+    bs.map((b) => `<option value="${esc(b.path)}">${esc(b.displayName)}</option>`).join('');
+  await plPopulateChans(card);
+}
+
+async function plPopulateChans(card){
+  const lid = card.querySelector('[data-plsel="list"]').value;
+  const bp = card.querySelector('[data-plsel="branch"]').value;
+  const dl = card.querySelector('datalist[data-pldl]');
+  if (!dl) return;
+  if (!lid || bp == null || bp === ''){ dl.innerHTML = ''; return; }
+  try {
+    const r = await api(`/api/lists/${lid}/channels?path=${encodeURIComponent(bp)}`);
+    dl.innerHTML = `<option value="— tutta la playlist —">`
+      + r.channels.filter((c) => c.enabled).map((c) => `<option value="${esc(c.shown)}">`).join('');
+  } catch (e){ dl.innerHTML = ''; }
+}
+
+/** Risolve il campo canale: '*' = playlist intera, altrimenti il canale (nome scritto o suggerito). */
+async function plResolveChan(lid, bp, value){
+  const v = String(value || '').trim();
+  if (!v || v === '*' || v === '— tutta la playlist —') return { wild: true };
+  const r = await api(`/api/lists/${lid}/channels?path=${encodeURIComponent(bp)}`);
+  const c = r.channels.find((x) => x.enabled && (x.shown === v || x.name === v));
+  return c ? { wild: false, chan: c } : null;
+}
+
+async function createPersonalList(){
+  const n = CFG.lists.filter((l) => l.kind === 'personal').length;
+  CFG.lists.push({
+    id: 'l_p' + Math.random().toString(16).slice(2, 8),
+    name: `La mia lista ${n + 1}`,
+    kind: 'personal',
+    url: '',
+    state: { status: 'ready', stats: { nodes: 0, stations: 0, external: 0, m3u: 0, failed: 0 } },
+    options: { enabled: true, inCatalog: false, personalEntries: [] },
+  });
+  await saveConfig();
+  renderLists();
+  toast('Lista personale creata: aggiungi canali o playlist intere dal riquadro "Aggiungi contenuto"');
+}
+
+function renderListCard(l){
+  const o = l.options, s = l.state || {};
+  const st = s.status || 'idle';
+  const stats = s.stats || null;
+  const personal = l.kind === 'personal';
+  const purl = personal
+    ? (CFG.settings.publicBaseUrl || location.origin).replace(/\/+$/, '') + '/personal/' + l.id + '.m3u' + tokenQs()
+    : '';
+  return `<section class="card listcard" data-id="${esc(l.id)}" ${personal ? 'data-kind="personal"' : ''}>
+    <div class="listhead">
+      <span class="name">${personal ? '⭐ ' : ''}${esc(l.name || l.url)}</span>
+      ${personal ? '<span class="badge ready" title="Lista personale: composta da canali e playlist delle tue liste">personale</span>' : ''}
+      ${s.kind === 'm3u' ? '<span class="badge ready" title="Sorgente playlist M3U">m3u</span>' : ''}
+      <span class="badge ${st}">${st}</span>
+      <div class="spacer" style="flex:1"></div>
+      <div class="acts">
+        <button class="ghost small" data-act="toggle" style="${o.enabled ? '' : 'opacity:.55;color:var(--warn)'}" title="Attiva/disattiva completamente la lista">${o.enabled ? '⏻ attiva' : '⏻ spenta'}</button>
+        <button class="ghost small" data-act="refresh">Aggiorna</button>
+        <button class="ghost small" data-act="preview">Anteprima M3U</button>
+        <button class="danger small" data-act="del">Elimina</button>
+      </div>
+    </div>
+    ${personal
+      ? `<div class="url">Lista personale (senza URL remoto): il contenuto lo scegli tu qui sotto.
+         Link M3U: <code>${esc(purl)}</code> <button class="ghost small" data-act="copypl" style="margin-left:6px">⧉ copia</button></div>`
+      : `<div class="url">${esc(l.url)}</div>`}
+    <div class="kv" style="margin-top:6px">
+      ${s.fetchedAt ? `Ultimo aggiornamento: <b>${esc(new Date(s.fetchedAt).toLocaleString('it-IT'))}</b>` : 'Mai aggiornata'}
+      ${stats ? ` · nodi <b>${stats.nodes}</b> · rami esterni <b>${stats.external}</b> · m3u importate <b>${stats.m3u}</b> · stream <b>${stats.stations}</b>${stats.failed?` · errori <b>${stats.failed}</b>`:''}` : ''}
+    </div>
+    ${s.error ? `<div class="err">${esc(s.error)}</div>` : ''}
+
+    <details class="fold" open>
+      <summary>⚙️ Impostazioni della lista</summary>
+      <div class="foldbody">
+        <div class="grid2">
+          <div>
+            <label>Nome visualizzato</label>
+            <input type="text" data-f="name" value="${esc(l.name)}">
+          </div>
+          <div>
+            <label>Prefisso group-title</label>
+            <select data-f="options.groupPrefix">
+              <option value="list" ${o.groupPrefix==='list'?'selected':''}>Nome della lista</option>
+              <option value="none" ${o.groupPrefix==='none'?'selected':''}>Nessuno</option>
+              <option value="custom" ${o.groupPrefix==='custom'?'selected':''}>Personalizzato</option>
+            </select>
+          </div>
+          <div>
+            <label>Prefisso personalizzato</label>
+            <input type="text" data-f="options.customPrefix" value="${esc(o.customPrefix||'')}">
+          </div>
+          <div>
+            <label>Livelli nel group-title</label>
+            <input type="number" min="1" max="6" data-f="options.groupDepth" value="${o.groupDepth}">
+          </div>
+          <div>
+            <label>Aggiornamento lista (minuti)</label>
+            <input type="number" min="5" data-f="options.refreshMinutes" value="${o.refreshMinutes}">
+            <div class="hint">1440 = giornaliero</div>
+          </div>
+          <div>
+            <label>Nome catalogo</label>
+            <input type="text" data-f="options.catalogName" value="${esc(o.catalogName||'')}">
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:12px">
+          <label class="chk ${o.enabled?'on':''}"><input type="checkbox" data-f="options.enabled" ${o.enabled?'checked':''}> Lista attiva</label>
+          <label class="chk ${o.inCatalog?'on':''}"><input type="checkbox" data-f="options.inCatalog" ${o.inCatalog?'checked':''}> Mostra come catalogo in Stremio/Nuvio</label>
+          <label class="chk ${o.dedupe?'on':''}"><input type="checkbox" data-f="options.dedupe" ${o.dedupe?'checked':''}> Rimuovi duplicati</label>
+          <label class="chk ${o.emitLogo?'on':''}"><input type="checkbox" data-f="options.emitLogo" ${o.emitLogo?'checked':''}> Usa l'icona del gruppo come logo (appesantisce la playlist)</label>
+        </div>
+      </div>
+    </details>
+
+    <details class="fold">
+      <summary>🧪 Protocolli, AceStream ed esclusioni</summary>
+      <div class="foldbody">
+        <div class="row">
+          ${['http','ace','rtmp','rtsp','other'].map(k=>`
+            <label class="chk ${o.protocols[k]?'on':''}"><input type="checkbox" data-f="options.protocols.${k}" ${o.protocols[k]?'checked':''}> ${PROTO_LABEL[k]}</label>`).join('')}
+        </div>
+        <div class="row" style="margin-top:12px">
+          <div style="flex:1 1 220px">
+            <label>AceStream</label>
+            <select data-f="options.aceMode">
+              <option value="keep" ${o.aceMode==='keep'?'selected':''}>acestream:// (serve Ace Player/Engine)</option>
+              <option value="engine" ${o.aceMode==='engine'?'selected':''}>Riscrivi in HTTP via Engine</option>
+              <option value="off" ${o.aceMode==='off'?'selected':''}>Escludi AceStream</option>
+            </select>
+          </div>
+          <div style="flex:1 1 260px">
+            <label>Host AceStream Engine (se "Riscrivi in HTTP")</label>
+            <input type="text" data-f="options.aceEngineHost" value="${esc(o.aceEngineHost||'')}" placeholder="http://IP:6878">
+          </div>
+        </div>
+        <div style="margin-top:12px">
+          <label>Escludi canali contenenti queste parole (una per riga)</label>
+          <textarea data-f="options.excludeKeywords" rows="2">${esc((o.excludeKeywords||[]).join('\n'))}</textarea>
+        </div>
+      </div>
+    </details>
+
+    <details class="fold">
+      <summary>🌐 EasyProxy (opzionale)</summary>
+      <div class="foldbody">
+        <div class="hint" style="margin-top:2px">Le liste <b>"(dns)"</b> spesso non funzionano perche' il <b>client</b>
+          (TV/telefono) non risolve quei domini, indipendentemente dal DNS del server. Con
+          <a class="lnk" href="https://github.com/realbestia1/EasyProxy" target="_blank">EasyProxy</a> i flussi
+          passano dal server (con il suo DNS/WARP/estrattori): compila l'URL della tua istanza
+          (es. <code>http://192.168.1.10:7860</code>) e gli stream di questa lista verranno riscritti.
+          Attenzione: tutto il traffico video passa dal server.</div>
+        <div class="row" style="margin-top:10px">
+          <div style="flex:2 1 260px">
+            <label>URL di EasyProxy (vuoto = disattivato)</label>
+            <input type="text" data-f="options.easyProxy" value="${esc(o.easyProxy||'')}" placeholder="http://192.168.10.10:7860 oppure https://proxy.tuodominio.it">
+          </div>
+          <div style="flex:1 1 160px">
+            <label>API_PASSWORD (se impostata)</label>
+            <input type="text" data-f="options.easyProxyPassword" value="${esc(o.easyProxyPassword||'')}">
+          </div>
+          <div style="flex:1 1 160px">
+            <label>Parametri extra (es. warp=off)</label>
+            <input type="text" data-f="options.easyProxyParams" value="${esc(o.easyProxyParams||'')}">
+          </div>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <div style="flex:0 0 auto;display:flex;align-items:flex-end">
+            <button class="ghost small" data-act="eptest">Test</button>
+          </div>
+        </div>
+        <details class="help">
+          <summary>ℹ️ Come interpretare il test (avvisi non bloccanti)</summary>
+          <div class="hint">Scrivi <b>IP oppure dominio</b>: funziona cosi' com'e', senza configurazioni speciali.
+            L'addon si limita a <b>riscrivere gli stream</b> verso EasyProxy: sara' il <b>client</b> (TV/telefono) a
+            connettersi. Il <b>Test</b> qui sotto e' solo indicativo: su molte reti di
+            casa il container Docker non riesce a raggiungere il proprio dominio pubblico (manca il NAT hairpin) o non
+            si fida del certificato; in quei casi mostra un <b>avviso non bloccante</b> e la riproduzione funziona
+            comunque sul client.</div>
+        </details>
+        <div class="epbox" data-epbox></div>
+      </div>
+    </details>
+
+    <details class="fold" open>
+      <summary>➕ Aggiungi contenuto dalle tue liste</summary>
+      <div class="foldbody">
+        <div class="row" style="margin-top:2px">
+          <div style="flex:1 1 140px"><label>Lista</label><select data-plsel="list">${CFG.lists.filter((x) => x.id !== l.id).map((x) => `<option value="${esc(x.id)}">${x.kind === 'personal' ? '⭐ ' : ''}${esc(x.name || x.url)}</option>`).join('')}</select></div>
+          <div style="flex:1 1 150px"><label>Playlist/ramo</label><select data-plsel="branch"></select></div>
+          <div style="flex:1 1 190px"><label>Canale (scrivi o scegli)</label><input type="text" data-plchan list="pldl-${l.id}" placeholder="nome canale o — tutta la playlist —"></div>
+          <div style="flex:0 0 auto;display:flex;gap:6px;align-items:flex-end">
+            <button data-act="pladd">+ Aggiungi</button>
+            <button class="ghost" data-act="plnew" title="Crea una playlist personalizzata vuota in questa lista">+ Nuova playlist</button>
+          </div>
+        </div>
+        <div class="row" data-plnewrow style="display:none">
+          <div style="flex:1 1 220px"><label>Nome della nuova playlist</label><input type="text" data-plnewname placeholder="es. Preferiti"></div>
+          <div style="flex:0 0 auto;display:flex;gap:6px;align-items:flex-end">
+            <button data-act="plnewok">Crea</button>
+            <button class="ghost" data-act="plnewno">Annulla</button>
+          </div>
+        </div>
+        <datalist id="pldl-${l.id}" data-pldl></datalist>
+        <details class="help">
+          <summary>ℹ️ Come funziona l'importazione</summary>
+          <div class="hint">Da un'<b>altra</b> lista importi canali o <b>— tutta la playlist —</b> come playlist aggiuntive
+            di questa lista. Dalla <b>stessa</b> lista sposti i canali in un'altra playlist o in una
+            <b>playlist personalizzata</b> (creala con <b>+ Nuova playlist</b>: compare tra le playlist e ci porti i
+            canali anche col campo gruppo e ➜). Il campo canale e' <b>scrivibile</b>: i suggerimenti arrivano dalla
+            playlist scelta (vedi anche i nomi personalizzati).</div>
+        </details>
+      </div>
+    </details>
+
+    ${renderBranches(l)}
+  </section>`;
+}
+
+/* ---------------- canali: stato e modifiche ---------------- */
+const chanKey = (path, name) => `${path}::${name}`;
+
+function setChannelEnabled(list, path, name, on){
+  const dis = new Set(list.options.disabledChannels || []);
+  const k = chanKey(path, name);
+  if (on) dis.delete(k); else dis.add(k);
+  list.options.disabledChannels = Array.from(dis);
+}
+function setChannelName(list, path, name, value){
+  const v = String(value || '').trim();
+  list.options.channelRenames = list.options.channelRenames || {};
+  const k = chanKey(path, name);
+  if (!v || v === name) delete list.options.channelRenames[k];
+  else list.options.channelRenames[k] = v;
+}
+
+/** Risolve il valore del campo gruppo: il nome di un ramo/gruppo esistente,
+ *  oppure testo libero = nuovo gruppo personale. Vuoto = ramo originale. */
+function resolveGroupTarget(list, value){
+  const v = String(value || '').trim();
+  if (!v) return null;
+  const hit = (branchesOf(list.id) || []).find((b) => b.displayName === v);
+  return hit ? hit.path : '@' + v;
+}
+
+/** Sposta un canale in un altro ramo o in un gruppo personale ("@Nome").
+ *  La chiave resta quella originale (home::nome): rename/esclusioni/ordini
+ *  continuano a funzionare anche dopo lo spostamento. */
+async function applyChannelMove(list, c, target, curPath){
+  list.options.channelMoves = list.options.channelMoves || {};
+  const key = chanKey(c.home, c.name);
+  if (!target || target === c.home) delete list.options.channelMoves[key];
+  else list.options.channelMoves[key] = target;
+  // salva subito sul server: albero e canali vengono riletti da li', quindi
+  // lo spostamento deve gia' essere registrato perche' la UI lo mostri
+  try {
+    await api('/api/config', { method:'PUT', body: JSON.stringify({ settings: CFG.settings, lists: CFG.lists }) });
+  } catch(e){ toast('Errore: '+e.message, 4000); return; }
+  await loadBranches(list.id); // aggiorna conteggi e gruppi personali
+  for (const p of new Set([curPath, target])) {
+    const k = `${list.id}|${p}`;
+    if (EXPANDED.has(k)) {
+      try {
+        const r = await api(`/api/lists/${list.id}/channels?path=${encodeURIComponent(p)}`);
+        CHANS[k] = r.channels;
+      } catch(_){ /* si aggiornera' alla prossima apertura */ }
+    }
+  }
+  renderLists();
+}
+
+/* ricarica i canali dei rami aperti (dopo spostamenti/eliminazioni tra liste) */
+async function reloadOpenChans(listIds){
+  for (const key of [...EXPANDED]){
+    const i = key.indexOf('|');
+    const lid = key.slice(0, i), p = key.slice(i + 1);
+    if (listIds && !listIds.includes(lid)) continue;
+    try {
+      const r = await api(`/api/lists/${lid}/channels?path=${encodeURIComponent(p)}`);
+      CHANS[key] = r.channels;
+    } catch (_){ CHANS[key] = []; }
+  }
+}
+
+function updateChannelCounts(card, list, path){
+  const key = `${list.id}|${path}`;
+  const chans = CHANS[key] || [];
+  const hidden = chans.filter(c=>!c.enabled).length;
+  const chDiv = card.querySelector(`.chans[data-chans="${path}"]`);
+  if (chDiv){
+    const cc = chDiv.querySelector('.ccount');
+    if (cc) cc.textContent = `${chans.length - hidden}/${chans.length} attivi`;
+    const brow = chDiv.previousElementSibling;
+    if (brow && brow.classList.contains('brow')){
+      const b = (branchesOf(list.id) || []).find(x=>x.path===path);
+      const bc = brow.querySelector('.bcount');
+      if (b && bc) bc.innerHTML = `${b.stations} canali${hidden?` <span style="color:var(--warn)">(${hidden} esclusi)</span>`:''}`;
+    }
+  }
+}
+
+async function toggleExpand(card, list, path){
+  const key = `${list.id}|${path}`;
+  if (EXPANDED.has(key)){ EXPANDED.delete(key); renderLists(); return; }
+  EXPANDED.add(key);
+  renderLists(); // mostra "Caricamento canali…"
+  try {
+    const r = await api(`/api/lists/${list.id}/channels?path=${encodeURIComponent(path)}`);
+    CHANS[key] = r.channels;
+  } catch(e){
+    EXPANDED.delete(key);
+    toast('Errore: ' + e.message, 4000);
+  }
+  renderLists();
+}
+
+/* ---------------- drag & drop (rami e canali) ---------------- */
+let DRAG = null; // {type:'branch'|'chan', el, chans?, target?, after?}
+
+function dragCleanup(card){
+  if (DRAG && DRAG.el) DRAG.el.classList.remove('dragging');
+  $$('.drag-before, .drag-after, .drag-into', card).forEach(e=>e.classList.remove('drag-before','drag-after','drag-into'));
+  DRAG = null;
+}
+
+function applyDrop(card, list){
+  if (!DRAG || !DRAG.target){ dragCleanup(card); return; }
+  const id = list.id;
+  if (DRAG.into){
+    // rilascio "dentro" una playlist: il canale (o tutti i canali del ramo
+    // trascinato) si sposta nella playlist di destinazione
+    const tPath = DRAG.target.classList.contains('brow')
+      ? DRAG.target.dataset.path
+      : ((DRAG.target.closest('.chans') || {}).dataset || {}).chans;
+    const srcId = DRAG.listId;
+    const type = DRAG.type;
+    const c = DRAG.chan;
+    const fromPath = type === 'branch' ? DRAG.el.dataset.path : '';
+    dragCleanup(card);
+    if (!tPath) return;
+    (async ()=>{
+      try {
+        if (type === 'chan'){
+          if (!c) return;
+          if (srcId === id){
+            if (tPath === (c.cur || '')){ toast('Il canale e\' gia\' in questa playlist'); return; }
+            const srcList = CFG.lists.find((l)=>l.id===srcId);
+            await applyChannelMove(srcList, c, tPath, c.cur || '');
+            toast('Canale spostato');
+          } else {
+            const r = await api(`/api/lists/${id}/addchannel`, { method:'POST', body: JSON.stringify({ path: tPath, name: c.name, home: c.home, fromList: srcId }) });
+            toast(r.revived ? 'Canale ripristinato e spostato qui' : `Canale spostato qui (era in: ${r.from})`);
+            await loadConfig();
+            await reloadOpenChans([id, srcId]);
+            renderLists();
+          }
+        } else {
+          if (srcId === id && fromPath === tPath){ toast('Stessa playlist'); return; }
+          const r = await api(`/api/lists/${id}/mergebranch`, { method:'POST', body: JSON.stringify({ fromList: srcId, from: fromPath, to: tPath }) });
+          toast(r.moved ? `${r.moved} canali spostati dentro la playlist` : 'Nessun canale da spostare');
+          await loadConfig();
+          await reloadOpenChans([id, srcId]);
+          renderLists();
+        }
+      } catch (e){ toast(e.message, 4000); }
+    })();
+    return;
+  }
+  if (DRAG.listId !== id){ dragCleanup(card); return; } // riordino solo dentro la stessa lista
+  if (DRAG.type === 'branch'){
+    const bs = branchesOf(id);
+    const from = bs.findIndex(b=>b.path===DRAG.el.dataset.path);
+    let to = bs.findIndex(b=>b.path===DRAG.target.dataset.path);
+    if (from >= 0 && to >= 0){
+      if (DRAG.after) to += 1;
+      const [item] = bs.splice(from, 1);
+      if (from < to) to -= 1;
+      bs.splice(to, 0, item);
+      rebuildOrder(list);
+    }
+  } else {
+    const path = DRAG.chans.dataset.chans;
+    const chans = CHANS[`${id}|${path}`];
+    const from = Number(DRAG.el.dataset.ci);
+    let to = Number(DRAG.target.dataset.ci);
+    if (chans && from >= 0 && to >= 0){
+      if (DRAG.after) to += 1;
+      const [item] = chans.splice(from, 1);
+      if (from < to) to -= 1;
+      chans.splice(to, 0, item);
+      list.options.channelOrder[path] = chans.map(c=>c.name);
+    }
+  }
+  dragCleanup(card);
+  renderLists();
+}
+
+function bindListEvents(){
+  $$('#lists .listcard').forEach(card=>{
+    const id = card.dataset.id;
+    const list = CFG.lists.find(l=>l.id===id);
+
+    card.addEventListener('change', async ev=>{
+      const el = ev.target;
+      if (el.dataset && el.dataset.plsel === 'list'){ await plPopulateBranches(card); return; }
+      if (el.dataset && el.dataset.plsel === 'branch'){ await plPopulateChans(card); return; }
+      if (el.dataset && el.dataset.cch !== undefined){
+        // spunta di un singolo canale
+        const chDiv = el.closest('.chans');
+        const path = chDiv.dataset.chans;
+        const chans = CHANS[`${id}|${path}`];
+        const c = chans && chans[Number(el.dataset.cch)];
+        if (c){
+          setChannelEnabled(list, c.home || path, c.name, el.checked);
+          c.enabled = el.checked;
+          el.closest('.crow').classList.toggle('off', !el.checked);
+          updateChannelCounts(card, list, path);
+        }
+        return;
+      }
+      if (el.classList && el.classList.contains('cname')){
+        // rinomina di un singolo canale
+        const row = el.closest('.crow');
+        const path = row.closest('.chans').dataset.chans;
+        const orig = row.dataset.cname;
+        const c = CHANS[`${id}|${path}`][Number(row.dataset.ci)];
+        setChannelName(list, (c && c.home) || path, orig, el.value);
+        const shown = (list.options.channelRenames || {})[chanKey((c && c.home) || path, orig)] || orig;
+        if (c) c.shown = shown;
+        el.classList.toggle('renamed', shown !== orig);
+        return;
+      }
+      if (el.dataset && el.dataset.cb){
+        setBranchEnabled(list, el.dataset.cb, el.checked);
+        el.closest('.brow').classList.toggle('off', !el.checked);
+        updateBadge(card, list);
+        return;
+      }
+      if (el.classList && el.classList.contains('bname')){
+        const row = el.closest('.brow');
+        setBranchName(list, row.dataset.path, row.dataset.name, el.value);
+        el.classList.toggle('renamed', branchDisplayName(list, {path:row.dataset.path, name:row.dataset.name}) !== row.dataset.name);
+        return;
+      }
+      if (el.dataset && el.dataset.f){
+        setPath(list, el.dataset.f, el.type==='checkbox' ? el.checked : el.value);
+        if (el.dataset.f.startsWith('options.protocols') || ['options.enabled','options.inCatalog','options.dedupe','options.emitLogo'].includes(el.dataset.f)){
+          el.closest('.chk').classList.toggle('on', el.checked);
+        }
+      }
+    });
+
+    card.addEventListener('input', ev=>{
+      const el = ev.target;
+      if (el.dataset && el.dataset.act === 'filter'){
+        const q = el.value.trim().toLowerCase();
+        $$('.brow', card).forEach(r=>{
+          const show = !q || r.dataset.search.includes(q);
+          r.style.display = show ? '' : 'none';
+          const ch = r.nextElementSibling;
+          if (ch && ch.classList.contains('chans')) ch.style.display = show ? '' : 'none';
+        });
+        return;
+      }
+      if (el.dataset && el.dataset.cfilter !== undefined){
+        const q = el.value.trim().toLowerCase();
+        $$('.crow', el.closest('.chans')).forEach(r=>{
+          r.style.display = !q || r.dataset.csearch.includes(q) ? '' : 'none';
+        });
+        return;
+      }
+      if (el.dataset && el.dataset.f && el.type !== 'checkbox') setPath(list, el.dataset.f, el.value);
+    });
+
+    card.addEventListener('click', async ev=>{
+      const cab = ev.target.closest('button[data-caddbtn]');
+      if (cab){
+        const inp = cab.parentElement.querySelector('[data-cadd]');
+        const v = (inp ? inp.value : '').trim();
+        if (!v){ toast('Scrivi il nome del canale da aggiungere'); return; }
+        try {
+          const r = await api(`/api/lists/${id}/addchannel`, {
+            method: 'POST',
+            body: JSON.stringify({ path: cab.dataset.caddbtn, name: v }),
+          });
+          toast(`Canale aggiunto qui (presi da: ${r.from})`);
+          if (inp) inp.value = '';
+          await loadConfig();          // risincronizza la config (mosse/voci lato server)
+          await reloadOpenChans([id]);
+          renderLists();
+        } catch (e){ toast(e.message, 4000); }
+        return;
+      }
+      const rb = ev.target.closest('button[data-rbranch]');
+      if (rb){
+        try {
+          await api(`/api/lists/${id}/restore`, { method:'POST', body: JSON.stringify({ path: rb.dataset.rbranch }) });
+          toast('Playlist ripristinata');
+          await loadConfig();
+          await reloadOpenChans([id]);
+          await refreshTrash(id);
+          renderLists();
+        } catch (e){ toast(e.message, 4000); }
+        return;
+      }
+      const rc = ev.target.closest('button[data-rchan]');
+      if (rc){
+        try {
+          await api(`/api/lists/${id}/restore`, { method:'POST', body: JSON.stringify({ path: rc.dataset.rpath, name: rc.dataset.rname }) });
+          toast('Canale ripristinato');
+          await loadConfig();
+          await reloadOpenChans([id]);
+          await refreshTrash(id);
+          renderLists();
+        } catch (e){ toast(e.message, 4000); }
+        return;
+      }
+      const cdel = ev.target.closest('button[data-cdel]');
+      if (cdel){
+        const row = cdel.closest('.crow');
+        const path = row.closest('.chans').dataset.chans;
+        const c = (CHANS[`${id}|${path}`] || [])[Number(cdel.dataset.cdel)];
+        if (!c) return;
+        if (!confirm(`Eliminare "${c.shown || c.name}" da questa lista? Potrai ripristinarlo dal 🗑 Cestino.`)) return;
+        try {
+          await api(`/api/lists/${id}/delete`, { method:'POST', body: JSON.stringify({ path: c.home || path, name: c.name }) });
+          toast('Canale eliminato — recuperabile nel 🗑 Cestino');
+          await loadConfig();
+          await reloadOpenChans([id]);
+          if (TRASHOPEN.has(id)) await refreshTrash(id);
+          renderLists();
+        } catch (e){ toast(e.message, 4000); }
+        return;
+      }
+      const bdel = ev.target.closest('button[data-bdel]');
+      if (bdel){
+        const path = bdel.dataset.bdel;
+        const b = (branchesOf(id) || []).find((x)=>x.path===path);
+        const nm = b ? (b.displayName || b.name) : path;
+        if (!confirm(`Eliminare la playlist "${nm}" e tutti i suoi canali? Potrai ripristinarla dal 🗑 Cestino.`)) return;
+        try {
+          await api(`/api/lists/${id}/delete`, { method:'POST', body: JSON.stringify({ path }) });
+          EXPANDED.delete(`${id}|${path}`);
+          delete CHANS[`${id}|${path}`];
+          toast('Playlist eliminata — recuperabile nel 🗑 Cestino');
+          await loadConfig();
+          if (TRASHOPEN.has(id)) await refreshTrash(id);
+          renderLists();
+        } catch (e){ toast(e.message, 4000); }
+        return;
+      }
+      const ap = ev.target.closest('button[data-capply]');
+      if (ap){
+        // sposta il canale nel gruppo scelto/scritto nel campo accanto
+        const row = ap.closest('.crow');
+        const path = row.closest('.chans').dataset.chans;
+        const c = CHANS[`${id}|${path}`][Number(ap.dataset.capply)];
+        const val = row.querySelector('.cmove') ? row.querySelector('.cmove').value : '';
+        if (c) await applyChannelMove(list, c, resolveGroupTarget(list, val), path);
+        return;
+      }
+      const rs = ev.target.closest('button[data-creset]');
+      if (rs){
+        // riporta il canale nella playlist originale
+        const row = rs.closest('.crow');
+        const path = row.closest('.chans').dataset.chans;
+        const c = CHANS[`${id}|${path}`][Number(rs.dataset.creset)];
+        if (c) await applyChannelMove(list, c, null, path);
+        return;
+      }
+      const exp = ev.target.closest('button[data-exp]');
+      if (exp){ await toggleExpand(card, list, exp.dataset.exp); return; }
+      const btn = ev.target.closest('button[data-act]');
+      if (!btn) return;
+      const act = btn.dataset.act;
+      if (act === 'trash'){
+        if (TRASHOPEN.has(id)){ TRASHOPEN.delete(id); renderLists(); return; }
+        TRASHOPEN.add(id);
+        renderLists();
+        await refreshTrash(id);
+        renderLists();
+        return;
+      }
+      if (act === 'toggle'){
+        list.options.enabled = !list.options.enabled;
+        await saveConfig();
+        renderLists();
+        toast(list.options.enabled ? 'Lista attivata' : 'Lista disattivata');
+      }
+      if (act === 'refresh') await refreshList(id, btn);
+      if (act === 'del'){ if (confirm('Eliminare la lista?')) await delList(id); }
+      if (act === 'preview') window.open(apiUrl(`/api/lists/${id}/preview.m3u`), '_blank');
+      if (act === 'eptest') await testEasyProxy(card, list, btn);
+      if (act === 'copypl'){
+        const base = (CFG.settings.publicBaseUrl || location.origin).replace(/\/+$/, '');
+        copyText(base + '/personal/' + id + '.m3u' + tokenQs()).then(
+          () => toast('Link M3U della lista personale copiato ✔'),
+          (e) => toast('Copia non riuscita: ' + e.message, 4000)
+        );
+      }
+      if (act === 'plnew'){
+        card.querySelector('[data-plnewrow]').style.display = '';
+        card.querySelector('[data-plnewname]').focus();
+        return;
+      }
+      if (act === 'plnewno'){ card.querySelector('[data-plnewrow]').style.display = 'none'; return; }
+      if (act === 'plnewok'){
+        const nm = card.querySelector('[data-plnewname]').value.trim();
+        if (!nm){ toast('Scrivi un nome per la playlist'); return; }
+        list.options.customGroups = list.options.customGroups || [];
+        if (list.options.customGroups.includes(nm)){ toast('Esiste gia\' una playlist con questo nome'); return; }
+        list.options.customGroups.push(nm);
+        await saveConfig();
+        await loadBranches(id);
+        renderLists();
+        toast(`Playlist "${nm}" creata: sceglila nella tendina o spostaci i canali`);
+        return;
+      }
+      if (act === 'pladd'){
+        const lid = card.querySelector('[data-plsel="list"]').value;
+        const bp = card.querySelector('[data-plsel="branch"]').value;
+        const cv = card.querySelector('[data-plchan]').value;
+        if (!lid || bp == null || bp === ''){ toast('Scegli lista e playlist/ramo'); return; }
+        if (lid === id){
+          // stessa lista: sposta il canale nella playlist/gruppo scelto
+          const res = await plResolveChan(lid, bp, cv).catch(() => null);
+          if (!res || res.wild){ toast('Per spostare, scrivi o scegli un singolo canale'); return; }
+          const c = res.chan;
+          list.options.channelMoves = list.options.channelMoves || {};
+          const key = `${c.home}::${c.name}`;
+          if (!bp.startsWith('@') && bp === c.home){
+            delete list.options.channelMoves[key];
+            toast('Il canale resta nella sua playlist');
+          } else {
+            list.options.channelMoves[key] = bp;
+            toast(bp.startsWith('@') ? `Canale spostato nel gruppo personale` : 'Canale spostato nella playlist scelta');
+          }
+          await saveConfig();
+          await loadBranches(id);
+          renderLists();
+        } else {
+          // altra lista: importa il canale o l'intera playlist come ramo nuovo
+          const res = await plResolveChan(lid, bp, cv).catch(() => null);
+          if (!res){ toast('Canale non trovato nella playlist scelta'); return; }
+          const src = `${lid}::${bp}::${res.wild ? '*' : res.chan.name}`;
+          list.options.personalEntries = list.options.personalEntries || [];
+          if (list.options.personalEntries.some((e) => e.src === src)){ toast('Voce gia\' presente'); return; }
+          list.options.personalEntries.push({ id: 'e' + Math.random().toString(16).slice(2, 8), src });
+          await saveConfig();
+          await loadBranches(id);
+          renderLists();
+        }
+        return;
+      }
+      if (act === 'all' || act === 'none'){
+        const bs = (branchesOf(id) || []).filter((b) => !b.custom);
+        for (const b of bs) setBranchEnabled(list, b.path, act === 'all');
+        renderLists();
+      }
+    });
+
+    /* --- drag & drop --- */
+    card.addEventListener('dragstart', ev=>{
+      const row = ev.target.closest('.brow, .crow');
+      if (!row) return;
+      ev.dataTransfer.effectAllowed = 'move';
+      try { ev.dataTransfer.setData('text/plain', ''); } catch(e){}
+      if (row.classList.contains('crow')){
+        const chDiv = row.closest('.chans');
+        DRAG = { type:'chan', el: row, chans: chDiv, listId: id,
+                 chan: (CHANS[`${id}|${chDiv.dataset.chans}`] || [])[Number(row.dataset.ci)] };
+      } else {
+        DRAG = { type:'branch', el: row, listId: id };
+      }
+      row.classList.add('dragging');
+    });
+
+    card.addEventListener('dragover', ev=>{
+      if (!DRAG) return;
+      $$('.drag-before, .drag-after, .drag-into', card).forEach(e=>e.classList.remove('drag-before','drag-after','drag-into'));
+      DRAG.target = null; DRAG.into = false; DRAG.after = false;
+      if (DRAG.type === 'chan'){
+        const brow = ev.target.closest('.brow');
+        const crow = ev.target.closest('.crow');
+        let target = null;
+        if (brow){ target = brow; DRAG.into = true; }            // canale sopra una playlist
+        else if (crow && crow !== DRAG.el){
+          target = crow;
+          DRAG.into = crow.closest('.chans') !== DRAG.chans;     // altro ramo aperto: sposta li'
+        }
+        if (!target) return;
+        ev.preventDefault();
+        ev.dataTransfer.dropEffect = 'move';
+        if (DRAG.into){ target.classList.add('drag-into'); }
+        else {
+          const rect = target.getBoundingClientRect();
+          DRAG.after = ev.clientY > rect.top + rect.height / 2;
+          target.classList.add(DRAG.after ? 'drag-after' : 'drag-before');
+        }
+        DRAG.target = target;
+        return;
+      }
+      // ramo: bordi = riordina, centro = sposta tutti i canali dentro
+      const brow = ev.target.closest('.brow');
+      if (!brow || brow === DRAG.el) return;
+      ev.preventDefault();
+      ev.dataTransfer.dropEffect = 'move';
+      const rect = brow.getBoundingClientRect();
+      const rel = (ev.clientY - rect.top) / rect.height;
+      if (rel < 0.3){ brow.classList.add('drag-before'); DRAG.after = false; }
+      else if (rel > 0.7){ brow.classList.add('drag-after'); DRAG.after = true; }
+      else { brow.classList.add('drag-into'); DRAG.into = true; }
+      DRAG.target = brow;
+    });
+
+    card.addEventListener('drop', ev=>{
+      ev.preventDefault();
+      applyDrop(card, list);
+    });
+
+    card.addEventListener('dragend', ()=>dragCleanup(card));
+
+    // al primo focus sul campo "aggiungi canale" carica i suggerimenti
+    card.addEventListener('focusin', async ev=>{
+      const inp = ev.target.closest('[data-cadd]');
+      if (inp){
+        const dl = card.querySelector('[data-dladd]');
+        if (dl && !dl.dataset.filled){
+          dl.dataset.filled = '1';
+          const ch = inp.closest('.chans');
+          const pth = ch ? ch.dataset.chans : '';
+          try {
+            const r = await api(`/api/lists/${id}/suggest?path=${encodeURIComponent(pth)}`);
+            dl.innerHTML = r.names.map((n) => `<option value="${esc(n)}">`).join('');
+          } catch (_) { /* suggerimenti non disponibili */ }
+        }
+        return;
+      }
+      const row = ev.target.closest('.brow, .crow');
+      if (row) row.draggable = false;
+    });
+    card.addEventListener('focusout', ev=>{
+      const row = ev.target.closest('.brow, .crow');
+      if (row) row.draggable = true;
+    });
+  });
+}
+
+function updateBadge(card, list){
+  const bs = branchesOf(list.id) || [];
+  const active = bs.filter(b=>branchEnabled(list, b.path)).length;
+  const badge = card.querySelector('h2 .badge');
+  if (badge) badge.textContent = `${active}/${bs.length} attive`;
+}
+
+function setPath(obj, pathStr, value){
+  const parts = pathStr.split('.');
+  let cur = obj;
+  for (let i=0;i<parts.length-1;i++) cur = cur[parts[i]];
+  const key = parts[parts.length-1];
+  if (key === 'excludeKeywords'){
+    cur[key] = String(value).split('\n').map(s=>s.trim()).filter(Boolean);
+  } else if (key === 'groupDepth' || key === 'refreshMinutes' || key === 'maxDepth' || key === 'cacheTtlMinutes' || key === 'autoRefreshMinutes'){
+    cur[key] = Number(value) || 0;
+  } else {
+    cur[key] = value;
+  }
+}
+
+/* ---------------- API ---------------- */
+async function api(path, opts={}){
+  const res = await fetch(apiUrl(path), {
+    headers: {'Content-Type':'application/json'},
+    ...opts
+  });
+  if (res.status === 401){
+    const t = prompt('Token amministratore (ADMIN_TOKEN):') || '';
+    localStorage.setItem('wisem3u_admin', t);
+    return api(path, opts);
+  }
+  const ct = res.headers.get('content-type')||'';
+  const body = ct.includes('json') ? await res.json() : await res.text();
+  if (!res.ok) throw new Error((body && body.error) || res.statusText);
+  return body;
+}
+
+async function loadBranches(id){
+  try {
+    const r = await api(`/api/lists/${id}/tree`);
+    TREES[id] = r.fetching ? null : r;
+  } catch(e){ TREES[id] = null; }
+}
+
+/** Attende che lo scaricamento in background finisca, aggiornando la UI.
+ *  Interroga /api/config: esiste sempre e il server lo usa anche per far
+ *  ripartire da solo gli scaricamenti interrotti (es. dopo un riavvio). */
+const POLLING = new Map(); // id -> promise, un solo polling per lista
+
+async function waitReady(id){
+  const start = Date.now();
+  let last = null;
+  let fails = 0;
+  while (Date.now() - start < 15*60*1000){
+    await sleep(2500);
+    let cfg;
+    try { cfg = await api('/api/config'); fails = 0; }
+    catch(e){
+      if (++fails >= 10){ toast('Il server non risponde: ricarica la pagina.', 6000); return false; }
+      continue; // errore transitorio: continua a provare
+    }
+    const fresh = cfg.lists.find(x=>x.id===id);
+    if (!fresh) return false; // lista eliminata
+    const mine = CFG.lists.find(x=>x.id===id);
+    const s = fresh.state || {};
+    if (mine) mine.state = s;
+    if (s.status !== last){ last = s.status; renderLists(); }
+    if (s.status === 'ready'){
+      if (mine && !mine.name && fresh.name) mine.name = fresh.name; // nome assegnato dal server
+      await loadBranches(id);
+      renderLists();
+      return true;
+    }
+    if (s.status === 'error'){ toast('Errore: ' + (s.error || 'sconosciuto'), 6000); renderLists(); return false; }
+  }
+  toast('Lo scaricamento sta impiegando molto: riprova più tardi con Aggiorna.', 6000);
+  return false;
+}
+
+function pollUntilReady(id){
+  if (POLLING.has(id)) return POLLING.get(id);
+  const p = waitReady(id).finally(()=>POLLING.delete(id));
+  POLLING.set(id, p);
+  return p;
+}
+
+/** Avvia il polling per le liste gia' in scaricamento (es. a pagina appena aperta). */
+function monitorFetching(){
+  for (const l of CFG.lists){
+    if (l.state && l.state.status === 'fetching') pollUntilReady(l.id);
+  }
+}
+
+async function loadConfig(){
+  CFG = await api('/api/config');
+  renderAll();
+  await Promise.all(CFG.lists.map(l=>loadBranches(l.id)));
+  renderAll();
+  monitorFetching();
+}
+
+function renderAll(){
+  $('#s_addonName').value = CFG.settings.addonName || '';
+  $('#s_addonId').value = CFG.settings.addonId || '';
+  $('#s_cacheTtlMinutes').value = CFG.settings.cacheTtlMinutes;
+  $('#s_autoRefreshMinutes').value = CFG.settings.autoRefreshMinutes;
+  $('#s_maxDepth').value = CFG.settings.maxDepth;
+  $('#s_token').value = CFG.settings.token || '';
+  $('#s_publicBaseUrl').value = CFG.settings.publicBaseUrl || '';
+  $('#s_dedupeGlobal').checked = !!CFG.settings.dedupeGlobal;
+  $('#s_fitLogos').checked = CFG.settings.fitLogos !== false;
+  const base = (CFG.settings.publicBaseUrl || location.origin).replace(/\/+$/, '');
+  const m = base + '/manifest.json' + tokenQs();
+  $('#manifestUrl').textContent = m;
+  $('#m3uUrl').textContent = base + '/playlist.m3u' + tokenQs();
+  $('#m3uLink').href = base + '/playlist.m3u' + tokenQs();
+  renderLists();
+  $('#status').textContent = `${CFG.lists.length} liste · ${CFG.lists.filter(l=>l.options.enabled).length} attive`;
+  $('#appVersion').textContent = CFG.version ? `WiseM3U v${CFG.version}` : '';
+}
+
+function readSettings(){
+  CFG.settings.addonName = $('#s_addonName').value.trim() || 'WiseM3U';
+  CFG.settings.addonId = $('#s_addonId').value.trim() || 'community.wisem3u';
+  CFG.settings.cacheTtlMinutes = Number($('#s_cacheTtlMinutes').value) || 1440;
+  CFG.settings.autoRefreshMinutes = Number($('#s_autoRefreshMinutes').value) || 0;
+  CFG.settings.maxDepth = Number($('#s_maxDepth').value) || 8;
+  CFG.settings.token = $('#s_token').value.trim();
+  CFG.settings.publicBaseUrl = $('#s_publicBaseUrl').value.trim();
+  CFG.settings.dedupeGlobal = $('#s_dedupeGlobal').checked;
+  CFG.settings.fitLogos = $('#s_fitLogos').checked;
+}
+
+async function saveConfig(){
+  readSettings();
+  const payload = { settings: CFG.settings, lists: CFG.lists };
+  try {
+    const saved = await api('/api/config', { method:'PUT', body: JSON.stringify(payload) });
+    CFG = saved;
+    renderAll();
+    toast('Configurazione salvata ✔');
+  } catch(e){ toast('Errore: '+e.message, 4000); }
+}
+
+async function refreshList(id, btn){
+  if (btn){ btn.disabled = true; btn.textContent = 'Aggiorno…'; }
+  const l = CFG.lists.find(x=>x.id===id);
+  try {
+    await api(`/api/lists/${id}/refresh`, { method:'POST' });
+    if (l) l.state = { status:'fetching' };
+    renderLists();
+    const ok = await pollUntilReady(id);
+    if (ok) toast('Lista aggiornata ✔');
+  } catch(e){ toast('Errore: '+e.message, 4000); }
+  finally { renderLists(); }
+}
+
+async function delList(id){
+  try { await api(`/api/lists/${id}`, { method:'DELETE' }); delete TREES[id]; await loadConfig(); toast('Lista eliminata'); }
+  catch(e){ toast('Errore: '+e.message); }
+}
+
+async function addList(){
+  const url = $('#newUrl').value.trim();
+  const name = $('#newName').value.trim();
+  if (!url) return toast('Inserisci un URL');
+  const btn = $('#btnAdd'); btn.disabled = true; btn.textContent = 'Aggiungo…';
+  try {
+    const r = await api('/api/lists', { method:'POST', body: JSON.stringify({ url, name }) });
+    $('#newUrl').value = ''; $('#newName').value = '';
+    await loadConfig();
+    toast('Lista aggiunta: scaricamento in background…');
+    const ok = await pollUntilReady(r.list.id);
+    if (ok) toast('Lista pronta: sistema i rami qui sotto ✔');
+  } catch(e){ toast('Errore: '+e.message, 5000); }
+  finally { btn.disabled=false; btn.textContent='Aggiungi'; renderLists(); }
+}
+
+async function testEasyProxy(card, list, btn){
+  const box = card.querySelector('[data-epbox]');
+  if (!list.options.easyProxy){
+    box.innerHTML = '<div class="err">Inserisci prima l\'URL di EasyProxy.</div>';
+    return;
+  }
+  btn.disabled = true;
+  box.innerHTML = '<div class="hint">Test della connessione in corso…</div>';
+  try {
+    const r = await api('/api/easyproxy/test', { method:'POST', body: JSON.stringify({
+      base: String(list.options.easyProxy || '').trim().replace(/\/+$/, ''),
+      password: list.options.easyProxyPassword || '',
+      testUrl: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8'
+    })});
+    if (!r.ok){
+      if (epNetErr(r.error)) {
+        box.innerHTML = `<div class="warn"><b>Avviso non bloccante.</b> ${esc(r.error || 'Connessione fallita')}${epHint(r.error)}</div>`;
+      } else {
+        box.innerHTML = `<div class="err">${esc(r.error || 'Connessione fallita')}${epHint(r.error)}</div>`;
+      }
+    } else {
+      const v = r.info || {};
+      const pt = r.proxyTest;
+      const ptHtml = pt
+        ? (pt.error
+          ? `<span class="pill">test proxy <b style="color:#ff9aa8">KO</b></span><div class="${epNetErr(pt.error)?'warn':'err'}" style="margin-top:6px">${epNetErr(pt.error)?'<b>Avviso non bloccante.</b> ':''}${esc(pt.error)}${epHint(pt.error)}</div>`
+          : `<span class="pill">test proxy <b style="color:#7ef0ac">HTTP ${pt.status}</b> (${pt.ms} ms)</span>`)
+        : '';
+      box.innerHTML = `<div class="hint" style="margin-top:8px">
+        <span class="pill">EasyProxy <b style="color:#7ef0ac">raggiungibile</b></span>
+        ${v.version?`<span class="pill">versione <b style="color:#fff">${esc(v.version)}</b></span>`:''}
+        ${v.public_ip?`<span class="pill">IP di uscita <b style="color:#fff">${esc(v.public_ip)}</b></span>`:''}
+        ${ptHtml}
+      </div>
+      <div class="hint">Se il test proxy risponde <b>HTTP 200</b> gli stream passano da EasyProxy.
+        Ricorda <b>Salva configurazione</b> per applicare la riscrittura degli URL.</div>`;
+    }
+  } catch(e){
+    box.innerHTML = `<div class="${epNetErr(e.message)?'warn':'err'}">${epNetErr(e.message)?'<b>Avviso non bloccante.</b> ':''}${esc(e.message)}${epHint(e.message)}</div>`;
+  }
+  finally { btn.disabled = false; }
+}
+
+/** Vero se l'errore del test e' di rete/certificato: non bloccante, perche' a connettersi e' il client. */
+function epNetErr(err){
+  return /timeout|ECONNREFUSED|EHOSTUNREACH|ENETUNREACH|ENOTFOUND|EAI_AGAIN|getaddrinfo|certificate|self signed|self-signed|unable to verify|SSL routines|DNS pubblici/i.test(String(err || ''));
+}
+
+/** Suggerimento mirato in base al tipo di errore del test EasyProxy. */
+function epHint(err){
+  const e = String(err || '');
+  if (/certificate|self signed|self-signed|unable to verify|SSL routines/i.test(e)) {
+    return ' Il container non si fida del certificato: non e\' bloccante, l\'importante e\' che se ne fidi il client (TV/telefono); con un certificato Let\'s Encrypt e\' automatico.';
+  }
+  if (/ECONNREFUSED|EHOSTUNREACH|ENETUNREACH|timeout/i.test(e)) {
+    return ' Sulle reti di casa il container spesso non raggiunge il proprio dominio pubblico (manca il NAT hairpin): non e\' bloccante, verifica la riproduzione sul client.';
+  }
+  return '';
+}
+
+async function probe(){
+  const url = $('#newUrl').value.trim();
+  if (!url) return toast('Inserisci un URL');
+  const box = $('#probeBox');
+  box.innerHTML = '<div class="hint">Download e analisi in corso…</div>';
+  try {
+    const r = await api('/api/probe', { method:'POST', body: JSON.stringify({ url }) });
+    const t = r.tree;
+    box.innerHTML = `<div class="hint" style="margin-top:10px">
+      <span class="pill">nome <b style="color:#fff">${esc(t.meta.name)}</b></span>
+      <span class="pill">formato <b style="color:#fff">${esc(t.meta.kind || 'wiseplay')}</b></span>
+      <span class="pill">nodi <b style="color:#fff">${t.stats.nodes}</b></span>
+      <span class="pill">stream <b style="color:#fff">${t.stats.stations}</b></span>
+      <span class="pill">m3u importate <b style="color:#fff">${t.stats.m3u}</b></span>
+      ${t.errors.length?`<span class="pill">errori <b style="color:#fff">${t.errors.length}</b></span>`:''}
+    </div>`;
+  } catch(e){ box.innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+
+/* ---------------- copia negli appunti ---------------- */
+function copyText(t){
+  if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(t);
+  return new Promise((res, rej) => {
+    const ta = document.createElement('textarea');
+    ta.value = t;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy') ? res() : rej(new Error('copia non riuscita')); }
+    catch(e){ rej(e); }
+    finally { ta.remove(); }
+  });
+}
+
+/* ---------------- init ---------------- */
+$('#btnCopyManifest').addEventListener('click', () => {
+  copyText($('#manifestUrl').textContent).then(
+    () => toast('URL del manifest copiato ✔'),
+    (e) => toast('Copia non riuscita: ' + e.message, 4000)
+  );
+});
+$('#btnCopyM3u').addEventListener('click', () => {
+  copyText($('#m3uUrl').textContent).then(
+    () => toast('URL playlist M3U copiato ✔'),
+    (e) => toast('Copia non riuscita: ' + e.message, 4000)
+  );
+});
+$('#btnAdd').addEventListener('click', addList);
+$('#newUrl').addEventListener('keydown', e=>{ if(e.key==='Enter') addList(); });
+$('#btnNewPList').addEventListener('click', createPersonalList);
+$('#sdToggle').addEventListener('click', () => { const el = $('#sidemenu'); el.hidden = !el.hidden; });
+$('#sidemenu').addEventListener('click', async (ev) => {
+  const go = ev.target.closest('[data-sdgo]');
+  if (go){
+    const card = document.querySelector(`#lists [data-id="${CSS.escape(go.dataset.sdgo)}"]`);
+    if (card){
+      card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      card.classList.remove('flash'); void card.offsetWidth; card.classList.add('flash');
+    }
+    return;
+  }
+  const up = ev.target.closest('[data-sdup]');
+  const dn = ev.target.closest('[data-sddn]');
+  if (up || dn){
+    const i = Number(up ? up.dataset.sdup : dn.dataset.sddn);
+    const j = up ? i - 1 : i + 1;
+    if (j < 0 || j >= CFG.lists.length) return;
+    [CFG.lists[i], CFG.lists[j]] = [CFG.lists[j], CFG.lists[i]];
+    await saveConfig();
+    renderLists();
+  }
+});
+$('#btnProbe').addEventListener('click', probe);
+$('#btnSave').addEventListener('click', saveConfig);
+$('#btnReload').addEventListener('click', loadConfig);
+$('#btnClearCache').addEventListener('click', async ()=>{
+  if(!confirm('Svuotare la cache di tutte le liste?')) return;
+  try { await api('/api/cache/clear',{method:'POST'}); toast('Cache svuotata'); } catch(e){ toast(e.message); }
+});
+
+loadConfig().catch(e=>{
+  $('#lists').innerHTML = `<section class="card"><div class="err">Impossibile caricare la configurazione: ${esc(e.message)}</div></section>`;
+});
+</script>
+</body>
+</html>

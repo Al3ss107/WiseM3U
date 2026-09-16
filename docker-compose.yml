@@ -1,0 +1,29 @@
+services:
+  wisem3u:
+    image: wisem3u:latest
+    build: .
+    container_name: wisem3u
+    restart: unless-stopped
+    # rete bridge: il container ha un IP proprio nella rete docker0 e la
+    # porta 7300 dell'host viene pubblicata sulla 7000 del container
+    network_mode: bridge
+    ports:
+      - "7300:7000"
+    environment:
+      - PORT=7000
+      # porta vista dall'esterno: serve solo per mostrare gli URL corretti
+      # (manifest, playlist) nella pagina di configurazione
+      - PUBLIC_PORT=7300
+      - CONFIG_FILE=/data/config.json
+      - CACHE_DIR=/data/cache
+      # Token per proteggere la pagina di configurazione (opzionale ma consigliato
+      # se la porta 7300 e' raggiungibile da internet)
+      - ADMIN_TOKEN=
+      - TZ=Europe/Rome
+    volumes:
+      - ./data:/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:7000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
