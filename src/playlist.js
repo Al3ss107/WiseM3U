@@ -44,7 +44,7 @@ function prefixJoiner(prefix) {
  * Raccoglie i canali di tutte le liste abilitate.
  * @param {object} config config normalizzata
  * @param {object} [opts] { force }
- * @returns {Promise<{channels:Array, lists:Array, errors:Array}>}
+ * @returns {Promise<{channels:Array, lists:Array, errors:Array, epgUrls:string[]}>}
  */
 async function collectChannels(config, opts = {}) {
   const seen = new Set();
@@ -52,6 +52,7 @@ async function collectChannels(config, opts = {}) {
   const channels = [];
   const listResults = [];
   const errors = [];
+  const epgUrls = []; // EPG ereditati dalle sorgenti m3u/m3u_plus attive
 
   for (const list of config.lists) {
     if (!list.options.enabled || (!list.url && list.kind !== 'personal')) {
@@ -98,6 +99,10 @@ async function collectChannels(config, opts = {}) {
       });
     }
 
+    for (const u of value.epgUrls || []) {
+      if (!epgUrls.includes(u)) epgUrls.push(u);
+    }
+
     listResults.push({
       id: list.id,
       name: list.name || list.url,
@@ -111,7 +116,7 @@ async function collectChannels(config, opts = {}) {
     });
   }
 
-  return { channels, lists: listResults, errors };
+  return { channels, lists: listResults, errors, epgUrls };
 }
 
 /* ----------------------- liste composite (personali) ----------------------- */
@@ -257,12 +262,28 @@ async function entryFor(config, list, force = false, chain = []) {
   return { ...entry, tree };
 }
 
+/** Header EPG per la playlist generata: impostazione manuale + EPG
+ *  ereditati dalle sorgenti m3u/m3u_plus. Scrive entrambe le forme comuni
+ *  (x-tvg-url per Kodi/Xtream, url-tvg per TiviMate e app IPTV). */
+function epgHeader(config, inherited = []) {
+  const all = [];
+  const manual = String(config.settings.epgUrl || '').trim();
+  if (manual) all.push(manual);
+  for (const u of inherited) {
+    if (/^https?:\/\//i.test(u) && !all.includes(u)) all.push(u);
+  }
+  if (!all.length) return {};
+  const joined = all.join(',');
+  return { 'x-tvg-url': joined, 'url-tvg': joined };
+}
+
 async function buildPlaylist(config, opts = {}) {
-  const { channels, lists, errors } = await collectChannels(config, opts);
+  const { channels, lists, errors, epgUrls } = await collectChannels(config, opts);
   const m3u = buildM3U(channels, {
     name: `${config.settings.addonName} (${channels.length} canali)`,
+    header: epgHeader(config, epgUrls),
   });
-  return { m3u, channels, lists, errors };
+  return { m3u, channels, lists, errors, epgUrls };
 }
 
 /* ---------------------------- cataloghi ---------------------------- */
@@ -417,7 +438,14 @@ async function listRows(config, list, opts = {}) {
     });
   }
 
-  const value = { rows, stats, fetchedAt: entry.fetchedAt, error: entry.error || '' };
+  const value = {
+    rows,
+    stats,
+    fetchedAt: entry.fetchedAt,
+    error: entry.error || '',
+    // EPG dichiarati dalla sorgente m3u/m3u_plus (snapshot vecchi: assenti)
+    epgUrls: (entry.tree && entry.tree.meta && entry.tree.meta.epgUrls) || [],
+  };
   rowsMemo.set(list.id, { fp, value });
   return value;
 }
@@ -722,6 +750,7 @@ module.exports = {
   entryFor,
   catalogId,
   catalogDisplayName,
+  epgHeader,
   proxyStreamUrl,
   metaId,
   parseMetaId,

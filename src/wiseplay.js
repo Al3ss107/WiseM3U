@@ -15,7 +15,7 @@
  * Una stazione e' { name, image, url } con url = acestream:// | http(s) | rtmp ...
  */
 
-const { parseM3U } = require('./m3u');
+const { parseM3U, epgUrlsFromHeader } = require('./m3u');
 const { familyOf, aceHash } = require('./protocols');
 
 const { USER_AGENT } = require('./constants');
@@ -153,8 +153,13 @@ function m3uToWisePlay(text, rootUrl) {
     kind: 'm3u',
     name,
     author: 'M3U',
-    info: `Playlist M3U (${entries.length} canali)`,
+    info:
+      `Playlist M3U (${entries.length} canali)` +
+      (header['x-tvg-url'] || header['url-tvg'] ? ' · EPG incluso' : ''),
     url: rootUrl,
+    // m3u_plus: l'EPG dichiarato dalla sorgente (x-tvg-url/url-tvg) si propaga
+    // alla playlist finale generata dall'addon
+    epgUrls: epgUrlsFromHeader(header),
     groups: [...groups.entries()].map(([g, stations]) => ({ name: g, stations })),
   };
 }
@@ -217,6 +222,10 @@ async function buildTree(rootUrl, options = {}) {
   if (!rootJson || typeof rootJson !== 'object') {
     throw new FetchError('La risposta non sembra una lista WisePlay o M3U valida', 0);
   }
+
+  // m3u_plus: URL EPG (XMLTV) ereditati dalle sorgenti m3u, radice e rami;
+  // finiscono nell'header della playlist finale generata dall'addon
+  const epgUrls = new Set(Array.isArray(rootJson.epgUrls) ? rootJson.epgUrls : []);
 
   const meta = {
     name: (rootJson.name || 'Lista WisePlay').toString().trim(),
@@ -320,6 +329,13 @@ async function buildTree(rootUrl, options = {}) {
       for (const e of parsed.entries) {
         pushStation(node, { name: e.name, image: e.logo || '', url: e.url });
       }
+      // anche i rami m3u (isHost) possono dichiarare un proprio EPG
+      if (epgUrls.size < 50) {
+        for (const u of epgUrlsFromHeader(parsed.header)) {
+          if (epgUrls.size >= 50) break;
+          epgUrls.add(u);
+        }
+      }
       node.m3uGroups = [...new Set(parsed.entries.map((e) => e.group).filter(Boolean))].slice(0, 20);
       return;
     }
@@ -376,6 +392,8 @@ async function buildTree(rootUrl, options = {}) {
     return node.counts;
   }
   count(root);
+
+  meta.epgUrls = [...epgUrls];
 
   return { meta, children: root.children, stats, errors, root };
 }

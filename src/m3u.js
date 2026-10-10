@@ -1,7 +1,9 @@
 'use strict';
 
 /**
- * Parser e serializzatore M3U / M3U8.
+ * Parser e serializzatore M3U / M3U8, con supporto al formato esteso
+ * "m3u_plus" (Xtream Codes: tvg-id/tvg-name/tvg-logo/group-title, EPG
+ * x-tvg-url/url-tvg, direttiva #EXTGRP delle playlist type=m3u).
  * Serve sia per importare i rami "isHost" delle liste WisePlay (che sono vere m3u)
  * sia per produrre la playlist finale esposta dall'addon.
  */
@@ -19,6 +21,7 @@ function parseM3U(text, fallbackGroup = '') {
   const entries = [];
   let header = {};
   let pending = null;
+  let lastExtGrp = '';
 
   for (const rawLine of lines) {
     const line = rawLine.trim();
@@ -32,12 +35,18 @@ function parseM3U(text, fallbackGroup = '') {
       pending = parseExtInf(line);
       continue;
     }
+    if (line.startsWith('#EXTGRP:')) {
+      // direttiva delle playlist Xtream "type=m3u": vale per il canale successivo
+      lastExtGrp = line.slice('#EXTGRP:'.length).trim();
+      continue;
+    }
     if (line.startsWith('#')) continue; // #EXTVLCOPT, #KODIPROP, commenti...
 
     // riga URL
     const url = line;
     const meta = pending || {};
-    const groupTitle = (meta['group-title'] || fallbackGroup || '').trim();
+    // precedenza: group-title dell'EXTINF, poi #EXTGRP, poi il fallback passato dal chiamante
+    const groupTitle = (meta['group-title'] || lastExtGrp || fallbackGroup || '').trim();
     entries.push({
       name: (meta.title || '').trim() || url,
       url,
@@ -48,9 +57,27 @@ function parseM3U(text, fallbackGroup = '') {
       duration: meta.duration != null ? meta.duration : -1,
     });
     pending = null;
+    lastExtGrp = '';
   }
 
   return { header, entries };
+}
+
+/**
+ * Gli URL EPG (XMLTV) dichiarati nell'header della playlist
+ * (x-tvg-url e' la forma Kodi/Xtream, url-tvg quella di molte app IPTV;
+ * entrambi ammettono piu' URL separati da virgola).
+ * @param {object} header attributi della riga #EXTM3U
+ * @returns {string[]} URL http(s) unici, nell'ordine in cui compaiono
+ */
+function epgUrlsFromHeader(header) {
+  const raw = header && (header['url-tvg'] || header['x-tvg-url']);
+  if (!raw) return [];
+  const seen = new Set();
+  for (const u of String(raw).split(',').map((s) => s.trim())) {
+    if (/^https?:\/\//i.test(u)) seen.add(u);
+  }
+  return [...seen];
 }
 
 function parseAttrs(line) {
@@ -61,12 +88,29 @@ function parseAttrs(line) {
   return attrs;
 }
 
+/**
+ * Divide "#EXTINF:<durata> attr...,Titolo canale" in testa e titolo.
+ * Il separatore e' la prima virgola FUORI dalle virgolette: nelle liste
+ * m3u_plus i valori tvg-name/group-title possono contenere virgole
+ * (es. group-title="Sport, Calcio"), e non devono spezzare il titolo.
+ */
+function splitExtInf(line) {
+  let inQuote = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') inQuote = !inQuote;
+    else if (ch === ',' && !inQuote) {
+      return { head: line.slice(0, i), title: line.slice(i + 1).trim() };
+    }
+  }
+  return { head: line, title: '' };
+}
+
 function parseExtInf(line) {
-  const attrs = parseAttrs(line);
-  // #EXTINF:-1 tvg-logo="..." group-title="...",Nome canale
-  const commaIdx = line.indexOf(',');
-  const title = commaIdx >= 0 ? line.slice(commaIdx + 1).trim() : '';
-  const head = commaIdx >= 0 ? line.slice(0, commaIdx) : line;
+  const { head, title } = splitExtInf(line);
+  // gli attributi si leggono solo dalla parte prima del titolo: virgolette
+  // e coppie chiave="valore" nel nome del canale non devono diventare attributi
+  const attrs = parseAttrs(head);
   const durMatch = head.match(/#EXTINF:\s*(-?[\d.]+)/);
   return { ...attrs, title, duration: durMatch ? Number(durMatch[1]) : -1 };
 }
@@ -106,4 +150,4 @@ function buildM3U(entries, opts = {}) {
   return out.join('\n') + '\n';
 }
 
-module.exports = { parseM3U, buildM3U };
+module.exports = { parseM3U, buildM3U, epgUrlsFromHeader };

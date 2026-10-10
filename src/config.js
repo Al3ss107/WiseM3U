@@ -55,6 +55,7 @@ function defaultConfig() {
       token: '',
       configPassword: '',
       publicBaseUrl: '', // URL pubblico (es. https://mio.dominio con nginx+cert): base per i link mostrati
+      epgUrl: '', // URL XMLTV manuale da dichiarare nella playlist generata (si aggiunge agli EPG ereditati dalle sorgenti m3u_plus)
     },
     lists: [],
   };
@@ -171,6 +172,9 @@ function normalizeConfig(raw) {
   const settings = { ...base.settings, ...(cfg.settings || {}) };
   settings.publicBaseUrl = String(settings.publicBaseUrl || '').trim().replace(/\/+$/, '');
   if (settings.publicBaseUrl && !/^https?:\/\//i.test(settings.publicBaseUrl)) settings.publicBaseUrl = '';
+  // EPG manuale: come l'URL pubblico, accetta solo http(s) altrimenti si azzera
+  settings.epgUrl = String(settings.epgUrl || '').trim();
+  if (settings.epgUrl && !/^https?:\/\//i.test(settings.epgUrl)) settings.epgUrl = '';
   settings.personalLists = Array.isArray(settings.personalLists)
     ? settings.personalLists
         .filter((p) => p && typeof p === 'object')

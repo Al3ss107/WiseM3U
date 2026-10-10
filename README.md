@@ -1,7 +1,8 @@
-# WiseM3U — addon Stremio & Nuvio per liste WisePlay e playlist M3U
+# WiseM3U — addon Stremio & Nuvio per liste WisePlay e playlist M3U/M3U_PLUS
 
 Trasforma le liste **WisePlay** (quelle condivise come link accorciati) **o una qualsiasi
-playlist M3U/M3U8** in una **playlist M3U** e in **cataloghi Stremio/Nuvio**, con una
+playlist M3U/M3U8 — comprese le M3U_PLUS di Xtream Codes** in una **playlist M3U** e in
+**cataloghi Stremio/Nuvio**, con una
 pagina web per scegliere **cosa usare e cosa no** di ogni lista.
 
 Self-hosted, poche dipendenze leggere (`express` + `pngjs`/`jpeg-js` per i poster
@@ -152,6 +153,10 @@ http://IP-DEL-SERVER:7300/playlist.m3u
   `publicBaseUrl` e/o il token, l'URL copiato li include già;
 * `group-title` = `NomeLista › Gruppo › Sottogruppo` (livelli configurabili)
 * logo, nome e deduplica configurabili per lista
+* **EPG integrata**: se una sorgente m3u_plus/Xtream dichiara la guida
+  (`x-tvg-url`/`url-tvg`) o imposti un **URL EPG** nelle impostazioni generali,
+  la playlist generata la riporta nell'header `#EXTM3U` — le app IPTV caricano
+  la guida programmi da sole
 * versione `.m3u8` disponibile allo stesso percorso con estensione `.m3u8`
 
 Endpoint di supporto:
@@ -353,7 +358,12 @@ WiseM3U:
 3. se la radice è una **playlist M3U** (non JSON) la converte in un albero equivalente:
    ogni `group-title` diventa un ramo/genere (i canali senza gruppo finiscono in
    "Generale"), logo e nomi restano quelli della playlist — da lì in poi vale tutto il
-   resto (selezione rami, rinomine, catalogo, output M3U);
+   resto (selezione rami, rinomine, catalogo, output M3U). È supportato il formato esteso
+   **M3U_PLUS**: i link Xtream Codes
+   (`get.php?username=…&password=…&type=m3u_plus&output=ts`) funzionano come sorgente a
+   tutti gli effetti; gli attributi `tvg-*` vengono letti anche quando contengono virgole,
+   la direttiva `#EXTGRP` (liste Xtream `type=m3u` semplici) viene rispettata e l'EPG
+   dichiarato dalla sorgente (`x-tvg-url`/`url-tvg`) viene ereditato dalla playlist finale;
 4. scende ricorsivamente nei `groups` annidati e scarica i riferimenti esterni **in parallelo**;
 5. riconosce al volo se un URL restituisce JSON WisePlay o una `.m3u` (i rami `isHost`
    sono quasi sempre m3u) e importa i canali;

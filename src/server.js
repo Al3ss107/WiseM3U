@@ -108,7 +108,7 @@ app.get('/manifest.json', async (req, res) => {
       id: s.addonId,
       version: C.VERSION,
       name: s.addonName,
-      description: 'Liste WisePlay convertite in canali M3U. Configurabile su /configure',
+      description: 'Liste WisePlay e playlist M3U/M3U_PLUS (anche Xtream) convertite in canali e cataloghi. Configurabile su /configure',
       logo: `${baseUrl(req)}/logo.svg`,
       background: `${baseUrl(req)}/logo.svg`,
       resources: ['catalog', 'meta', 'stream'],
@@ -264,7 +264,13 @@ async function listM3U(cfg, list, onlyPath = '') {
     .map((c) => ({ ...c, url: playlist.proxyStreamUrl(normalizeStreamUrl(c.url, list.options), list) }))
     .filter((c) => c.url)
     .map((c) => ({ name: c.name, url: c.url, logo: c.logo, group: c.group || prefix }));
-  return buildM3U(channels, { name: `${prefix} (${channels.length} canali)` });
+  // anche l'anteprima/le liste dedicate dichiarano l'EPG (manuale + quello
+  // ereditato dalla sorgente m3u/m3u_plus, se lo aveva)
+  const listEpg = (entry.tree && entry.tree.meta && entry.tree.meta.epgUrls) || [];
+  return buildM3U(channels, {
+    name: `${prefix} (${channels.length} canali)`,
+    header: playlist.epgHeader(cfg, listEpg),
+  });
 }
 
 app.get('/api/lists/:id/preview.m3u', requireAdmin, async (req, res) => {
@@ -286,6 +292,7 @@ app.get('/channels.json', requireToken, async (req, res) => {  try {
       count: result.channels.length,
       lists: result.lists,
       errors: result.errors,
+      epg: Object.keys(playlist.epgHeader(cfg, result.epgUrls)).length ? result.epgUrls : undefined,
       channels: req.query.full === '1' ? result.channels : undefined,
     });
   } catch (err) {

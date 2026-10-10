@@ -236,7 +236,7 @@
   <img src="/logo.svg" alt="logo">
   <div>
     <h1>WiseM3U <span class="sub">addon Stremio &amp; Nuvio</span></h1>
-    <div class="sub">Liste WisePlay → playlist M3U + cataloghi</div>
+    <div class="sub">Liste WisePlay, M3U e M3U_PLUS → playlist M3U + cataloghi</div>
   </div>
   <div class="spacer"></div>
   <div class="links">
@@ -251,11 +251,11 @@
 
   <!-- ============ AGGIUNGI LISTA ============ -->
   <section class="card">
-    <h2><span class="n">1</span> Aggiungi una lista (WisePlay o M3U)</h2>
+    <h2><span class="n">1</span> Aggiungi una lista (WisePlay o M3U/M3U_PLUS)</h2>
     <div class="row">
       <div style="flex:3 1 320px">
-        <label>URL della lista (WisePlay JSON o playlist M3U)</label>
-        <input id="newUrl" type="url" placeholder="https://esempio.it/lista.json oppure https://esempio.it/lista.m3u">
+        <label>URL della lista (WisePlay JSON, playlist M3U o M3U_PLUS/Xtream)</label>
+        <input id="newUrl" type="url" placeholder="https://esempio.it/lista.m3u oppure http://iptv.it:8080/get.php?username=...&password=...&type=m3u_plus&output=ts">
       </div>
       <div style="flex:2 1 200px">
         <label>Nome (opzionale)</label>
@@ -271,6 +271,12 @@
       <summary>ℹ️ Quali link funzionano e come</summary>
       <div class="hint">Accetta sia le catene JSON WisePlay (link accorciati, gist, php…) sia un normale
         <b>link M3U/M3U8</b>: i <code>group-title</code> della playlist diventano i rami/generi.
+        Funziona anche con le playlist <b>M3U_PLUS di Xtream Codes</b>
+        (<code>get.php?username=…&amp;password=…&amp;type=m3u_plus&amp;output=ts</code>) e con
+        quelle <code>type=m3u</code> semplici (direttiva <code>#EXTGRP</code>): nomi e gruppi
+        vengono letti dagli attributi <code>tvg-*</code> anche quando contengono virgole, e un
+        eventuale <b>EPG</b> dichiarato dalla sorgente (<code>x-tvg-url</code>/<code>url-tvg</code>)
+        viene riportato nella playlist generata.
         L'addon segue i redirect, scarica i JSON annidati e importa anche i rami
         <code>isHost</code> che puntano a file <code>.m3u</code>. Lo scaricamento avviene in
         background: puoi continuare a usare la pagina mentre lavora.
@@ -316,6 +322,12 @@
         <div class="hint">Se l'addon sta dietro nginx con dominio + certificato, scrivi qui la base
           pubblica (es. <code>https://tv.miodominio.it</code>): i link mostrati useranno quella.</div>
       </div>
+      <div>
+        <label>URL EPG XMLTV (opzionale)</label>
+        <input id="s_epgUrl" type="text" placeholder="https://mio.dominio/guide.xml">
+        <div class="hint">Dichiarato nell'header della playlist generata (<code>url-tvg</code>/<code>x-tvg-url</code>).
+          Si aggiunge agli EPG ereditati dalle sorgenti m3u_plus/Xtream. Vuoto = solo quelli rilevati.</div>
+      </div>
     </div>
     <div class="row" style="margin-top:12px">
       <label class="chk on" style="flex:0 0 auto"><input type="checkbox" id="s_dedupeGlobal"> Rimuovi i duplicati globali (stesso URL)</label>
@@ -343,7 +355,9 @@
     </div>
     <div class="hint">In <b>Nuvio</b>: Impostazioni → Contenuti e scoperta → Componenti aggiuntivi, incolla l'URL del manifest.
       In <b>Stremio</b>: Addon → Community, incolla lo stesso URL.
-      L'URL <b>M3U</b> funziona in qualsiasi lettore IPTV (contiene solo le liste attive).</div>
+      L'URL <b>M3U</b> funziona in qualsiasi lettore IPTV (contiene solo le liste attive) ed è già in
+      formato <b>m3u_plus</b>: se le sorgenti hanno un EPG (o ne imposti uno nelle impostazioni generali)
+      il lettore caricherà da solo la guida programmi.</div>
   </section>
 
   <!-- ============ LISTE ============ -->
@@ -1442,6 +1456,7 @@ function renderAll(){
   $('#s_maxDepth').value = CFG.settings.maxDepth;
   $('#s_token').value = CFG.settings.token || '';
   $('#s_publicBaseUrl').value = CFG.settings.publicBaseUrl || '';
+  $('#s_epgUrl').value = CFG.settings.epgUrl || '';
   $('#s_dedupeGlobal').checked = !!CFG.settings.dedupeGlobal;
   $('#s_fitLogos').checked = CFG.settings.fitLogos !== false;
   const base = (CFG.settings.publicBaseUrl || location.origin).replace(/\/+$/, '');
@@ -1462,6 +1477,7 @@ function readSettings(){
   CFG.settings.maxDepth = Number($('#s_maxDepth').value) || 8;
   CFG.settings.token = $('#s_token').value.trim();
   CFG.settings.publicBaseUrl = $('#s_publicBaseUrl').value.trim();
+  CFG.settings.epgUrl = $('#s_epgUrl').value.trim();
   CFG.settings.dedupeGlobal = $('#s_dedupeGlobal').checked;
   CFG.settings.fitLogos = $('#s_fitLogos').checked;
 }
