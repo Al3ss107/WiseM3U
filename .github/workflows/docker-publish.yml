@@ -2,7 +2,7 @@ name: Build & publish Docker image
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, 'arena/**' ]
     tags: [ 'v*' ]
   workflow_dispatch:
 
@@ -42,6 +42,9 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+            # i branch di lavoro (es. arena/...) pubblicano un tag col nome del branch:
+            # ghcr.io/<utente>/wisem3u:arena-7045a7cd-wisem3u — "latest" resta su main
+            type=ref,event=branch
 
       - name: Build e push (amd64 + arm64 + armv7)
         uses: docker/build-push-action@v6
