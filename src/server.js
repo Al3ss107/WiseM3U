@@ -87,6 +87,18 @@ function baseUrl(req) {
   return `${proto}://${host}`;
 }
 
+/**
+ * URL di lista incollato da una pagina/messaggio HTML: gli `&` diventano spesso
+ * `&amp;` (o `&#38;`) e il server Xtream riceve parametri sbagliati (risponde con
+ * pagine d'errore -> "lista non valida"). Normalizziamo sempre all'ingresso.
+ */
+function sanitizeListUrl(url) {
+  return String(url || '')
+    .trim()
+    .replace(/&amp;/gi, '&')
+    .replace(/&#0?38;/gi, '&');
+}
+
 function publicConfig(cfg) {
   return {
     version: C.VERSION,
@@ -385,7 +397,7 @@ function startRefresh(listId, force = true) {
 /** Aggiunge una lista; lo scaricamento parte in background (UI: /state). */
 app.post('/api/lists', requireAdmin, (req, res) => {
   try {
-    const url = (req.body && req.body.url ? String(req.body.url) : '').trim();
+    const url = sanitizeListUrl(req.body && req.body.url);
     if (!/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'URL non valido (usa http/https)' });
     const name = (req.body && req.body.name ? String(req.body.name) : '').trim();
 
@@ -848,7 +860,7 @@ app.get('/api/lists/:id/tree', requireAdmin, async (req, res) => {
 
 /** Test rapido di un URL senza salvarlo. */
 app.post('/api/probe', requireAdmin, async (req, res) => {
-  const url = (req.body && req.body.url ? String(req.body.url) : '').trim();
+  const url = sanitizeListUrl(req.body && req.body.url);
   if (!/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'URL non valido' });
   try {
     const tree = await buildTree(url, { maxDepth: store.loadConfig().settings.maxDepth });

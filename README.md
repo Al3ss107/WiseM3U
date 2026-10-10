@@ -159,6 +159,13 @@ http://IP-DEL-SERVER:7300/playlist.m3u
   la guida programmi da sole
 * versione `.m3u8` disponibile allo stesso percorso con estensione `.m3u8`
 
+> **Errori tipici con le liste Xtream** — `lista non valida` quasi sempre è un
+> URL copiato da pagina/messaggio HTML con `&amp;` al posto di `&` (WiseM3U lo
+> corregge da solo, ma verifica username/password/type: l'errore mostra l'inizio
+> della risposta del server). `failed to fetch` con pannelli lenti/instabili: il
+> download della radice arriva a 60 s di timeout e viene ritentato una volta in
+> automatico.
+
 Endpoint di supporto:
 
 | Endpoint | Descrizione |

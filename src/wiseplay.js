@@ -24,6 +24,11 @@ const MAX_DEPTH = 8;
 const MAX_NODES = 6000;
 const MAX_STATIONS = 150000;
 const FETCH_TIMEOUT_MS = 20000;
+// le sorgenti Xtream/m3u_plus vengono generate dal pannello a ogni richiesta:
+// con migliaia di voci (live+VOD+serie) possono richiedere molto piu' dei 20s
+// usati per i singoli rami
+const ROOT_FETCH_TIMEOUT_MS = 60000;
+const ROOT_FETCH_RETRY_DELAY_MS = 1500;
 const MAX_BYTES = 60 * 1024 * 1024;
 const CONCURRENCY = 32;
 
@@ -210,7 +215,22 @@ async function buildTree(rootUrl, options = {}) {
   const stats = newCounters();
   const errors = [];
 
-  const rootText = await fetchText(rootUrl, options);
+  // Scarica la radice con timeout dedicato e un secondo tentativo automatico:
+  // i pannelli Xtream lenti/instabili altrimenti finiscono in "failed to fetch".
+  // Gli errori HTTP 4xx (credenziali o URL errati) non vengono riprovati.
+  async function fetchRoot() {
+    const opts = { ...options, timeout: ROOT_FETCH_TIMEOUT_MS };
+    try {
+      return await fetchText(rootUrl, opts);
+    } catch (err) {
+      const status = err && err.status;
+      if (status && status >= 400 && status < 500) throw err;
+      await new Promise((r) => setTimeout(r, ROOT_FETCH_RETRY_DELAY_MS));
+      return fetchText(rootUrl, opts);
+    }
+  }
+
+  const rootText = await fetchRoot();
   const rootKind = guessKind(rootUrl, rootText);
   let rootJson;
   if (rootKind === 'm3u') {
@@ -220,7 +240,15 @@ async function buildTree(rootUrl, options = {}) {
     rootJson = parseLenientJson(rootText);
   }
   if (!rootJson || typeof rootJson !== 'object') {
-    throw new FetchError('La risposta non sembra una lista WisePlay o M3U valida', 0);
+    // tipico con link Xtream copiati male (es. &amp; al posto di &): il server
+    // risponde con una pagina/JSON d'errore. Mostriamo l'inizio della risposta
+    // cosi' la causa e' leggibile direttamente nella configurazione.
+    const snippet = String(rootText || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+    throw new FetchError(
+      'La risposta non sembra una lista WisePlay o M3U valida' +
+        (snippet ? ` — inizio risposta: "${snippet}"` : ''),
+      0
+    );
   }
 
   // m3u_plus: URL EPG (XMLTV) ereditati dalle sorgenti m3u, radice e rami;

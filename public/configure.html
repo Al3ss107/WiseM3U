@@ -280,6 +280,13 @@
         L'addon segue i redirect, scarica i JSON annidati e importa anche i rami
         <code>isHost</code> che puntano a file <code>.m3u</code>. Lo scaricamento avviene in
         background: puoi continuare a usare la pagina mentre lavora.
+        <br>⚠️ <b>Copia/incolla:</b> se l'URL viene da una pagina web o da un messaggio HTML,
+        i <code>&amp;</code> possono arrivare scritti come <code>&amp;amp;</code>: WiseM3U li
+        corregge da solo sia qui sia nel server.
+        <br>⚠️ <b>Pannelli lenti:</b> le playlist Xtream con migliaia di voci possono impiegare
+        fino a 60 s a generarsi; in caso di errore di rete il download viene ritentato una volta.
+        <br>⚠️ Se una lista va in errore, il messaggio mostra l'<b>inizio della risposta</b> del
+        server: così distingui subito credenziali errate da URL non valido.
         Nota: se l'URL sorgente e' servito da un altro addon/container sullo stesso server
         (es. un altro addon), quel servizio lavorera' a ogni scaricamento/aggiornamento: e' il
         comportamento atteso, perche' WiseM3U deve scaricare la sorgente.</div>
@@ -1511,8 +1518,13 @@ async function delList(id){
   catch(e){ toast('Errore: '+e.message); }
 }
 
+/** URL incollato da pagine/messaggi HTML: &amp;/&#38; tornano a & (v. anche lato server). */
+function cleanListUrl(s){
+  return String(s || '').trim().replace(/&amp;/gi, '&').replace(/&#0?38;/gi, '&');
+}
+
 async function addList(){
-  const url = $('#newUrl').value.trim();
+  const url = cleanListUrl($('#newUrl').value);
   const name = $('#newName').value.trim();
   if (!url) return toast('Inserisci un URL');
   const btn = $('#btnAdd'); btn.disabled = true; btn.textContent = 'Aggiungo…';
@@ -1588,7 +1600,7 @@ function epHint(err){
 }
 
 async function probe(){
-  const url = $('#newUrl').value.trim();
+  const url = cleanListUrl($('#newUrl').value);
   if (!url) return toast('Inserisci un URL');
   const box = $('#probeBox');
   box.innerHTML = '<div class="hint">Download e analisi in corso…</div>';
