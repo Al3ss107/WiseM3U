@@ -15,6 +15,8 @@
  * Una stazione e' { name, image, url } con url = acestream:// | http(s) | rtmp ...
  */
 
+const http = require('http');
+const https = require('https');
 const { parseM3U, epgUrlsFromHeader } = require('./m3u');
 const { familyOf, aceHash } = require('./protocols');
 
@@ -98,6 +100,28 @@ class FetchError extends Error {
   }
 }
 
+/** Codici d'errore TLS che indicano un certificato non attendibile
+ *  (self-signed, scaduto, catena rotta: frequente nei pannelli Xtream). */
+const CERT_ERROR_RE = /UNABLE_TO_VERIFY_LEAF_SIGNATURE|DEPTH_ZERO_SELF_SIGNED_CERT|SELF_SIGNED_CERT_IN_CHAIN|CERT_HAS_EXPIRED|UNABLE_TO_GET_ISSUER_CERT|CERT_NOT_YET_VALID/i;
+
+/**
+ * undici risponde a quasi ogni problema di rete con il generico "fetch failed":
+ * la causa vera (DNS, certificato, reset, refused...) e' in err.cause.
+ * La spostiamo nel messaggio cosi' resta visibile nello stato della lista.
+ */
+function fetchFailure(err, url) {
+  if (err instanceof FetchError) return err;
+  const cause = err && err.cause;
+  let detail = (cause && (cause.code || cause.message)) || (err && err.message) || String(err);
+  if (cause && cause.code && cause.message && !String(detail).includes(cause.message)) {
+    detail = `${cause.code}: ${cause.message}`;
+  }
+  const cert = CERT_ERROR_RE.test(String((cause && cause.code) || '') + ' ' + String((cause && cause.message) || ''));
+  const out = new FetchError(`Connessione fallita verso ${url} — ${detail}`, 0);
+  out.certError = cert;
+  return out;
+}
+
 async function fetchText(url, opts = {}) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), opts.timeout || FETCH_TIMEOUT_MS);
@@ -114,9 +138,66 @@ async function fetchText(url, opts = {}) {
     const buf = Buffer.from(await res.arrayBuffer());
     if (buf.length > MAX_BYTES) throw new FetchError(`Risposta troppo grande (${buf.length} byte)`, res.status);
     return buf.toString('utf8');
+  } catch (err) {
+    throw fetchFailure(err, url);
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Ripiego per pannelli Xtream con certificato TLS non attendibile
+ * (self-signed/scaduto, molto comuni): rifa la richiesta SENZA verifica del
+ * certificato usando i moduli http/https nativi (redirect gestiti a mano).
+ * Si usa solo dopo che la richiesta normale e' fallita proprio per il
+ * certificato: non e' un bypass generale.
+ */
+function fetchTextInsecureTls(url, opts = {}, redirectsLeft = 5) {
+  return new Promise((resolve, reject) => {
+    let u;
+    try { u = new URL(url); } catch (_) { return reject(new FetchError('URL non valido', 0)); }
+    const lib = u.protocol === 'https:' ? https : http;
+    const req = lib.get(
+      {
+        host: u.hostname,
+        port: u.port || (u.protocol === 'https:' ? 443 : 80),
+        path: u.pathname + (u.search || ''),
+        headers: {
+          'User-Agent': USER_AGENT,
+          Accept: 'application/json, text/plain, application/x-mpegurl, */*',
+          'Accept-Encoding': 'identity', // niente compressione: qui non viene decompressed
+        },
+        timeout: opts.timeout || FETCH_TIMEOUT_MS,
+        rejectUnauthorized: false,
+        // SNI corretto verso i vhost; verso gli IP non va inviato (RFC 6066)
+        ...(require('net').isIP(u.hostname) ? {} : { servername: u.hostname }),
+      },
+      (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && redirectsLeft > 0) {
+          res.resume();
+          const next = new URL(res.headers.location, url).toString();
+          return resolve(fetchTextInsecureTls(next, opts, redirectsLeft - 1));
+        }
+        if (res.statusCode !== 200) {
+          res.resume();
+          return reject(new FetchError(`HTTP ${res.statusCode} per ${url}`, res.statusCode));
+        }
+        const chunks = [];
+        let size = 0;
+        res.on('data', (c) => {
+          size += c.length;
+          if (size <= MAX_BYTES) chunks.push(c);
+        });
+        res.on('end', () => {
+          if (size > MAX_BYTES) return reject(new FetchError(`Risposta troppo grande (${size} byte)`, res.statusCode));
+          resolve(Buffer.concat(chunks).toString('utf8'));
+        });
+        res.on('error', (e) => reject(fetchFailure(e, url)));
+      }
+    );
+    req.on('timeout', () => req.destroy(new FetchError(`timeout dopo ${opts.timeout || FETCH_TIMEOUT_MS} ms`, 0)));
+    req.on('error', (e) => reject(e instanceof FetchError ? e : fetchFailure(e, url)));
+  });
 }
 
 function isM3uText(text) {
@@ -217,16 +298,30 @@ async function buildTree(rootUrl, options = {}) {
 
   // Scarica la radice con timeout dedicato e un secondo tentativo automatico:
   // i pannelli Xtream lenti/instabili altrimenti finiscono in "failed to fetch".
+  // Certificato TLS non attendibile (self-hosted): retry senza verifica.
   // Gli errori HTTP 4xx (credenziali o URL errati) non vengono riprovati.
   async function fetchRoot() {
     const opts = { ...options, timeout: ROOT_FETCH_TIMEOUT_MS };
     try {
       return await fetchText(rootUrl, opts);
     } catch (err) {
+      if (err && err.certError) {
+        console.warn(`[wiseplay] certificato TLS non verificabile per ${rootUrl}: riprovo senza verifica`);
+        return fetchTextInsecureTls(rootUrl, opts);
+      }
       const status = err && err.status;
       if (status && status >= 400 && status < 500) throw err;
       await new Promise((r) => setTimeout(r, ROOT_FETCH_RETRY_DELAY_MS));
-      return fetchText(rootUrl, opts);
+      try {
+        return await fetchText(rootUrl, opts);
+      } catch (err2) {
+        // anche il secondo tentativo puo' scoprire che il problema e' il certificato
+        if (err2 && err2.certError) {
+          console.warn(`[wiseplay] certificato TLS non verificabile per ${rootUrl}: riprovo senza verifica`);
+          return fetchTextInsecureTls(rootUrl, opts);
+        }
+        throw err2;
+      }
     }
   }
 
