@@ -954,7 +954,15 @@ app.get('/api/lists/:id/channels', requireAdmin, async (req, res) => {
       const key = `${path}::${st.name}`;
       if (del.has(key)) return; // eliminato: non si vede piu'
       if (movedOut.has(key)) return; // vive in un altro ramo/gruppo
-      chans.push({ name: st.name, shown: renames[key] || st.name, enabled: !dis.has(key), home: path, cur: path, from: '' });
+      chans.push({
+        name: st.name,
+        shown: renames[key] || st.name,
+        enabled: !dis.has(key),
+        home: path,
+        cur: path,
+        from: '',
+        url: st.url || '', // URL dell'origine (prima di qualunque riscrittura proxy/diag)
+      });
     });
   }
   for (const inc of incoming.get(path) || []) {
@@ -966,6 +974,7 @@ app.get('/api/lists/:id/channels', requireAdmin, async (req, res) => {
       home: inc.srcPath,
       cur: path,
       from: inc.srcName,
+      url: (inc.st && inc.st.url) || '',
     });
   }
 

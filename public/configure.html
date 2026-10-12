@@ -164,6 +164,10 @@
   .crow .cname{flex:1 1 150px;min-width:0;padding:6px 10px;font-size:12.5px}
   .crow .cname.renamed{border-color:#3c6bd6}
   .crow .cmove{flex:1 1 130px;max-width:200px;background:#101a3a;color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-size:11.5px}
+  .crow .curl{flex:0 0 100%;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;color:#8a97c4;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:1px 2px 3px 26px;cursor:pointer;user-select:all}
+  .crow .curl:hover{color:#cfe0ff}
+  .crow .curl::before{content:'⮕ ';color:#55617f}
   .crow .cmove.renamed{border-color:#3c6bd6}
   .crow input[type=checkbox]{width:15px;height:15px;accent-color:var(--acc);cursor:pointer;flex:0 0 auto}
   /* ---------- drag & drop ---------- */
@@ -608,6 +612,7 @@ function renderChannels(list, b){
       <button class="ghost small" data-capply="${i}" title="Sposta il canale nel gruppo scritto o scelto">➜</button>
       <button class="ghost small" data-creset="${i}" title="Riporta il canale nella sua playlist originale">↺</button>
       <button class="ghost small" data-cdel="${i}" title="Elimina il canale (recuperabile nel cestino)">✕</button>
+      ${c.url ? `<div class="curl" data-curl="${i}" title="URL della sorgente video (quella del pannello, prima di proxy/diagnostica) — click per copiare">${esc(c.url)}</div>` : ''}
     </div>`;
   }).join('');
   return `<div class="chans" data-chans="${esc(b.path)}">
@@ -625,6 +630,9 @@ function renderChannels(list, b){
 }
 
 function renderLists(){
+  // la ricostruzione del DOM non deve spostare la vista: senza questo accorgimento
+  // espandere una playlist in coda alla pagina riportava la vista all'inizio
+  const sy = window.scrollY;
   const root = $('#lists');
   if (!CFG.lists.length){
     root.innerHTML = `<section class="card">
@@ -637,6 +645,7 @@ function renderLists(){
   for (const card of document.querySelectorAll('#lists .listcard')) plPopulateBranches(card);
   renderSideMenu();
   for (const l of CFG.lists) fillXtreamBadge(l);
+  if (window.scrollY !== sy) window.scrollTo({ top: sy, behavior: 'instant' });
 }
 
 /* -------- scadenza account Xtream (player_api.php) -------- */
@@ -1214,6 +1223,18 @@ function bindListEvents(){
           await refreshTrash(id);
           renderLists();
         } catch (e){ toast(e.message, 4000); }
+        return;
+      }
+      const curl = ev.target.closest('.curl');
+      if (curl){
+        const path = curl.closest('.chans').dataset.chans;
+        const c = (CHANS[`${id}|${path}`] || [])[Number(curl.dataset.curl)];
+        if (c && c.url){
+          copyText(c.url).then(
+            () => toast('URL sorgente copiato ✔'),
+            (e) => toast('Copia non riuscita: ' + e.message, 4000)
+          );
+        }
         return;
       }
       const cdel = ev.target.closest('button[data-cdel]');

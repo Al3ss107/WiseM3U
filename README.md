@@ -209,7 +209,9 @@ API usate dalla pagina di configurazione (utili anche per script/automazioni):
   playlist e catalogo). Un filtro in alto trova subito i rami per nome.
 * **Singoli canali** — con il pulsante **▸ canali** espandi una playlist e gestisci i
   canali uno per uno: **escludere**, **rinominare**, **riordinare** (trascina) e
-  **spostare**: il campo gruppo a destra di ogni canale (tendina con i gruppi
+  **spostare**. Sotto ogni canale vedi l'**URL della sorgente video** (quella
+  originale del pannello, prima di EasyProxy/diagnostica): click per copiarla.
+  Il campo gruppo a destra di ogni canale (tendina con i gruppi
   esistenti, sempre scrivibile) seguito da due pulsanti espliciti —
   **➜** sposta il canale nel gruppo scelto o digitato (un gruppo inesistente viene
   creato al volo), **↺** lo riporta nella playlist originale. Lo spostamento viene
