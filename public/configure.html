@@ -168,6 +168,14 @@
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:1px 2px 3px 26px;cursor:pointer;user-select:all}
   .crow .curl:hover{color:#cfe0ff}
   .crow .curl::before{content:'⮕ ';color:#55617f}
+  .crow .cfont{flex:0 0 100%;padding:0 2px 4px 26px}
+  .crow .ckfont{background:#1d2849;border:1px solid var(--line);color:#9fc1ff;border-radius:7px;
+    padding:1px 8px;font-size:11px;cursor:pointer}
+  .crow .ckfont:hover{border-color:var(--line2);background:#22305a}
+  .crow .ckfont:disabled{opacity:.45;cursor:wait}
+  .crow .fontres{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;color:#7ef0ac;
+    word-break:break-all;white-space:pre-wrap;display:inline-block}
+  .crow .fontres.ko{color:#ffd479}
   .crow .cmove.renamed{border-color:#3c6bd6}
   .crow input[type=checkbox]{width:15px;height:15px;accent-color:var(--acc);cursor:pointer;flex:0 0 auto}
   /* ---------- drag & drop ---------- */
@@ -613,6 +621,7 @@ function renderChannels(list, b){
       <button class="ghost small" data-creset="${i}" title="Riporta il canale nella sua playlist originale">↺</button>
       <button class="ghost small" data-cdel="${i}" title="Elimina il canale (recuperabile nel cestino)">✕</button>
       ${c.url ? `<div class="curl" data-curl="${i}" title="URL della sorgente video (quella del pannello, prima di proxy/diagnostica) — click per copiare">${esc(c.url)}</div>` : ''}
+      ${c.url ? `<div class="cfont"><button class="ckfont" data-cresolve="${i}" title="Segue i redirect del pannello e mostra la FONTE reale dello stream (CDN/server d'origine): due canali diversi con la stessa fonte condividono la sorgente — e i suoi eventuali problemi">⚡ risolvi fonte</button></div>` : ''}
     </div>`;
   }).join('');
   return `<div class="chans" data-chans="${esc(b.path)}">
@@ -630,8 +639,8 @@ function renderChannels(list, b){
 }
 
 function renderLists(){
-  // la ricostruzione del DOM non deve spostare la vista: senza questo accorgimento
-  // espandere una playlist in coda alla pagina riportava la vista all'inizio
+  // cintura di sicurezza: se una ricostruzione del DOM sposta comunque il
+  // documento (scroll clamping), lo riportiamo al punto giusto dopo il layout
   const sy = window.scrollY;
   const root = $('#lists');
   if (!CFG.lists.length){
@@ -645,7 +654,7 @@ function renderLists(){
   for (const card of document.querySelectorAll('#lists .listcard')) plPopulateBranches(card);
   renderSideMenu();
   for (const l of CFG.lists) fillXtreamBadge(l);
-  if (window.scrollY !== sy) window.scrollTo({ top: sy, behavior: 'instant' });
+  requestAnimationFrame(() => { if (window.scrollY !== sy) window.scrollTo(0, sy); });
 }
 
 /* -------- scadenza account Xtream (player_api.php) -------- */
@@ -1011,17 +1020,36 @@ function updateChannelCounts(card, list, path){
 
 async function toggleExpand(card, list, path){
   const key = `${list.id}|${path}`;
-  if (EXPANDED.has(key)){ EXPANDED.delete(key); renderLists(); return; }
+  const q = `.brow[data-path="${CSS.escape(path)}"]`;
+  const row = card.querySelector(q);
+  const btn = card.querySelector(`button[data-exp="${CSS.escape(path)}"]`);
+  const existing = card.querySelector(`.chans[data-chans="${CSS.escape(path)}"]`);
+
+  if (EXPANDED.has(key)){
+    EXPANDED.delete(key);
+    if (existing) existing.remove();
+    if (btn) btn.textContent = '\u25b8 canali';
+    return; // niente renderLists(): ricostruire tutto faceva saltare lo scroll
+  }
   EXPANDED.add(key);
-  renderLists(); // mostra "Caricamento canali…"
+  if (btn) btn.textContent = '▾ canali';
+  if (row) row.insertAdjacentHTML('afterend',
+    `<div class="chans" data-chans="${esc(path)}"><div class="hint">Caricamento canali…</div></div>`);
+
   try {
     const r = await api(`/api/lists/${list.id}/channels?path=${encodeURIComponent(path)}`);
     CHANS[key] = r.channels;
   } catch(e){
     EXPANDED.delete(key);
     toast('Errore: ' + e.message, 4000);
+    const el = card.querySelector(`.chans[data-chans="${CSS.escape(path)}"]`);
+    if (el) el.remove();
+    if (btn) btn.textContent = '\u25b8 canali';
+    return;
   }
-  renderLists();
+  const b = (branchesOf(list.id) || []).find(x=>x.path===path);
+  const el = card.querySelector(`.chans[data-chans="${CSS.escape(path)}"]`);
+  if (b && el) el.outerHTML = renderChannels(list, b);
 }
 
 /* ---------------- drag & drop (rami e canali) ---------------- */
@@ -1223,6 +1251,33 @@ function bindListEvents(){
           await refreshTrash(id);
           renderLists();
         } catch (e){ toast(e.message, 4000); }
+        return;
+      }
+      const cresolve = ev.target.closest('button[data-cresolve]');
+      if (cresolve){
+        const path = cresolve.closest('.chans').dataset.chans;
+        const c = (CHANS[`${id}|${path}`] || [])[Number(cresolve.dataset.cresolve)];
+        const holder = cresolve.closest('.cfont');
+        const rowEl = cresolve.closest('.crow');
+        if (holder && c && c.url){
+          cresolve.disabled = true;
+          cresolve.textContent = '… risolvo…';
+          try {
+            const r = await api(`/api/probeurl?u=${encodeURIComponent(c.url)}`);
+            if (r.finalUrl){
+              const same = r.finalUrl === c.url;
+              const hops = (r.chain || []).length;
+              holder.innerHTML = `<span class="fontres" title="${same ? 'Il pannello non redirige: la fonte coincide con l\'URL' : `Fonte reale dopo ${hops - 1} redirect`} — la vedi anche nei filtri">${same
+                ? '➡ nessun redirect: la fonte è questa URL' : `➡ ${esc(r.finalUrl)}`}</span>`;
+              // la fonte reale entra nel filtro testuale della playlist
+              if (rowEl) rowEl.dataset.csearch = ((rowEl.dataset.csearch || '') + ' ' + r.finalUrl).toLowerCase();
+            } else {
+              holder.innerHTML = `<span class="fontres ko">⚠ ${esc(r.reason || 'fonte non risolvibile')}</span>`;
+            }
+          } catch(e){
+            holder.innerHTML = `<span class="fontres ko">⚠ ${esc(e.message)}</span>`;
+          }
+        }
         return;
       }
       const curl = ev.target.closest('.curl');

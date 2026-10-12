@@ -211,6 +211,11 @@ API usate dalla pagina di configurazione (utili anche per script/automazioni):
   canali uno per uno: **escludere**, **rinominare**, **riordinare** (trascina) e
   **spostare**. Sotto ogni canale vedi l'**URL della sorgente video** (quella
   originale del pannello, prima di EasyProxy/diagnostica): click per copiarla.
+  Con **⚡ risolvi fonte** (su richiesta, senza disturbare il pannello) WiseM3U
+  segue i redirect dell'URL fino alla **fonte reale** (CDN/server d'origine):
+  canali diversi — anche da liste diverse — che alimentano la stessa sorgente
+  video si riconoscono subito, così se una fonte cade sai tutti i canali colpiti;
+  la fonte risolta entra anche nel filtro testuale della playlist.
   Il campo gruppo a destra di ogni canale (tendina con i gruppi
   esistenti, sempre scrivibile) seguito da due pulsanti espliciti —
   **➜** sposta il canale nel gruppo scelto o digitato (un gruppo inesistente viene

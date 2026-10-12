@@ -68,16 +68,17 @@ function capabilities() {
  * Simula il player: GET con Range + chiusura appenaarrivati gli header.
  * Ritorna sempre (mai eccezioni): { ok, finalUrl, status, reason }.
  */
-function probe(urlText, redirectsLeft = 3) {
+function probe(urlText, redirectsLeft = 3, chain) {
   return new Promise((resolve) => {
+    if (!chain) chain = [urlText]; // traccia gli hop: [...url visitati]
     let u;
     try {
       u = new URL(urlText);
     } catch (_) {
-      return resolve({ ok: false, reason: 'URL non valido' });
+      return resolve({ ok: false, reason: 'URL non valido', chain });
     }
     if (u.protocol !== 'http:' && u.protocol !== 'https:') {
-      return resolve({ ok: false, reason: `protocollo non supportato: ${u.protocol}` });
+      return resolve({ ok: false, reason: `protocollo non supportato: ${u.protocol}`, chain });
     }
     const lib = u.protocol === 'https:' ? https : http;
     let req;
@@ -100,11 +101,11 @@ function probe(urlText, redirectsLeft = 3) {
           if (code >= 300 && code < 400 && res.headers.location && redirectsLeft > 0) {
             res.resume();
             const next = new URL(res.headers.location, urlText).toString();
-            return resolve(probe(next, redirectsLeft - 1));
+            return resolve(probe(next, redirectsLeft - 1, chain.concat([next])));
           }
           res.resume();
           if (code === 200 || code === 206) {
-            return resolve({ ok: true, finalUrl: urlText, status: code });
+            return resolve({ ok: true, finalUrl: urlText, status: code, chain });
           }
           const reason =
             code === 401 || code === 403
@@ -114,17 +115,18 @@ function probe(urlText, redirectsLeft = 3) {
                 : code >= 500
                   ? `il server di origine e' in errore (HTTP ${code}): riprova tra poco`
                   : `risposta inattesa del pannello (HTTP ${code})`;
-          resolve({ ok: false, status: code, reason });
+          resolve({ ok: false, status: code, reason, chain });
         }
       );
     } catch (e) {
-      return resolve({ ok: false, reason: `richiesta non partita: ${e.message}` });
+      return resolve({ ok: false, reason: `richiesta non partita: ${e.message}`, chain });
     }
     req.on('timeout', () => {
       req.destroy();
       resolve({
         ok: false,
         reason: `nessuna risposta in ${Math.round(PROBE_TIMEOUT_MS / 1000)}s: server lento o offline (e' lo stesso problema del buffering infinito)`,
+        chain,
       });
     });
     req.on('error', (e) => {
@@ -139,7 +141,7 @@ function probe(urlText, redirectsLeft = 3) {
             : /CERT|SSL|TLS|HANDSHAKE|WRONG_VERSION/i.test(`${c} ${m}`)
               ? `problema TLS verso ${u.hostname} (${c || m})`
               : `errore di rete: ${c || m}`;
-      resolve({ ok: false, reason });
+      resolve({ ok: false, reason, chain });
     });
     req.end();
   });

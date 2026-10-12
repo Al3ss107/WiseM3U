@@ -1008,6 +1008,23 @@ app.get('/api/lists/:id/tree', requireAdmin, async (req, res) => {
   });
 });
 
+/** Risolve la FONTE reale di un URL stream: segue i redirect del pannello
+ *  fino al CDN/server di origine effettivo, cosi' canali diversi che condividono
+ *  la stessa sorgente si riconoscono anche se arrivano da pannelli diversi. */
+app.get('/api/probeurl', requireAdmin, async (req, res) => {
+  const u = String(req.query.u || '').trim();
+  if (!/^https?:\/\//i.test(u)) {
+    return res.json({ ok: false, reason: 'URL non http/https (es. acestream:// non e\' risolvibile via redirect)' });
+  }
+  try {
+    const r = await streamdiag.probe(u);
+    const final = r.finalUrl || (r.chain && r.chain.length > 1 ? r.chain[r.chain.length - 1] : null);
+    res.json({ ok: r.ok, status: r.status || 0, finalUrl: final, chain: r.chain || [u], reason: r.reason || '' });
+  } catch (err) {
+    res.json({ ok: false, reason: err.message || String(err) });
+  }
+});
+
 /** Test rapido di un URL senza salvarlo. */
 app.post('/api/probe', requireAdmin, async (req, res) => {
   const url = sanitizeListUrl(req.body && req.body.url);
