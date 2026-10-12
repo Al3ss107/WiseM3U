@@ -106,6 +106,23 @@
   details.help>summary{cursor:pointer;color:var(--mut);font-size:12.5px;user-select:none}
   details.help>summary:hover{color:#cfe0ff}
   details.help .hint{margin:6px 0 2px;padding:9px 11px;background:rgba(14,21,48,.6);border:1px solid var(--line);border-radius:9px}
+
+  /* log live */
+  .logbox{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.7;
+    background:#050914;border:1px solid var(--line);border-radius:10px;padding:8px 10px;
+    height:330px;overflow-y:auto;overflow-x:auto;white-space:pre-wrap;word-break:break-all}
+  .logbox .hint{margin:0;padding:0;background:none;border:none}
+  .lgline{display:block;color:#cdd8f3}
+  .lgline.debug{color:#7f8bb3}
+  .lgline.warn{color:#ffd479}
+  .lgline.error{color:#ff9aa8}
+  .lgts{color:#55617f;margin-right:7px}
+  .lgscope{display:inline-block;background:#1d2849;color:#9fc1ff;border-radius:6px;
+    padding:0 6px;margin-right:7px;font-size:11px}
+  .logbar{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-bottom:9px}
+  .logbar .spacer{flex:1}
+  .logbar select,.logbar input{flex:0 0 auto}
+  .logbar input{flex:1 1 240px}
   /* ---------- card lista ---------- */
   .listcard{border-left:3px solid var(--acc)}
   .listhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
@@ -370,6 +387,37 @@
   <!-- ============ LISTE ============ -->
   <h2 class="secttl"><span class="n">4</span> Le tue liste</h2>
   <section id="lists"></section>
+
+  <!-- ============ LOG LIVE ============ -->
+  <h2 class="secttl"><span class="n">5</span> Log live</h2>
+  <section class="card" id="logCard">
+    <div class="logbar">
+      <select id="logScope" title="Filtra per area">
+        <option value="all" selected>Tutte le aree</option>
+        <option value="stream">stream</option>
+        <option value="download">download</option>
+        <option value="playlist">playlist</option>
+        <option value="catalog">catalogo</option>
+        <option value="system">sistema</option>
+      </select>
+      <input id="logFilter" type="text" placeholder="🔎 filtra… (canale, lista, url, errore)">
+      <span class="spacer"></span>
+      <button class="ghost small" id="logPause" title="Metti in pausa o riprendi l'aggiornamento automatico">⏸ Pausa</button>
+      <button class="ghost small" id="logDownload" title="Scarica i log correnti come file di testo">⭳ Scarica</button>
+      <button class="danger small" id="logClear" title="Svuota i log">Svuota</button>
+    </div>
+    <div id="logBox" class="logbox">
+      <div class="hint">In attesa di eventi… i log partono da soli quando qualcuno guarda un canale
+      (stream), l'addon scarica una lista (download) o viene chiesta la playlist. Le stesse righe
+      compaiono anche con <code>docker logs -f wisem3u</code>.</div>
+    </div>
+    <details class="help">
+      <summary>⚠️ Attenzione alla privacy dei log</summary>
+      <div class="hint">Le righe contengono gli URL delle tue liste e dei canali, che possono
+      includere username e password dei servizi IPTV. Prima di condividere uno screenshot o il
+      file scaricato, oscura le credenziali.</div>
+    </details>
+  </section>
 
 </main>
 
@@ -1390,6 +1438,79 @@ async function api(path, opts={}){
   if (!res.ok) throw new Error((body && body.error) || res.statusText);
   return body;
 }
+
+/* ---------------- log live ---------------- */
+const LOG = { since: 0, pause: false, lines: [] };
+const LOG_MAX_LINES = 600; // limite nel DOM (il server ne tiene 1000)
+
+function fmtLogTs(ts){
+  const d = new Date(ts);
+  const p = (n, l=2) => String(n).padStart(l, '0');
+  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(),3)}`;
+}
+
+async function pollLogs(){
+  if (LOG.pause) return;
+  try {
+    const r = await api(`/api/logs?since=${LOG.since}&limit=300`);
+    for (const e of (r.entries || [])){
+      if (e.id > LOG.since) LOG.since = e.id;
+      if (!LOG.lines.some(x => x.id === e.id)) LOG.lines.push(e);
+    }
+    if (LOG.lines.length > LOG_MAX_LINES) LOG.lines.splice(0, LOG.lines.length - LOG_MAX_LINES);
+    if (r.entries && r.entries.length) renderLogs();
+  } catch (_) { /* log silenzioso: mai disturbare con il polling */ }
+}
+
+function renderLogs(){
+  const box = $('#logBox');
+  const scope = $('#logScope').value;
+  const f = ($('#logFilter').value || '').trim().toLowerCase();
+  const rows = LOG.lines.filter(e =>
+    (scope === 'all' || e.scope === scope) &&
+    (!f || e.msg.toLowerCase().includes(f) || e.scope.includes(f))
+  );
+  // auto-scroll solo se l'utente e' gia' in fondo
+  const atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
+  box.innerHTML = rows.length
+    ? rows.map(e =>
+        `<span class="lgline ${e.level}"><span class="lgts">${fmtLogTs(e.ts)}</span><span class="lgscope">${esc(e.scope)}</span>${esc(e.msg)}</span>`
+      ).join('')
+    : `<div class="hint">${LOG.lines.length ? 'Nessun evento corrisponde ai filtri.' : 'In attesa di eventi…'}</div>`;
+  if (atBottom) box.scrollTop = box.scrollHeight;
+}
+
+function exportLogs(){
+  const scope = $('#logScope').value;
+  const f = ($('#logFilter').value || '').trim().toLowerCase();
+  const rows = LOG.lines.filter(e =>
+    (scope === 'all' || e.scope === scope) &&
+    (!f || e.msg.toLowerCase().includes(f) || e.scope.includes(f))
+  );
+  const text = rows.map(e => `${e.ts} [${e.level}] [${e.scope}] ${e.msg}`).join('\n') + '\n';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+  a.download = `wisem3u-logs-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+$('#logPause').addEventListener('click', () => {
+  LOG.pause = !LOG.pause;
+  $('#logPause').textContent = LOG.pause ? '▶ Riprendi' : '⏸ Pausa';
+  $('#logPause').classList.toggle('on', LOG.pause);
+});
+$('#logClear').addEventListener('click', async () => {
+  try { await api('/api/logs/clear', { method: 'POST', body: '{}' }); } catch (_) { /* niente */ }
+  LOG.lines.length = 0;
+  LOG.since = 0;
+  renderLogs();
+});
+$('#logScope').addEventListener('change', renderLogs);
+$('#logFilter').addEventListener('input', renderLogs);
+$('#logDownload').addEventListener('click', exportLogs);
+setInterval(pollLogs, 1500);
+pollLogs();
 
 async function loadBranches(id){
   try {

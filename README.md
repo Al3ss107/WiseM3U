@@ -343,6 +343,25 @@ Nella pagina di configurazione, per ogni lista:
 > server (e da EasyProxy): su macchine piccole valuta la banda disponibile e
 > attivalo solo sulle liste che ne hanno bisogno.
 
+### Log live (debug)
+
+In fondo alla pagina di configurazione c'è la sezione **Log live**: mostra in
+tempo reale (aggiornata ogni ~1,5 s) cosa fa l'addon, senza bisogno della shell:
+
+* **stream** — ogni volta che un client avvia un canale: nome canale, lista e
+  gruppo di origine, ora di avvio e **URL finale servito** (dopo
+  riscrittura/EasyProxy), più IP e user-agent del client;
+* **download** — inizio/fine scaricamento di ogni lista con durata, conteggio
+  stream e motivo dell'eventuale fallimento (con la causa di rete reale: DNS,
+  connessione rifiutata, certificato, HTTP 403/404…);
+* **playlist / catalogo / sistema** — generazione della playlist.m3u, richieste
+  dei client, eventi di avvio;
+
+con filtro per area e testo, pausa, svuota e **scarica** (file .txt). Le stesse
+righe appaiono anche con `docker logs -f wisem3u`. Il buffer tiene gli ultimi
+1000 eventi (variabile `LIVE_LOG_BUFFER`). ⚠️ Le righe contengono gli URL delle
+liste (con le eventuali credenziali): oscurale prima di condividerli.
+
 ---
 
 ## 5. Come funziona
@@ -414,6 +433,7 @@ Robustezza e prestazioni (misurate sulle due liste di esempio):
 | `CONFIG_FILE` | `/data/config.json` | percorso del file di configurazione |
 | `CACHE_DIR` | `/data/cache` | cartella degli snapshot gzip |
 | `ADMIN_TOKEN` | *(vuoto)* | se impostato, protegge `/configure` e le API `/api/*` |
+| `LIVE_LOG_BUFFER` | `1000` | numero di eventi mantenuti nel buffer dei **log live** |
 
 ---
 
@@ -435,6 +455,10 @@ npm start        # avvio locale su http://localhost:7000
 | `EACCES: permission denied, open '…/config.json.tmp'` | Il bind-mount eredita l'ownership **root** dell'host ma l'app gira come utente `app` | L'entrypoint fa `chown` sul volume e poi cede i privilegi: ricrea il container con l'ultima build. A mano: `sudo chown -R <uid>:<gid> /PERCORSO/DATI/wisem3u` oppure avvia il container come root |
 | In Stremio/Nuvio il catalogo si vede ma aprendo una voce appare *"Nessun addon fornisce metadati"* | Il client ha in cache un manifest vecchio (o l'addon è stato aggiornato senza reinstallarlo) | **Rimuovi l'addon e reinstallalo** incollando di nuovo l'URL `/manifest.json`: il client deve rileggere `idPrefixes` |
 | Una lista resta bloccata su **fetching** nella pagina di configurazione | Il container è stato riavviato mentre lo scaricamento era in corso (stato residuo) | Dalla build attuale si **sblocca da solo**: al riavvio (o appena apri la pagina) lo scaricamento riparte in automatico e la pagina lo segue. Aggiorna la pagina con **Ctrl+F5** se vedi ancora la vecchia UI |
+| `ERR_SSL_WRONG_VERSION_NUMBER` | L'URL è `https://` ma il server parla HTTP semplice su quella porta | Gestito **in automatico**: WiseM3U riprova scambiando `https://` in `http://`. Lascia l'URL così com'è |
+| `ENOTFOUND nome.dominio` | Il DNS del container non risolve il dominio (lista scaduta, errore di battitura o DNS di casa) | WiseM3U riprova in automatico coi DNS pubblici (1.1.1.1/8.8.8.8). Se il messaggio resta, il dominio è davvero sparito o c'è un refuso nell'URL |
+| La risposta è una *pagina web HTML* | Hai incollato un link di anteprima/condivisione (Google, Mega…) e non il file | Copia il **link diretto** alla playlist, cioè quello che finisce in `.m3u` / `get.php?...&type=m3u_plus...` |
+| `HTTP 403` | Il pannello rifiuta l'accesso: credenziali errate, account scaduto, limite connessioni o blocco paese/user-agent | Verifica le credenziali ricopiando l'URL dal pannello, controlla la scadenza dal provider, oppure prova con `output=ts` |
 
 Con la build attuale entrambi i casi si sistemano **da soli al riavvio**: non devi toccare il volume.
 Se resti su una build vecchia, i due comandi sopra risolvono immediatamente.

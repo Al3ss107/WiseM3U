@@ -12,6 +12,7 @@ const cache = require('./cache');
 const playlist = require('./playlist');
 const { buildTree, treeForUi } = require('./wiseplay');
 const imgfit = require('./imgfit');
+const live = require('./liveLog');
 const C = require('./constants');
 
 const PORT = Number(process.env.PORT || 7000);
@@ -60,6 +61,15 @@ app.use((req, res, next) => {
 
 function tokenOf(req) {
   return (req.query.token || req.query.access_token || req.headers['x-access-token'] || '').toString();
+}
+
+/** Identificazione del client per i log live (ip + user-agent). */
+function clientInfo(req) {
+  return {
+    ip: (req.headers['x-forwarded-for'] || (req.socket && req.socket.remoteAddress) || '')
+      .toString().split(',')[0].trim(),
+    ua: (req.headers['user-agent'] || '').toString().slice(0, 160),
+  };
 }
 
 function requireToken(req, res, next) {
@@ -187,9 +197,18 @@ app.get(/^\/catalog\/([^/]+)\/(.+)\.json$/, requireToken, async (req, res) => {
     const cfg = store.loadConfig();
     const result = await playlist.buildCatalog(cfg, catId, extras);
     if (!result) return res.status(404).json({ error: 'catalogo non trovato' });
+    const list = cfg.lists.find((l) => playlist.catalogId(l.id) === catId);
+    const listName = list ? list.name || list.url || list.id : catId;
+    live.add(
+      'catalog',
+      'debug',
+      `catalogo "${listName}" (${catId})${extras.genre ? ` genere: "${extras.genre}"` : ''}${extras.search ? ` ricerca: "${extras.search}"` : ''}${extras.skip ? ` da #${extras.skip}` : ''} → ${(result.metas || []).length} voci`,
+      { list: listName, ...clientInfo(req) }
+    );
     res.set('Cache-Control', C.PUBLIC_CACHE_CONTROL);
     res.json(fitPosters(result, req));
   } catch (err) {
+    live.add('catalog', 'error', `errore nel catalogo: ${err.message}`, clientInfo(req));
     console.error('[catalog]', err);
     res.status(500).json({ error: err.message });
   }
@@ -208,12 +227,35 @@ app.get('/meta/:type/:id.json', requireToken, async (req, res) => {
 });
 
 app.get('/stream/:type/:id.json', requireToken, async (req, res) => {
+  const t0 = Date.now();
   try {
     const cfg = store.loadConfig();
     const result = await playlist.buildStreams(cfg, req.params.id);
-    if (!result) return res.status(404).json({ error: 'stream non trovato' });
+    if (!result) {
+      live.add('stream', 'warn', `stream richiesto per id sconosciuto: "${req.params.id}"`, clientInfo(req));
+      return res.status(404).json({ error: 'stream non trovato' });
+    }
+    // da qui il client fa partire la riproduzione: logghiamo TUTTO il necessario
+    // per il debug (canale, playlist/gruppo, lista di origine, URL finale servito)
+    const parsed = playlist.parseMetaId(req.params.id);
+    const list = parsed ? cfg.lists.find((l) => l.id === parsed.listId) : null;
+    const listName = list ? list.name || list.url || list.id : parsed ? parsed.listId : '?';
+    const playedAt = new Date().toISOString();
+    const streams = (result && result.streams) || [];
+    for (const s of streams) {
+      live.add(
+        'stream',
+        'info',
+        `▶ ${s.title} | lista: "${listName}" | gruppo: ${String(s.name || '').split('\n').pop()} | avvio: ${playedAt} | url: ${s.url}`,
+        { id: req.params.id, list: listName, ms: Date.now() - t0, ...clientInfo(req) }
+      );
+    }
+    if (!streams.length) {
+      live.add('stream', 'warn', `0 stream restituiti per "${req.params.id}" (lista "${listName}"): tutti esclusi dai filtri o spariti`, { id: req.params.id, ms: Date.now() - t0, ...clientInfo(req) });
+    }
     res.json(result);
   } catch (err) {
+    live.add('stream', 'error', `errore nello stream "${req.params.id}": ${err.message}`, clientInfo(req));
     console.error('[stream]', err);
     res.status(500).json({ error: err.message });
   }
@@ -224,9 +266,20 @@ app.get('/stream/:type/:id.json', requireToken, async (req, res) => {
 /* ------------------------------------------------------------------ */
 
 app.get('/playlist.m3u', requireToken, async (req, res) => {
+  const t0 = Date.now();
   try {
     const cfg = store.loadConfig();
-    const { m3u, channels } = await playlist.buildPlaylist(cfg, { force: req.query.refresh === '1' });
+    const { m3u, channels, lists } = await playlist.buildPlaylist(cfg, { force: req.query.refresh === '1' });
+    const okLists = lists.filter((l) => !l.skipped && !l.error).length;
+    const koLists = lists.filter((l) => l.error).length;
+    live.add(
+      'playlist',
+      'info',
+      `playlist.m3u generata: ${channels.length} canali da ${okLists}/${cfg.lists.length} liste` +
+        `${koLists ? ` (${koLists} in errore)` : ''} in ${Date.now() - t0} ms` +
+        `${req.query.refresh === '1' ? ' [refresh forzato]' : ''}`,
+      clientInfo(req)
+    );
     res.set('Content-Type', 'application/vnd.apple.mpegurl; charset=utf-8');
     res.set(
       'Content-Disposition',
@@ -234,6 +287,7 @@ app.get('/playlist.m3u', requireToken, async (req, res) => {
     );
     res.send(m3u);
   } catch (err) {
+    live.add('playlist', 'error', `generazione playlist.m3u fallita: ${err.message}`, clientInfo(req));
     console.error('[m3u]', err);
     res.status(500).json({ error: err.message });
   }
@@ -358,8 +412,16 @@ function startRefresh(listId, force = true) {
   if (refreshing.has(listId)) return;
   const list = store.findList(listId);
   if (!list) return;
+  const t0 = Date.now();
   refreshing.add(listId);
   store.updateListState(listId, { status: 'fetching', error: '' });
+  const listName = list.name || list.url || listId;
+  live.add(
+    'download',
+    'info',
+    `▼ scaricamento lista "${listName}" (${listId})${force ? ' [forzato]' : ''} — url: ${list.url || '(lista personale)'}`,
+    { list: listName, id: listId }
+  );
   const cfg0 = store.loadConfig();
   const builder = list.kind === 'personal' ? () => playlist.buildPersonalTree(cfg0, list) : undefined;
   cache
@@ -372,6 +434,7 @@ function startRefresh(listId, force = true) {
       builder,
     })
     .then((entry) => {
+      const st = entry.tree.stats || {};
       store.updateListState(listId, {
         status: 'ready',
         error: '',
@@ -379,6 +442,13 @@ function startRefresh(listId, force = true) {
         stats: entry.tree.stats,
         kind: entry.tree.meta.kind || 'wiseplay',
       });
+      live.add(
+        'download',
+        'info',
+        `✔ lista "${listName}" pronta: ${st.stations || 0} stream, ${st.nodes || 0} rami, ` +
+          `${st.m3u || 0} m3u importate, ${st.failed || 0} errori — in ${((Date.now() - t0) / 1000).toFixed(1)}s`,
+        { list: listName, id: listId }
+      );
       // dai' il nome della lista se l'utente non l'ha scelto
       const c = store.loadConfig();
       const l = c.lists.find((x) => x.id === listId);
@@ -389,7 +459,14 @@ function startRefresh(listId, force = true) {
       }
     })
     .catch((err) => {
-      store.updateListState(listId, { status: 'error', error: err.message || String(err) });
+      const msg = err.message || String(err);
+      store.updateListState(listId, { status: 'error', error: msg });
+      live.add(
+        'download',
+        'error',
+        `✖ scaricamento lista "${listName}" fallito dopo ${((Date.now() - t0) / 1000).toFixed(1)}s — ${msg} — url: ${list.url}`,
+        { list: listName, id: listId }
+      );
     })
     .finally(() => refreshing.delete(listId));
 }
@@ -981,6 +1058,26 @@ app.post('/api/easyproxy/test', requireAdmin, async (req, res) => {
 app.post('/api/cache/clear', requireAdmin, (req, res) => {
   cache.invalidateAll();
   imgfit.purge();
+  live.add('system', 'info', 'cache svuotata dalla pagina di configurazione', clientInfo(req));
+  res.json({ ok: true });
+});
+
+/* ------------------------------------------------------------------ */
+/* log live (debug): buffer in memoria + specchio su docker logs       */
+/* ------------------------------------------------------------------ */
+
+app.get('/api/logs', requireAdmin, (req, res) => {
+  res.json({
+    entries: live.list({
+      since: req.query.since,
+      limit: req.query.limit,
+      scope: req.query.scope,
+    }),
+  });
+});
+
+app.post('/api/logs/clear', requireAdmin, (req, res) => {
+  live.clear();
   res.json({ ok: true });
 });
 
@@ -1064,6 +1161,7 @@ if (require.main === module) {
     console.log(`  Liste configurate        : ${cfg.lists.length}`);
     console.log(`  File config              : ${store.CONFIG_FILE}`);
     console.log('='.repeat(64));
+    live.add('system', 'info', `WiseM3U ${C.VERSION} avviato su http://${HOST}:${PORT} — ${cfg.lists.length} liste configurate`);
 
     // stati "fetching" residui da un riavvio precedente: riprendi gli scaricamenti
     for (const l of cfg.lists) reconcileListState(l.id);

@@ -119,6 +119,11 @@ function fetchFailure(err, url) {
   const cert = CERT_ERROR_RE.test(String((cause && cause.code) || '') + ' ' + String((cause && cause.message) || ''));
   const out = new FetchError(`Connessione fallita verso ${url} — ${detail}`, 0);
   out.certError = cert;
+  // conserva codice e messaggio della causa per i retry mirati di fetchRoot
+  out.causeRef = {
+    code: (cause && cause.code) || '',
+    message: (cause && cause.message) || (err && err.message) || '',
+  };
   return out;
 }
 
@@ -146,58 +151,76 @@ async function fetchText(url, opts = {}) {
 }
 
 /**
- * Ripiego per pannelli Xtream con certificato TLS non attendibile
- * (self-signed/scaduto, molto comuni): rifa la richiesta SENZA verifica del
- * certificato usando i moduli http/https nativi (redirect gestiti a mano).
- * Si usa solo dopo che la richiesta normale e' fallita proprio per il
- * certificato: non e' un bypass generale.
+ * Fetch di ripiego con i moduli http/https nativi (redirect gestiti a mano).
+ * Si usa SOLO nei casi specifici in cui undici fallisce:
+ *  - opts.insecure: certificato TLS non attendibile -> salta la verifica
+ *    (self-signed/scaduto, molto comune nei pannelli Xtream self-hosted);
+ *  - opts.ip: il DNS locale/container non risolve il dominio -> connessione
+ *    diretta per IP (Host e SNI restano il dominio, cosi' i vhost rispondono).
  */
-function fetchTextInsecureTls(url, opts = {}, redirectsLeft = 5) {
+function nodeFetchText(url, opts = {}, redirectsLeft = 5) {
   return new Promise((resolve, reject) => {
     let u;
     try { u = new URL(url); } catch (_) { return reject(new FetchError('URL non valido', 0)); }
-    const lib = u.protocol === 'https:' ? https : http;
-    const req = lib.get(
-      {
-        host: u.hostname,
-        port: u.port || (u.protocol === 'https:' ? 443 : 80),
-        path: u.pathname + (u.search || ''),
-        headers: {
-          'User-Agent': USER_AGENT,
-          Accept: 'application/json, text/plain, application/x-mpegurl, */*',
-          'Accept-Encoding': 'identity', // niente compressione: qui non viene decompressed
-        },
-        timeout: opts.timeout || FETCH_TIMEOUT_MS,
-        rejectUnauthorized: false,
-        // SNI corretto verso i vhost; verso gli IP non va inviato (RFC 6066)
-        ...(require('net').isIP(u.hostname) ? {} : { servername: u.hostname }),
-      },
-      (res) => {
-        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && redirectsLeft > 0) {
-          res.resume();
-          const next = new URL(res.headers.location, url).toString();
-          return resolve(fetchTextInsecureTls(next, opts, redirectsLeft - 1));
-        }
-        if (res.statusCode !== 200) {
-          res.resume();
-          return reject(new FetchError(`HTTP ${res.statusCode} per ${url}`, res.statusCode));
-        }
-        const chunks = [];
-        let size = 0;
-        res.on('data', (c) => {
-          size += c.length;
-          if (size <= MAX_BYTES) chunks.push(c);
-        });
-        res.on('end', () => {
-          if (size > MAX_BYTES) return reject(new FetchError(`Risposta troppo grande (${size} byte)`, res.statusCode));
-          resolve(Buffer.concat(chunks).toString('utf8'));
-        });
-        res.on('error', (e) => reject(fetchFailure(e, url)));
+    const isHttps = u.protocol === 'https:';
+    const lib = isHttps ? https : http;
+    const connectHost = opts.ip || u.hostname;
+    const headers = {
+      'User-Agent': USER_AGENT,
+      Accept: 'application/json, text/plain, application/x-mpegurl, */*',
+      'Accept-Encoding': 'identity', // niente compressione: qui non viene decompressa
+    };
+    if (opts.ip) headers.host = u.host; // connessi per IP: il vhost deve vedere il dominio
+    const requestOpts = {
+      host: connectHost,
+      port: u.port || (isHttps ? 443 : 80),
+      path: u.pathname + (u.search || ''),
+      headers,
+      timeout: opts.timeout || FETCH_TIMEOUT_MS,
+    };
+    if (isHttps) {
+      if (opts.insecure) requestOpts.rejectUnauthorized = false;
+      // SNI: sempre il dominio (mai verso un IP, RFC 6066)
+      if (!require('net').isIP(u.hostname)) requestOpts.servername = u.hostname;
+    }
+    const req = lib.get(requestOpts, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && redirectsLeft > 0) {
+        res.resume();
+        const next = new URL(res.headers.location, url).toString();
+        return resolve(nodeFetchText(next, opts, redirectsLeft - 1));
       }
-    );
+      if (res.statusCode !== 200) {
+        res.resume();
+        return reject(new FetchError(`HTTP ${res.statusCode} per ${url}`, res.statusCode));
+      }
+      const chunks = [];
+      let size = 0;
+      res.on('data', (c) => {
+        size += c.length;
+        if (size <= MAX_BYTES) chunks.push(c);
+      });
+      res.on('end', () => {
+        if (size > MAX_BYTES) return reject(new FetchError(`Risposta troppo grande (${size} byte)`, res.statusCode));
+        resolve(Buffer.concat(chunks).toString('utf8'));
+      });
+      res.on('error', (e) => reject(fetchFailure(e, url)));
+    });
     req.on('timeout', () => req.destroy(new FetchError(`timeout dopo ${opts.timeout || FETCH_TIMEOUT_MS} ms`, 0)));
     req.on('error', (e) => reject(e instanceof FetchError ? e : fetchFailure(e, url)));
   });
+}
+
+/** Risolve un hostname con DNS pubblici (1.1.1.1 / 8.8.8.8). */
+function resolveViaPublicDns(hostname) {
+  const r = new (require('dns').promises.Resolver)();
+  r.setServers(['1.1.1.1', '8.8.8.8']);
+  return Promise.race([
+    r.resolve4(hostname).then((a) => a[0]),
+    new Promise((resolve, rej) => {
+      const t = setTimeout(() => rej(new Error('timeout DNS pubblici')), 4000);
+      if (t.unref) t.unref();
+    }),
+  ]);
 }
 
 function isM3uText(text) {
@@ -296,36 +319,77 @@ async function buildTree(rootUrl, options = {}) {
   const stats = newCounters();
   const errors = [];
 
-  // Scarica la radice con timeout dedicato e un secondo tentativo automatico:
-  // i pannelli Xtream lenti/instabili altrimenti finiscono in "failed to fetch".
-  // Certificato TLS non attendibile (self-hosted): retry senza verifica.
+  // Scarica la radice con timeout dedicato e retry mirati (v. recoveryFetch):
+  //  - https parlato a server solo-HTTP (ERR_SSL_WRONG_VERSION_NUMBER) -> http
+  //  - certificato TLS non attendibile -> senza verifica
+  //  - dominio non risolto dal DNS locale -> DNS pubblici + connessione per IP
+  //  - altri errori transitori -> un secondo tentativo dopo una pausa
   // Gli errori HTTP 4xx (credenziali o URL errati) non vengono riprovati.
+  async function recoveryFetch(err, opts) {
+    const causeRef = (err && err.causeRef) || {};
+    const causeStr = `${causeRef.code || ''} ${causeRef.message || ''} ${(err && err.message) || ''}`;
+
+    if (/ERR_SSL_WRONG_VERSION_NUMBER/i.test(causeStr)) {
+      const downgraded = rootUrl.replace(/^https:\/\//i, 'http://');
+      if (downgraded !== rootUrl) {
+        console.warn(`[wiseplay] "${rootUrl}" parla HTTP e non TLS: riprovo come ${downgraded}`);
+        return fetchText(downgraded, opts);
+      }
+      return null;
+    }
+    if (err && err.certError) {
+      console.warn(`[wiseplay] certificato TLS non verificabile per ${rootUrl}: riprovo senza verifica`);
+      return nodeFetchText(rootUrl, { ...opts, insecure: true });
+    }
+    if (/ENOTFOUND|EAI_AGAIN/i.test(causeRef.code || '')) {
+      let host;
+      try { host = new URL(rootUrl).hostname; } catch (_) { return null; }
+      if (require('net').isIP(host)) return null;
+      let ip = null;
+      try { ip = await resolveViaPublicDns(host); } catch (_) { ip = null; }
+      if (!ip) return null;
+      console.warn(`[wiseplay] il DNS locale non risolve "${host}": uso i DNS pubblici (${ip})`);
+      return nodeFetchText(rootUrl, { ...opts, ip });
+    }
+    return null;
+  }
+
   async function fetchRoot() {
     const opts = { ...options, timeout: ROOT_FETCH_TIMEOUT_MS };
     try {
       return await fetchText(rootUrl, opts);
     } catch (err) {
-      if (err && err.certError) {
-        console.warn(`[wiseplay] certificato TLS non verificabile per ${rootUrl}: riprovo senza verifica`);
-        return fetchTextInsecureTls(rootUrl, opts);
-      }
+      const recovered = await recoveryFetch(err, opts).catch(() => null);
+      if (recovered != null) return recovered;
       const status = err && err.status;
-      if (status && status >= 400 && status < 500) throw err;
+      if (status && status >= 400 && status < 500) {
+        if (status === 403) {
+          err.message += ' — accesso negato dal pannello: username/password errati, account scaduto, limite connessioni raggiunto o blocco paese/user-agent';
+        } else if (status === 404) {
+          err.message += " — percorso non trovato: controlla che l'URL sia completo (username, password, type=..., output=...)";
+        }
+        throw err;
+      }
       await new Promise((r) => setTimeout(r, ROOT_FETCH_RETRY_DELAY_MS));
       try {
         return await fetchText(rootUrl, opts);
       } catch (err2) {
-        // anche il secondo tentativo puo' scoprire che il problema e' il certificato
-        if (err2 && err2.certError) {
-          console.warn(`[wiseplay] certificato TLS non verificabile per ${rootUrl}: riprovo senza verifica`);
-          return fetchTextInsecureTls(rootUrl, opts);
-        }
+        const recovered2 = await recoveryFetch(err2, opts).catch(() => null);
+        if (recovered2 != null) return recovered2;
         throw err2;
       }
     }
   }
 
   const rootText = await fetchRoot();
+
+  if (!String(rootText || '').trim()) {
+    throw new FetchError(
+      'Il server ha risposto con un contenuto vuoto (0 byte): la playlist e\' disattivata oppure username/password sono errati',
+      0
+    );
+  }
+
   const rootKind = guessKind(rootUrl, rootText);
   let rootJson;
   if (rootKind === 'm3u') {
@@ -339,8 +403,14 @@ async function buildTree(rootUrl, options = {}) {
     // risponde con una pagina/JSON d'errore. Mostriamo l'inizio della risposta
     // cosi' la causa e' leggibile direttamente nella configurazione.
     const snippet = String(rootText || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+    // se e' una pagina HTML (es. link di anteprima/condivisione o Google
+    // incollato al posto del file), lo diciamo esplicitamente
+    const isHtml = /<!doctype html|<html[\s>]/i.test(String(rootText).slice(0, 4000));
     throw new FetchError(
       'La risposta non sembra una lista WisePlay o M3U valida' +
+        (isHtml
+          ? ' — la risposta e\' una PAGINA WEB HTML, non una playlist: incolla il LINK DIRETTO al file (es. .../get.php?...&type=m3u_plus&output=ts) e non un link di anteprima'
+          : '') +
         (snippet ? ` — inizio risposta: "${snippet}"` : ''),
       0
     );
