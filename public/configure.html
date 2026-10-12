@@ -356,12 +356,20 @@
     <div class="row" style="margin-top:12px">
       <label class="chk on" style="flex:0 0 auto"><input type="checkbox" id="s_dedupeGlobal"> Rimuovi i duplicati globali (stesso URL)</label>
       <label class="chk on" style="flex:0 0 auto"><input type="checkbox" id="s_fitLogos"> Loghi proporzionati nei cataloghi</label>
+      <label class="chk on" style="flex:0 0 auto"><input type="checkbox" id="s_streamDiag"> Diagnostica stream (errore a video)</label>
       <div class="spacer"></div>
       <button class="ghost small" id="btnClearCache" style="flex:0 0 auto">Svuota cache</button>
     </div>
     <div class="hint">Se imposti un <b>token</b>, manifest/playlist/cataloghi richiederanno
       <code>?token=...</code>: la pagina di configurazione mostra già gli URL completi da incollare in
       Nuvio e Stremio.</div>
+    <div class="hint"><b>Diagnostica stream</b>: attiva per capire PERCHÉ un canale non parte.
+      Playlist e cataloghi consegneranno URL «diagnostici»: se lo stream risponde correttamente il
+      player viene reindirizzato alla fonte (il video NON passa dal container, niente banda sprecata);
+      se invece il pannello rifiuta o non risponde, a schermo compare un <b>video che spiega l'errore</b>
+      (403, limite connessioni, server spento…) invece del solito buffering infinito — e la causa esatta
+      viene registrata nei <a href="#logCard" style="color:inherit">Log live</a> qui sotto.
+      Ottimo in fase di configurazione; puoi spegnerlo quando tutto gira.</div>
   </section>
 
   <!-- ============ COLLEGA I CLIENT ============ -->
@@ -1587,6 +1595,7 @@ function renderAll(){
   $('#s_epgUrl').value = CFG.settings.epgUrl || '';
   $('#s_dedupeGlobal').checked = !!CFG.settings.dedupeGlobal;
   $('#s_fitLogos').checked = CFG.settings.fitLogos !== false;
+  $('#s_streamDiag').checked = !!CFG.settings.streamDiag;
   const base = (CFG.settings.publicBaseUrl || location.origin).replace(/\/+$/, '');
   const m = base + '/manifest.json' + tokenQs();
   $('#manifestUrl').textContent = m;
@@ -1608,6 +1617,7 @@ function readSettings(){
   CFG.settings.epgUrl = $('#s_epgUrl').value.trim();
   CFG.settings.dedupeGlobal = $('#s_dedupeGlobal').checked;
   CFG.settings.fitLogos = $('#s_fitLogos').checked;
+  CFG.settings.streamDiag = $('#s_streamDiag').checked;
 }
 
 async function saveConfig(){

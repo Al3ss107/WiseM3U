@@ -14,8 +14,10 @@ RUN npm install --omit=dev --no-audit --no-fund
 COPY src ./src
 COPY public ./public
 
-# su-exec serve all'entrypoint per cedere i privilegi dopo il chown del volume
-RUN apk add --no-cache su-exec \
+# su-exec: cedere i privilegi all'entrypoint dopo il chown del volume
+# ffmpeg + ttf-dejavu: video di errore "a schermo" della diagnostica stream
+# (STREAM DIAG) e rilevazione risoluzione/codec con ffprobe nei log live
+RUN apk add --no-cache su-exec ffmpeg ttf-dejavu \
     && mkdir -p /data \
     && addgroup -S app && adduser -S app -G app \
     && chown -R app:app /app /data

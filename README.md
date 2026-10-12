@@ -331,6 +331,25 @@ Nella pagina di configurazione, per ogni lista:
 * **API_PASSWORD** — la password di EasyProxy, se l'hai impostata;
 * **Parametri extra** — aggiunti alla richiesta proxy, es. `warp=off` per usare
   l'IP reale del server invece di WARP;
+
+### Diagnostica stream (errore a video)
+
+Impostazione generale **Diagnostica stream (errore a video)**: il problema che
+risolve è il *buffering infinito senza spiegazioni* di Nuvio/Stremio quando un
+pannello rifiuta lo stream. Attivata, playlist e cataloghi consegnano URL
+«diagnostici» (`/proxy/play`):
+
+* lo stream **funziona** → semplice redirect 302 alla fonte: **il video NON
+  passa dal container**, la banda resta diretta come prima;
+* lo stream **fallisce** (403, limite connessioni, server spento, dominio
+  morto…) → il container genera al volo con **FFmpeg** un video pulito che
+  spiega l'errore **a schermo** (canale, lista e motivo), e la causa esatta
+  finisce anche nei **Log live** come riga `⛔`.
+
+Se usi un proxy HTTPS (nginx/dominio) imposta prima *URL pubblico*. L'user-agent
+delle sonde è `vlc` di default, variabile `STREAM_DIAG_UA`. Se FFmpeg manca,
+ricade in una risposta testuale 502. Riportala a OFF quando non serve — gli URL
+tornano quelli originali direttamente.
 * **Test** — verifica *dal container* raggiungibilità, password e proxy di prova
   (`HTTP 200`). È **solo indicativo**: WiseM3U si limita a
   riscrivere gli stream verso EasyProxy e a connettersi è il **client**
@@ -434,6 +453,8 @@ Robustezza e prestazioni (misurate sulle due liste di esempio):
 | `CACHE_DIR` | `/data/cache` | cartella degli snapshot gzip |
 | `ADMIN_TOKEN` | *(vuoto)* | se impostato, protegge `/configure` e le API `/api/*` |
 | `LIVE_LOG_BUFFER` | `1000` | numero di eventi mantenuti nel buffer dei **log live** |
+| `STREAM_DIAG_UA` | VLC/3.0.20 | user-agent usato dalle sonde `/proxy/play` (alcuni pannelli accettano solo certi UA) |
+| `STREAM_DIAG_PROBE_TIMEOUT_MS` | `8000` | timeout della sonda diagnostica prima di mostrare l'errore a video |
 
 ---
 

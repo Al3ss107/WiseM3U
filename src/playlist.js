@@ -279,8 +279,10 @@ function epgHeader(config, inherited = []) {
 
 async function buildPlaylist(config, opts = {}) {
   const { channels, lists, errors, epgUrls } = await collectChannels(config, opts);
-  const m3u = buildM3U(channels, {
-    name: `${config.settings.addonName} (${channels.length} canali)`,
+  // opts.rewrite (diagnostica stream): riscrittura finale degli URL canale prima dell'M3U
+  const out = typeof opts.rewrite === 'function' ? channels.map((c) => opts.rewrite(c) || c) : channels;
+  const m3u = buildM3U(out, {
+    name: `${config.settings.addonName} (${out.length} canali)`,
     header: epgHeader(config, epgUrls),
   });
   return { m3u, channels, lists, errors, epgUrls };

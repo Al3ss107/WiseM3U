@@ -51,6 +51,7 @@ function defaultConfig() {
       maxDepth: 8,
       dedupeGlobal: true,
       fitLogos: true, // riproporziona i loghi dei canali in poster "contain" (endpoint /imgfit)
+      streamDiag: false, // diagnostica stream: errore a schermo (video) invece di buffering silente
       personalLists: [], // liste personali: canali pescati da tutte le liste [{id,name,includeInMain,channels:["listId::path::nome"]}]
       token: '',
       configPassword: '',

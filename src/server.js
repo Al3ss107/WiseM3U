@@ -13,6 +13,7 @@ const playlist = require('./playlist');
 const { buildTree, treeForUi } = require('./wiseplay');
 const imgfit = require('./imgfit');
 const live = require('./liveLog');
+const streamdiag = require('./streamdiag');
 const C = require('./constants');
 
 const PORT = Number(process.env.PORT || 7000);
@@ -95,6 +96,21 @@ function baseUrl(req) {
   const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'http').split(',')[0].trim();
   const host = req.headers['x-forwarded-host'] || req.get('host');
   return `${proto}://${host}`;
+}
+
+/** Base pubblica preferita (URL pubblico in settings), altrimenti da richiesta. */
+function publicBase(req, cfg) {
+  const p = (cfg && cfg.settings && cfg.settings.publicBaseUrl || '').trim();
+  return (p || baseUrl(req)).replace(/\/+$/, '');
+}
+
+/**
+ * Diagnostica stream attiva? Riscrive gli URL serviti (playlist/catalogo)
+ * verso /proxy/play: OK -> redirect diretto, KO -> video di errore a schermo.
+ */
+function diagStreamUrl(cfg, req, url, name, listName) {
+  if (!cfg.settings.streamDiag) return url;
+  return streamdiag.diagUrl(publicBase(req, cfg), cfg.settings.token || '', url, name, listName);
 }
 
 /**
@@ -240,20 +256,27 @@ app.get('/stream/:type/:id.json', requireToken, async (req, res) => {
     const parsed = playlist.parseMetaId(req.params.id);
     const list = parsed ? cfg.lists.find((l) => l.id === parsed.listId) : null;
     const listName = list ? list.name || list.url || list.id : parsed ? parsed.listId : '?';
+    // diagnostica attiva: gli URL consegnati passano da /proxy/play (la riga ▶
+    // qua sotto logga sempre l'URL ORIGINALE, cosi' il debug resta dritto)
+    const rawStreams = (result && result.streams) || [];
+    const outStreams = rawStreams.map((s) => ({
+      ...s,
+      url: diagStreamUrl(cfg, req, s.url, s.title, listName),
+    }));
     const playedAt = new Date().toISOString();
-    const streams = (result && result.streams) || [];
-    for (const s of streams) {
+    for (const s of rawStreams) {
       live.add(
         'stream',
         'info',
-        `▶ ${s.title} | lista: "${listName}" | gruppo: ${String(s.name || '').split('\n').pop()} | avvio: ${playedAt} | url: ${s.url}`,
+        `▶ ${s.title} | lista: "${listName}" | gruppo: ${String(s.name || '').split('\n').pop()} | avvio: ${playedAt} | url: ${s.url}` +
+          (cfg.settings.streamDiag ? ' [diag]' : ''),
         { id: req.params.id, list: listName, ms: Date.now() - t0, ...clientInfo(req) }
       );
     }
-    if (!streams.length) {
+    if (!outStreams.length) {
       live.add('stream', 'warn', `0 stream restituiti per "${req.params.id}" (lista "${listName}"): tutti esclusi dai filtri o spariti`, { id: req.params.id, ms: Date.now() - t0, ...clientInfo(req) });
     }
-    res.json(result);
+    res.json({ ...result, streams: outStreams });
   } catch (err) {
     live.add('stream', 'error', `errore nello stream "${req.params.id}": ${err.message}`, clientInfo(req));
     console.error('[stream]', err);
@@ -269,7 +292,12 @@ app.get('/playlist.m3u', requireToken, async (req, res) => {
   const t0 = Date.now();
   try {
     const cfg = store.loadConfig();
-    const { m3u, channels, lists } = await playlist.buildPlaylist(cfg, { force: req.query.refresh === '1' });
+    const { m3u, channels, lists } = await playlist.buildPlaylist(cfg, {
+      force: req.query.refresh === '1',
+      rewrite: cfg.settings.streamDiag
+        ? (ch) => ({ ...ch, url: diagStreamUrl(cfg, req, ch.url, ch.name, ch.listName || '') })
+        : undefined,
+    });
     const okLists = lists.filter((l) => !l.skipped && !l.error).length;
     const koLists = lists.filter((l) => l.error).length;
     live.add(
@@ -277,7 +305,8 @@ app.get('/playlist.m3u', requireToken, async (req, res) => {
       'info',
       `playlist.m3u generata: ${channels.length} canali da ${okLists}/${cfg.lists.length} liste` +
         `${koLists ? ` (${koLists} in errore)` : ''} in ${Date.now() - t0} ms` +
-        `${req.query.refresh === '1' ? ' [refresh forzato]' : ''}`,
+        `${req.query.refresh === '1' ? ' [refresh forzato]' : ''}` +
+        `${cfg.settings.streamDiag ? ' [diag]' : ''}`,
       clientInfo(req)
     );
     res.set('Content-Type', 'application/vnd.apple.mpegurl; charset=utf-8');
@@ -291,6 +320,15 @@ app.get('/playlist.m3u', requireToken, async (req, res) => {
     console.error('[m3u]', err);
     res.status(500).json({ error: err.message });
   }
+});
+
+/** Diagnostica stream: OK -> 302 alla fonte; KO -> video/errore a schermo. */
+app.get('/proxy/play', requireToken, (req, res) => {
+  const t0 = Date.now();
+  streamdiag.handlePlay(req, res, { t0, client: clientInfo(req) }).catch((err) => {
+    live.add('stream', 'error', `errore proxy diagnostico: ${err.message}`, clientInfo(req));
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  });
 });
 
 app.get('/playlist.m3u8', (req, res) => {
@@ -1162,6 +1200,8 @@ if (require.main === module) {
     console.log(`  File config              : ${store.CONFIG_FILE}`);
     console.log('='.repeat(64));
     live.add('system', 'info', `WiseM3U ${C.VERSION} avviato su http://${HOST}:${PORT} — ${cfg.lists.length} liste configurate`);
+    const caps = streamdiag.capabilities();
+    live.add('system', 'debug', `diagnostica stream: ffmpeg=${caps.ffmpeg} ffprobe=${caps.ffprobe} font=${caps.font}`);
 
     // stati "fetching" residui da un riavvio precedente: riprendi gli scaricamenti
     for (const l of cfg.lists) reconcileListState(l.id);
