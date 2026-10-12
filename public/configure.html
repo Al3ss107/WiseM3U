@@ -454,6 +454,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
+const WM_UI_VERSION = '1.4.4'; // versione di questo HTML: se diversa da CFG.version il browser sta servendo una pagina vecchia dalla cache
 const $ = (s, r=document) => r.querySelector(s);
 const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
 let CFG = null;
@@ -639,9 +640,15 @@ function renderChannels(list, b){
 }
 
 function renderLists(){
-  // cintura di sicurezza: se una ricostruzione del DOM sposta comunque il
-  // documento (scroll clamping), lo riportiamo al punto giusto dopo il layout
+  // rendere ricostruibili anche i container CON scroll proprio (.branches):
+  // la loro scrollTop va preservata esplicitamente, altrimenti la rebuild interna
+  // riporta la vista in cima alla "Playlist della lista" di quella scheda
   const sy = window.scrollY;
+  const bTops = {};
+  document.querySelectorAll('#lists .listcard').forEach(c=>{
+    const b = c.querySelector('.branches');
+    if (b) bTops[c.dataset.id] = b.scrollTop;
+  });
   const root = $('#lists');
   if (!CFG.lists.length){
     root.innerHTML = `<section class="card">
@@ -654,7 +661,13 @@ function renderLists(){
   for (const card of document.querySelectorAll('#lists .listcard')) plPopulateBranches(card);
   renderSideMenu();
   for (const l of CFG.lists) fillXtreamBadge(l);
-  requestAnimationFrame(() => { if (window.scrollY !== sy) window.scrollTo(0, sy); });
+  requestAnimationFrame(() => {
+    if (window.scrollY !== sy) window.scrollTo(0, sy);
+    document.querySelectorAll('#lists .listcard').forEach(c=>{
+      const b = c.querySelector('.branches');
+      if (b && bTops[c.dataset.id] != null) b.scrollTop = bTops[c.dataset.id];
+    });
+  });
 }
 
 /* -------- scadenza account Xtream (player_api.php) -------- */
@@ -662,6 +675,12 @@ function renderLists(){
 function fmtItDate(iso){
   try { return new Date(iso).toLocaleDateString('it-IT', { day:'numeric', month:'short', year:'numeric' }); }
   catch(_) { return iso; }
+}
+
+/** Chiave fonte di un URL (host+path senza query/token): dedup lato client. */
+function keyFromUrl(u){
+  try { const x = new URL(u); return `${x.protocol}//${x.host}${x.pathname}`; }
+  catch(_){ return String(u || ''); }
 }
 
 async function fillXtreamBadge(l, force){
@@ -1024,17 +1043,22 @@ async function toggleExpand(card, list, path){
   const row = card.querySelector(q);
   const btn = card.querySelector(`button[data-exp="${CSS.escape(path)}"]`);
   const existing = card.querySelector(`.chans[data-chans="${CSS.escape(path)}"]`);
+  // scroll del container playlist della scheda (agiato da .branches): non deve muoversi
+  const brBox = card.querySelector('.branches');
+  const bTop = brBox ? brBox.scrollTop : 0;
 
   if (EXPANDED.has(key)){
     EXPANDED.delete(key);
     if (existing) existing.remove();
     if (btn) btn.textContent = '\u25b8 canali';
+    if (brBox) requestAnimationFrame(()=>{ brBox.scrollTop = bTop; });
     return; // niente renderLists(): ricostruire tutto faceva saltare lo scroll
   }
   EXPANDED.add(key);
   if (btn) btn.textContent = '▾ canali';
   if (row) row.insertAdjacentHTML('afterend',
     `<div class="chans" data-chans="${esc(path)}"><div class="hint">Caricamento canali…</div></div>`);
+  if (brBox) brBox.scrollTop = bTop;
 
   try {
     const r = await api(`/api/lists/${list.id}/channels?path=${encodeURIComponent(path)}`);
@@ -1049,7 +1073,11 @@ async function toggleExpand(card, list, path){
   }
   const b = (branchesOf(list.id) || []).find(x=>x.path===path);
   const el = card.querySelector(`.chans[data-chans="${CSS.escape(path)}"]`);
-  if (b && el) el.outerHTML = renderChannels(list, b);
+  if (b && el) {
+    el.outerHTML = renderChannels(list, b);
+    // dopo la sostituzione del contenuto ripristina esplicitamente la scrollTop
+    if (brBox) requestAnimationFrame(()=>{ brBox.scrollTop = bTop; });
+  }
 }
 
 /* ---------------- drag & drop (rami e canali) ---------------- */
@@ -1264,13 +1292,18 @@ function bindListEvents(){
           cresolve.textContent = '… risolvo…';
           try {
             const r = await api(`/api/probeurl?u=${encodeURIComponent(c.url)}`);
-            if (r.finalUrl){
-              const same = r.finalUrl === c.url;
-              const hops = (r.chain || []).length;
-              holder.innerHTML = `<span class="fontres" title="${same ? 'Il pannello non redirige: la fonte coincide con l\'URL' : `Fonte reale dopo ${hops - 1} redirect`} — la vedi anche nei filtri">${same
-                ? '➡ nessun redirect: la fonte è questa URL' : `➡ ${esc(r.finalUrl)}`}</span>`;
-              // la fonte reale entra nel filtro testuale della playlist
-              if (rowEl) rowEl.dataset.csearch = ((rowEl.dataset.csearch || '') + ' ' + r.finalUrl).toLowerCase();
+            if (r.sourceKey){
+              // chiave dedup: host+path senza token/query; il redirect anti-hotlink
+              // sullo stesso percorso NON significa "non risolto": la fonte e' la stessa
+              const hops = (r.chain || []).length - 1;
+              const note = hops <= 0
+                ? 'nessun redirect (endpoint diretto)'
+                : r.sourceKey === keyFromUrl(c.url)
+                  ? `redirect ${hops}x sullo stesso percorso (token anti-hotlink): la fonte è questo host+path`
+                  : `redirect ${hops}x: la fonte reale è sotto`;
+              holder.innerHTML = `<span class="fontres" title="${note} — identica fonte = stesso canale anche se token/query diversi">🔑 fonte: <b>${esc(r.sourceKey)}</b> <i style="color:#9fc1ff;font-style:normal">(${esc(note)})</i></span>`;
+              // la fonte entra nel filtro testuale della playlist (senza token: confrontabile)
+              if (rowEl) rowEl.dataset.csearch = ((rowEl.dataset.csearch || '') + ' ' + r.sourceKey).toLowerCase();
             } else {
               holder.innerHTML = `<span class="fontres ko">⚠ ${esc(r.reason || 'fonte non risolvibile')}</span>`;
             }
@@ -1717,7 +1750,15 @@ function renderAll(){
   $('#m3uLink').href = base + '/playlist.m3u' + tokenQs();
   renderLists();
   $('#status').textContent = `${CFG.lists.length} liste · ${CFG.lists.filter(l=>l.options.enabled).length} attive`;
-  $('#appVersion').textContent = CFG.version ? `WiseM3U v${CFG.version}` : '';
+  if (CFG.version && String(CFG.version) !== WM_UI_VERSION){
+    // pagina stale dal browser: l'UI e il server non sono allineati (bug "fantasma" possibili)
+    const el = $('#appVersion');
+    el.textContent = `WiseM3U v${CFG.version} ⚠ pagina UI v${WM_UI_VERSION}: aggiorna con Ctrl+Maiusc+R`;
+    el.style.color = 'var(--warn)';
+    toast('Pagina di configurazione stale (cache del browser): premi Ctrl+Maiusc+R per aggiornarla', 6000);
+  } else {
+    $('#appVersion').textContent = CFG.version ? `WiseM3U v${CFG.version}` : '';
+  }
 }
 
 function readSettings(){

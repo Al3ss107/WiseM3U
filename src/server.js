@@ -34,10 +34,19 @@ app.use(compression({
     return compression.filter(req, res);
   },
 }));
-app.use(express.static(path.join(__dirname, '..', 'public')));
-app.get(['/', '/configure', '/configure/'], (req, res) =>
-  res.sendFile(path.join(__dirname, '..', 'public', 'configure.html'))
-);
+app.use(express.static(path.join(__dirname, '..', 'public'), {
+  // mai servire HTML/JS "congelati" da cache del browser dopo gli aggiornamenti:
+  // devono essere SEMPRE la versione del container, altrimenti UI e logica divergono
+  setHeaders: (res, filePath) => {
+    if (/\.(html|js|css)$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    }
+  },
+}));
+app.get(['/', '/configure', '/configure/'], (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+  res.sendFile(path.join(__dirname, '..', 'public', 'configure.html'));
+});
 
 app.use((req, res, next) => {
   res.set('Access-Control-Allow-Origin', '*');
@@ -1010,7 +1019,9 @@ app.get('/api/lists/:id/tree', requireAdmin, async (req, res) => {
 
 /** Risolve la FONTE reale di un URL stream: segue i redirect del pannello
  *  fino al CDN/server di origine effettivo, cosi' canali diversi che condividono
- *  la stessa sorgente si riconoscono anche se arrivano da pannelli diversi. */
+ *  la stessa sorgente si riconoscono anche se arrivano da pannelli diversi.
+ *  sourceKey = host+path SENZA query/token (redirezione anti-hotlink). Due canali
+ *  con la stessa sourceKey attingono dalla stessa sorgente, token diversi o no. */
 app.get('/api/probeurl', requireAdmin, async (req, res) => {
   const u = String(req.query.u || '').trim();
   if (!/^https?:\/\//i.test(u)) {
@@ -1019,7 +1030,22 @@ app.get('/api/probeurl', requireAdmin, async (req, res) => {
   try {
     const r = await streamdiag.probe(u);
     const final = r.finalUrl || (r.chain && r.chain.length > 1 ? r.chain[r.chain.length - 1] : null);
-    res.json({ ok: r.ok, status: r.status || 0, finalUrl: final, chain: r.chain || [u], reason: r.reason || '' });
+    let sourceKey = null;
+    if (final) {
+      try {
+        const f = new URL(final);
+        sourceKey = `${f.protocol}//${f.host}${f.pathname}`;
+      } catch (_) { sourceKey = final; }
+    }
+    res.json({
+      ok: r.ok,
+      status: r.status || 0,
+      finalUrl: final,
+      redirected: !!(final && final !== u),
+      sourceKey,
+      chain: r.chain || [u],
+      reason: r.reason || '',
+    });
   } catch (err) {
     res.json({ ok: false, reason: err.message || String(err) });
   }
