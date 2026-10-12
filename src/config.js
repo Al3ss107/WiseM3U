@@ -163,6 +163,8 @@ function normalizeList(list) {
       fetchedAt: (list.state && list.state.fetchedAt) || '',
       stats: (list.state && list.state.stats) || null,
       kind: (list.state && list.state.kind) || '',
+      // info account Xtream (scadenza): cache 30 min del badge in configurazione
+      ...(list.state && list.state.xtream ? { xtream: list.state.xtream } : {}),
     },
   };
 }

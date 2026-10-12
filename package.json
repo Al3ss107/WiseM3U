@@ -1,13 +1,14 @@
 {
   "name": "wisem3u",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Addon Stremio/Nuvio self-hosted che converte liste WisePlay in playlist M3U e cataloghi",
   "license": "MIT",
   "type": "commonjs",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
+    "dev": "node --watch src/server.js",
+    "test": "node tests/test_logs.js && node tests/test_diag.js && node tests/test_xtream.js"
   },
   "dependencies": {
     "compression": "^1.7.4",

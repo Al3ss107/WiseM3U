@@ -791,4 +791,7 @@ module.exports = {
   isM3uText,
   guessKind,
   FetchError,
+  // riusati dalla sonda Xtream (scadenze account)
+  nodeFetchText,
+  resolveViaPublicDns,
 };

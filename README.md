@@ -362,6 +362,16 @@ tornano quelli originali direttamente.
 > server (e da EasyProxy): su macchine piccole valuta la banda disponibile e
 > attivalo solo sulle liste che ne hanno bisogno.
 
+### Scadenza account Xtream
+
+Per le liste Xtream (URL `get.php?...&username=...&password=...`) la scheda
+della lista mostra un badge **⏳ con la data di scadenza e i giorni rimanenti**
+decurati da `/player_api.php`, più eventuale limite di connessioni. Verde oltre
+i 30 giorni, giallo sotto i 30, rosso sotto i 7 o da scaduto. I dati vengono
+conservati 30 minuti in cache (niente nuove richieste al pannello ad ogni
+apertura); **click sul badge per rileggere subito**. Se il pannello è giù si
+conserva l'ultima informazione nota segnalata come *stale*.
+
 ### Log live (debug)
 
 In fondo alla pagina di configurazione c'è la sezione **Log live**: mostra in
@@ -464,6 +474,7 @@ Robustezza e prestazioni (misurate sulle due liste di esempio):
 npm install
 npm start        # avvio locale su http://localhost:7000
                  # (nel container la porta host e' la 7300, vedi docker-compose.yml)
+npm test         # batteria di regressione: log live, diagnostica stream, scadenza Xtream
 ```
 
 ---

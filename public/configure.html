@@ -636,6 +636,43 @@ function renderLists(){
   bindListEvents();
   for (const card of document.querySelectorAll('#lists .listcard')) plPopulateBranches(card);
   renderSideMenu();
+  for (const l of CFG.lists) fillXtreamBadge(l);
+}
+
+/* -------- scadenza account Xtream (player_api.php) -------- */
+
+function fmtItDate(iso){
+  try { return new Date(iso).toLocaleDateString('it-IT', { day:'numeric', month:'short', year:'numeric' }); }
+  catch(_) { return iso; }
+}
+
+async function fillXtreamBadge(l, force){
+  if (!l || l.kind === 'personal') return;
+  if (!/\/get\.php/i.test(l.url || '')) return;
+  const el = document.getElementById('xt_' + l.id);
+  if (!el) return;
+  try {
+    const r = await api(`/api/lists/${l.id}/xtream${force ? '?refresh=1' : ''}`);
+    if (!r || !r.ok || !r.user) { el.innerHTML = ''; return; }
+    const u = r.user;
+    const days = u.daysLeft;
+    const expTxt = u.expired
+      ? '⛔ account SCADUTO'
+      : days == null
+        ? '⏳ senza scadenza'
+        : `⏳ scade il ${fmtItDate(u.expiryIso)} (${days} gg)`;
+    const conn = u.maxConnections ? ` · max ${u.maxConnections} conn` : '';
+    const color = u.expired ? 'background:#3a1220;color:#ff9aa8'
+      : days == null ? 'background:#123324;color:#7ef0ac'
+      : days <= 7 ? 'background:#3a1220;color:#ff9aa8'
+      : days <= 30 ? 'background:#3a2c0d;color:#ffd479'
+      : 'background:#123324;color:#7ef0ac';
+    el.innerHTML = `<span class="badge" style="${color};cursor:pointer" title="Account Xtream: ${esc(u.status)} · aggiornato ${fmtItDate(r.fetchedAt)} — click per rileggere" onclick="refreshXtreamBadge('${esc(l.id)}')">${expTxt}${conn}</span>`;
+  } catch (_) { /* nessun dato: badge vuoto */ }
+}
+async function refreshXtreamBadge(id){
+  const l = (CFG.lists || []).find(x => x.id === id);
+  if (l) fillXtreamBadge(l, true);
 }
 
 /* --------- menu laterale: riordino liste + accesso rapido --------- */
@@ -714,6 +751,7 @@ function renderListCard(l){
       ${personal ? '<span class="badge ready" title="Lista personale: composta da canali e playlist delle tue liste">personale</span>' : ''}
       ${s.kind === 'm3u' ? '<span class="badge ready" title="Sorgente playlist M3U">m3u</span>' : ''}
       <span class="badge ${st}">${st}</span>
+      <span class="xtbadge" id="xt_${esc(l.id)}"></span>
       <div class="spacer" style="flex:1"></div>
       <div class="acts">
         <button class="ghost small" data-act="toggle" style="${o.enabled ? '' : 'opacity:.55;color:var(--warn)'}" title="Attiva/disattiva completamente la lista">${o.enabled ? '⏻ attiva' : '⏻ spenta'}</button>

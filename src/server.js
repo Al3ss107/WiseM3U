@@ -14,6 +14,7 @@ const { buildTree, treeForUi } = require('./wiseplay');
 const imgfit = require('./imgfit');
 const live = require('./liveLog');
 const streamdiag = require('./streamdiag');
+const xtream = require('./xtream');
 const C = require('./constants');
 
 const PORT = Number(process.env.PORT || 7000);
@@ -550,6 +551,31 @@ app.get('/api/lists/:id/state', requireAdmin, (req, res) => {
   if (!list) return res.status(404).json({ error: 'lista non trovata' });
   reconcileListState(list.id);
   res.json(store.findList(list.id).state || {});
+});
+
+/** Info account Xtream (scadenza/stato) dalla /player_api.php del pannello.
+ *  Cache nella config per 30 minuti: la pagina resta istantanea all'apertura. */
+app.get('/api/lists/:id/xtream', requireAdmin, async (req, res) => {
+  const list = store.findList(req.params.id);
+  if (!list) return res.status(404).json({ error: 'lista non trovata' });
+  const url = sanitizeListUrl(list.url || '');
+  if (!xtream.xtreamInfo(url)) return res.json({ ok: false, xtream: false });
+
+  const cached = list.state && list.state.xtream;
+  const force = req.query.refresh === '1';
+  if (cached && cached.fetchedAt && !force) {
+    const ageMs = Date.now() - new Date(cached.fetchedAt).getTime();
+    if (ageMs >= 0 && ageMs < 30 * 60 * 1000) return res.json({ ok: true, ...cached, cached: true });
+  }
+
+  const r = await xtream.fetchPanelInfo(url);
+  if (!r.ok) {
+    // senza dati freschi: conserva quelli vecchi (meglio vecchio che niente)
+    if (cached) return res.json({ ok: true, ...cached, cached: true, stale: true, fetchError: r.reason });
+    return res.json({ ok: false, xtream: true, error: r.reason });
+  }
+  store.updateListState(list.id, { xtream: r });
+  res.json({ ok: true, ...r, cached: false });
 });
 
 app.delete('/api/lists/:id', requireAdmin, (req, res) => {
