@@ -17,6 +17,19 @@ const streamdiag = require('./streamdiag');
 const xtream = require('./xtream');
 const C = require('./constants');
 
+// dieta RAM: quando la cache evita l'albero parseato di una lista, libera anche
+// le righe flatten memoizzate (stringhe condivise col tree, altrimenti non free)
+cache.setEvictHook((listId) => playlist.clearRows(listId));
+
+// rilascia volentieri al kernel l'heap inutilizzata (con NODE_OPTIONS=--expose-gc):
+// mantiene l'RSS vicino ai dati vivi invece che al picco storico
+if (typeof global.gc === 'function') {
+  setInterval(() => {
+    const m = process.memoryUsage();
+    if (m.heapUsed > 96 * 1024 * 1024) global.gc();
+  }, 30000).unref();
+}
+
 const PORT = Number(process.env.PORT || 7000);
 const HOST = process.env.HOST || '0.0.0.0';
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
@@ -1214,12 +1227,18 @@ app.get(/^\/personal\/([^/]+)\.m3u$/, requireToken, async (req, res) => {
 
 app.get('/healthz', (req, res) => {
   const cfg = store.loadConfig();
+  const m = process.memoryUsage();
+  const cs = cache.stats();
   res.json({
     ok: true,
     version: C.VERSION,
     lists: cfg.lists.length,
     enabled: cfg.lists.filter((l) => l.options.enabled).length,
     uptime: Math.round(process.uptime()),
+    // visibilita' della dieta RAM senza entrare nel container
+    rssMB: Math.round(m.rss / 1048576),
+    heapMB: Math.round(m.heapUsed / 1048576),
+    cache: { entries: cs.entries, parsed: cs.parsedEntries, gzMB: Math.round(cs.gzBytes / 1048576), hotLists: cs.maxParsed },
   });
 });
 

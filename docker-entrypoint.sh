@@ -12,6 +12,11 @@
 CFG="${CONFIG_FILE:-/data/config.json}"
 CACHEDIR="${CACHE_DIR:-/data/cache}"
 
+# dieta RAM: --expose-gc permette al server di rilasciare heap inutilizzata
+# periodicamente (vedi il timer GC in scena); l'utente puo' sovrascrivere o
+# ampliare tutto con NODE_OPTIONS (es. anche --max-old-space-size)
+export NODE_OPTIONS="--expose-gc ${NODE_OPTIONS}"
+
 if [ -d "$CFG" ]; then
   echo "[entrypoint] $CFG e' una directory (autocreatata da Docker): la sistemo"
   rmdir "$CFG" 2>/dev/null || mv "$CFG" "${CFG}.autodir-backup" 2>/dev/null || \

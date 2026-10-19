@@ -446,6 +446,11 @@ Robustezza e prestazioni (misurate sulle due liste di esempio):
 
 * analisi completa in **pochi secondi** (32 fetch paralleli), cache su disco **gzip**
   scritta **in background** (59 MB → ~4 MB) e reload in ~10 ms;
+* **dieta RAM degli alberi**: in memoria resta solo lo snapshot **gzip** di ogni lista
+  (~1/6 della dimensione originale) e viene parseato solo al bisogno; restano "calde"
+  (parseate) al massimo `WM_HOT_TREES` liste alla volta (LRU, default **1**). Con
+  100k+ canali totali l'RSS scende parecchio rispetto a tenerle tutte parseate —
+  `/healthz` espone `rssMB`/`heapMB`/cache per verificarlo da fuori;
 * **aggiunta e aggiornamento delle liste in background**: la pagina risponde subito e
   mostra lo stato (`fetching` → `ready`) senza tenere richieste appese;
 * il **manifest è sempre istantaneo**: i generi arrivano dall'albero in cache e il
@@ -470,6 +475,7 @@ Robustezza e prestazioni (misurate sulle due liste di esempio):
 | `CACHE_DIR` | `/data/cache` | cartella degli snapshot gzip |
 | `ADMIN_TOKEN` | *(vuoto)* | se impostato, protegge `/configure` e le API `/api/*` |
 | `LIVE_LOG_BUFFER` | `1000` | numero di eventi mantenuti nel buffer dei **log live** |
+| `WM_HOT_TREES` | `1` | quante liste restano **parseate in RAM** insieme (LRU): alzalo se i client saltano spesso tra liste grandi, abbassa se la RAM scarseggia |
 | `STREAM_DIAG_UA` | VLC/3.0.20 | user-agent usato dalle sonde `/proxy/play` (alcuni pannelli accettano solo certi UA) |
 | `STREAM_DIAG_PROBE_TIMEOUT_MS` | `8000` | timeout della sonda diagnostica prima di mostrare l'errore a video |
 

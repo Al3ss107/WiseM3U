@@ -349,6 +349,11 @@ function catalogDisplayName(list) {
 const PAGE_SIZE = 100;
 const rowsMemo = new Map();
 
+/** RAM farm: l'albero parseato di questa lista viene evitto dalla cache — le righe
+ *  memoizzate condividono le stringhe col tree: libera anche loro (sono ricostruite
+ *  al prossimo uso). */
+function clearRows(listId) { rowsMemo.delete(listId); }
+
 function rowFingerprint(list, fetchedAt) {
   const o = list.options;
   return (
@@ -759,4 +764,5 @@ module.exports = {
   encodePath,
   decodePath,
   listPrefix,
+  clearRows,
 };
