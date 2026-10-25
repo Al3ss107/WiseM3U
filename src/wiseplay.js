@@ -49,6 +49,45 @@ function looksLikeJson(s) {
   return t.startsWith('{') || t.startsWith('[') || /"stations"\s*:|"groups"\s*:/.test(t);
 }
 
+/**
+ * Rimuove le "virgole spurie" tipiche dei gist WisePlay scritti a mano:
+ *   - virgola finale:   {"a":1,}  [1,2,]
+ *   - elemento vuoto:   [.., , ..]   (appare in alcune liste "catena")
+ *   - virgola orfana:   [,..]  {,..}
+ * Il regex semplice (,(\s*[}\]])) non basta e corromperebbe le STRINGHE che
+ * contengono sequenze simili: qui scorriamo carattere per carattere
+ * rispettando i delimitatori "..." e gli escape.
+ */
+function removeStrayCommas(json) {
+  const n = json.length;
+  let out = '';
+  let inStr = false;
+  let esc = false;
+  let prev = ''; // ultimo carattere NON-spazio emesso
+  for (let i = 0; i < n; i++) {
+    const c = json[i];
+    if (inStr) {
+      out += c;
+      if (esc) esc = false;
+      else if (c === '\\') esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') { inStr = true; out += c; prev = c; continue; }
+    if (c === ',') {
+      // se il prossimo carattere significativo chiude la struttura o e' un'altra
+      // virgola, o se il precedente apriva la struttura -> virgola spuria: salta
+      let j = i + 1;
+      while (j < n && /\s/.test(json[j])) j++;
+      const next = j < n ? json[j] : '';
+      if (next === ',' || next === ']' || next === '}' || prev === '[' || prev === '{' || prev === ',') continue;
+    }
+    out += c;
+    if (!/\s/.test(c)) prev = c;
+  }
+  return out;
+}
+
 function parseLenientJson(raw) {
   let s = String(raw || '').replace(/^\uFEFF/, '');
   s = stripControlChars(s);
@@ -76,10 +115,10 @@ function parseLenientJson(raw) {
     }
   }
 
-  // ultima spiaggia: rimuove le virgole finali (,} oppure ,])
+  // ultima spiaggia: versione ripulita (virgole finali/spurie, elementi vuoti)
   for (const candidate of attempts) {
     try {
-      return JSON.parse(candidate.replace(/,(\s*[}\]])/g, '$1'));
+      return JSON.parse(removeStrayCommas(candidate));
     } catch (_) {
       /* next */
     }
@@ -300,6 +339,7 @@ function newCounters() {
     external: 0,
     m3u: 0,
     duplicates: 0,
+    embedded: 0,
     truncated: false,
   };
 }
@@ -468,6 +508,13 @@ async function buildTree(rootUrl, options = {}) {
     if (!s || typeof s !== 'object') return;
     const url = (s.url || '').toString().trim();
     if (!url) return;
+    // embed: true = pagina web da aprire in browser integrato (Serially, Plex,
+    // Rai Play...): NON e' uno stream riproducibile, in Stremio sarebbe un
+    // canale morto presente in catalogo -> la saltiamo
+    if (s.embed === true || s.embed === 'true' || s.embed === 1 || s.embed === '1') {
+      stats.embedded++;
+      return;
+    }
     if (stats.stations >= MAX_STATIONS) {
       stats.truncated = true;
       return;

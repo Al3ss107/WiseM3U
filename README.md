@@ -444,6 +444,11 @@ WiseM3U:
 
 Robustezza e prestazioni (misurate sulle due liste di esempio):
 
+* JSON **tollerante**: ricatta i gist scritti a mano con virgole finali (`,]`, `},`) ed
+  elementi vuoti (`[a, ,b]`) senza toccare le stringhe; ignora il flag `import:false`
+  di WisePlay (caricamento lazy: noi risolviamo sempre, è l'unico modo di mostrare il
+  contenuto agli utenti Stremio/Nuvio) ed esclude le stazioni `embed:true` (pagine
+  web non riproducibili in Stremio, sarebbero canali morti);
 * analisi completa in **pochi secondi** (32 fetch paralleli), cache su disco **gzip**
   scritta **in background** (59 MB → ~4 MB) e reload in ~10 ms;
 * **dieta RAM degli alberi**: in memoria resta solo lo snapshot **gzip** di ogni lista
