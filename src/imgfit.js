@@ -22,7 +22,7 @@ const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
 const sharp = require('sharp');
-const { USER_AGENT } = require('./constants');
+const { IMG_USER_AGENT } = require('./constants');
 
 const CACHE_DIR = process.env.IMGFIT_DIR || path.join(__dirname, '..', 'data', 'imgcache');
 const MAX_BYTES = 8 * 1024 * 1024; // webp/svg di brand possono pesare
@@ -56,7 +56,13 @@ async function fetchBuf(url) {
     const res = await fetch(url, {
       redirect: 'follow',
       signal: ctrl.signal,
-      headers: { 'User-Agent': USER_AGENT, Accept: 'image/*' },
+      headers: {
+        // niente suffisso WiseM3U (vedi IMG_USER_AGENT) + Accept da browser:
+        // diversi CDN di loghi rispondono 403/i-frame challenge altrimenti
+        'User-Agent': IMG_USER_AGENT,
+        Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        'Accept-Language': 'it-IT,it;q=0.9,en;q=0.8',
+      },
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const buf = Buffer.from(await res.arrayBuffer());
@@ -125,6 +131,24 @@ function runQueued(fn) {
   });
 }
 
+/** Fallback: passa l'immagine GREZZA al client. Cache breve cosi' il client
+ *  non martella gli stessi URL ma il poster puo' sistemarsi da solo più tardi. */
+function fallbackRedirect(res, url) {
+  res.setHeader('Cache-Control', 'public, max-age=300');
+  return res.redirect(302, url);
+}
+
+// un avviso per poster fallito (diagnosi da docker logs; host-only = niente URL)
+const WARNED = new Set();
+function warnFailed(key, url, err) {
+  if (WARNED.has(key)) return;
+  WARNED.add(key);
+  if (WARNED.size > 200) WARNED.clear();
+  let host = 'sconosciuto';
+  try { host = new URL(url).hostname; } catch (_) { /* url grezza */ }
+  console.warn(`[imgfit] logo non processato da ${host}: ${(err && err.message) || 'formato ignoto'} — fallback all'originale`);
+}
+
 /** Handler express: GET /imgfit?shape=landscape&url=https://… */
 async function handle(req, res) {
   const url = String(req.query.url || '');
@@ -141,24 +165,27 @@ async function handle(req, res) {
     return res.send(cached);
   } catch (_) { /* non in cache: si elabora */ }
 
-  if (queue.length >= MAX_QUEUE) return res.redirect(302, url);
+  if (queue.length >= MAX_QUEUE) return fallbackRedirect(res, url);
 
   try {
     let p = inflight.get(key);
     if (!p) {
-      p = runQueued(() => produce(url, shape).catch(() => null));
+      p = runQueued(() => produce(url, shape).catch((err) => {
+        warnFailed(key, url, err);
+        return null;
+      }));
       inflight.set(key, p);
       p.finally(() => inflight.delete(key));
     }
     const out = await p;
-    if (!out) return res.redirect(302, url);
+    if (!out) return fallbackRedirect(res, url);
     ensureDir();
     fsp.writeFile(file, out).catch(() => { /* disco pieno: risponde comunque */ });
     res.setHeader('Cache-Control', 'public, max-age=604800');
     res.setHeader('Content-Type', 'image/jpeg');
     return res.send(Buffer.from(out));
   } catch (_) {
-    return res.redirect(302, url);
+    return fallbackRedirect(res, url);
   }
 }
 

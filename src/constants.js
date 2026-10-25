@@ -16,6 +16,13 @@ module.exports = {
     `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) ` +
     `Chrome/126.0 Safari/537.36 WiseM3U/${pkg.version}`,
 
+  /** User-agent "pulito" per i loghi/poster: i CDN dietro Cloudflare worker
+   *  (quelli dei loghi vavoo, Rakuten, Pluto...) bloccano anche solo il
+   *  suffisso "WiseM3U/x.y" come traffico bot -> 403 -> poster ritagliati. */
+  IMG_USER_AGENT:
+    `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) ` +
+    `Chrome/126.0.0.0 Safari/537.36`,
+
   /** Limite del body JSON accettato dalle API (la config puo' essere grande). */
   JSON_BODY_LIMIT: '4mb',
 

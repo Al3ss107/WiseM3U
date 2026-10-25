@@ -36,8 +36,18 @@ const isCanvas = async (buf, W, H) => { try { const m = await sharp(buf).metadat
   const ico = Buffer.concat([hdr, inner]);
 
   const media = { '/x.png': png, '/x.webp': webp, '/x.svg': svg, '/x.ico': ico, '/x.txt': 'not-an-image' };
+  let lastImgUa = '';
   const mediaSrv = http.createServer((q, r) => {
-    const m = media[new URL(q.url, 'http://x').pathname];
+    const px = new URL(q.url, 'http://x').pathname;
+    // /cf.png emula un CDN dietro Cloudflare: 403 se l'UA puzza di bot
+    if (px === '/cf.png') {
+      lastImgUa = q.headers['user-agent'] || '';
+      if (/WiseM3U|node-fetch|undici|axios|^$/.test(lastImgUa) || !/Chrome\//.test(lastImgUa)) {
+        r.writeHead(403); return r.end('cloudflare: bot blocked');
+      }
+      r.writeHead(200, { 'Content-Type': 'image/png' }); return r.end(png);
+    }
+    const m = media[px];
     if (m == null) { r.writeHead(404); return r.end(''); }
     r.writeHead(200, { 'Content-Type': 'application/octet-stream' });
     r.end(m);
@@ -59,6 +69,14 @@ const isCanvas = async (buf, W, H) => { try { const m = await sharp(buf).metadat
   const sq = await produce(`${BASE}/x.webp`, 'square');
   assert(sq && (await isCanvas(sq, 512, 512)), 'produce square -> canvas JPEG 512x512');
 
+  // i loghi devono uscire con UA da browser pulito (CDN worker = 403 altrimenti,
+  // v1.5.1: poster tagliati dopo svuotamento cache)
+  const cf = await produce(`${BASE}/cf.png`, 'landscape');
+  assert(cf && (await isCanvas(cf, 640, 360)),
+    `produce dietro wannabe-Cloudflare: ok (UA='${lastImgUa.slice(0, 60)}…')`);
+  assert(/Chrome\/126/.test(lastImgUa) && !/WiseM3U/.test(lastImgUa),
+    `UA immagini pulita da suffisso bot: ${lastImgUa}`);
+
   // --- handler express: 200 jpeg, 302 fallback, cache su disco ---------------------------
   const app = express();
   app.get('/imgfit', (req, res) => handle(req, res));
@@ -72,6 +90,8 @@ const isCanvas = async (buf, W, H) => { try { const m = await sharp(buf).metadat
   assert(await isCanvas(Buffer.from(await okRes.arrayBuffer()), 640, 360), 'handler: il deposito e\' la tela');
   const fall = await fetch(`${acc}/imgfit?shape=landscape&url=${encodeURIComponent(`${BASE}/x.txt`)}`, { redirect: 'manual' });
   assert(fall.status === 302, `handler: immagine ignota -> 302 all'origine (${fall.status})`);
+  assert(/max-age=300/.test(fall.headers.get('cache-control') || ''),
+    `handler: fallback con cache breve (${fall.headers.get('cache-control')})`);
   const cached = await fetch(`${acc}/imgfit?shape=landscape&url=${encodeURIComponent(`${BASE}/x.webp`)}`);
   assert(cached.status === 200, 'handler: seconda richiesta servita (cache disco)');
 
