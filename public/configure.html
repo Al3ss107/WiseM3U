@@ -454,7 +454,8 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const WM_UI_VERSION = '1.4.4'; // versione di questo HTML: se diversa da CFG.version il browser sta servendo una pagina vecchia dalla cache
+// il server inietta qui la sua versione alla consegna della pagina (mai piu' hardcoded)
+const WM_UI_VERSION = '__WM_UI_VERSION__';
 const $ = (s, r=document) => r.querySelector(s);
 const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
 let CFG = null;

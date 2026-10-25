@@ -1,6 +1,7 @@
 'use strict';
 
 const path = require('path');
+const fs = require('fs');
 const http = require('http');
 const https = require('https');
 const net = require('net');
@@ -56,9 +57,19 @@ app.use(express.static(path.join(__dirname, '..', 'public'), {
     }
   },
 }));
+// La pagina di configurazione viene servita con la versione dell'addon INIETTATA
+// dal server (placeholder __WM_UI_VERSION__): impossibile che il marcatore vuoto
+// resti indietro rispetto al backend (bug v1.4.4/v1.4.5) — niente avvisi eterni.
+let CONFIG_HTML = null;
+function configPageHtml() {
+  if (!CONFIG_HTML) {
+    CONFIG_HTML = fs.readFileSync(path.join(__dirname, '..', 'public', 'configure.html'), 'utf8');
+  }
+  return CONFIG_HTML.replace('__WM_UI_VERSION__', C.VERSION);
+}
 app.get(['/', '/configure', '/configure/'], (req, res) => {
   res.setHeader('Cache-Control', 'no-cache, must-revalidate');
-  res.sendFile(path.join(__dirname, '..', 'public', 'configure.html'));
+  res.type('html').send(configPageHtml());
 });
 
 app.use((req, res, next) => {
