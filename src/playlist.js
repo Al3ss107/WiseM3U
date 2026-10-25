@@ -622,7 +622,10 @@ async function buildCatalog(config, catId, extras = {}) {
       name: r.name,
       // logo proprio del canale, altrimenti l'icona del gruppo come poster
       poster: r.logo || r.groupLogo || undefined,
-      posterShape: 'square',
+      // loghi dei canali TV sono orizzontali: card 16:9 ("landscape"),
+      // niente piu' tagli laterali nei client (Nuvio/Stremio) che ricavano
+      // la geometria della card dal posterShape
+      posterShape: 'landscape',
       genre: [r.genre],
       description: r.group,
     })),
@@ -659,7 +662,8 @@ async function buildMeta(config, id) {
         name: (list.options.channelRenames || {})[ckey] || st.name,
         poster: st.image || node.image || undefined,
         background: st.image || node.image || undefined,
-        posterShape: 'square',
+        // anche il dettaglio canale: landscape, coerente col catalogo
+        posterShape: 'landscape',
         genre: [genre],
         description: [
           names.join(' › '),

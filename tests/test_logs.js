@@ -146,6 +146,14 @@ async function waitFor(pred, ms, step = 400) {
     const metas = (cat.body && cat.body.metas) || [];
     const meta = metas.find((m) => (m.name || '').includes('Test'));
     assert(meta, `catalogo: ${JSON.stringify(metas).slice(0, 200)}`);
+    // i canali TV devono uscire come card landscape (loghi orizzontali):
+    // se ricompare 'square' i client ricominciano a tagliare i loghi (v1.4.7)
+    assert(meta.posterShape === 'landscape',
+      `posterShape catalogo: ${meta.posterShape}`);
+    const metaDet = await apiJ(`/meta/tv/${encodeURIComponent(meta.id)}.json`);
+    assert(metaDet.body && metaDet.body.meta && metaDet.body.meta.posterShape === 'landscape',
+      `posterShape meta: ${JSON.stringify(metaDet.body).slice(0, 200)}`);
+
     const stream = await apiJ(`/stream/tv/${encodeURIComponent(meta.id)}.json`);
     assert(stream.status === 200 && (stream.body.streams || []).some((s) => s.url === CHAN_URL),
       `stream: ${JSON.stringify(stream.body).slice(0, 200)}`);

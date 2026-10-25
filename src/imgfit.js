@@ -29,8 +29,8 @@ const MAX_QUEUE = 12;
 const BG = [16, 20, 24]; // #101418, tono scuro da app TV
 
 const SHAPES = {
-  square: [512, 512],     // poster canali (posterShape square)
-  landscape: [640, 360],  // poster gruppi/landing (posterShape landscape)
+  square: [512, 512],     // preset residuo/fallback (posterShape square)
+  landscape: [640, 360],  // poster canali e gruppi (posterShape landscape)
 };
 
 let active = 0;
