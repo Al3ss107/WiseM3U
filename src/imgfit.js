@@ -2,31 +2,35 @@
 
 /**
  * Riformatta i loghi dei canali in poster proporzionati (contain su tela
- * scura), cosi' i client che ritagliano "cover" non li mostrano zoomati.
+ * scura), cosi' i client che ritagliano "cover" non li mostrano tagliati.
  *
- * Solo JS puro (pngjs + jpeg-js), niente native: adatto ad ARM lenti.
+ * Decodifica e composizione con sharp/libvips (binari precompilati, anche
+ * musl/ARM): digerisce PNG, JPEG, WebP, SVG, GIF, TIFF, e — con un parsing
+ * minimo — anche i FAVICON .ICO moderni (PNG embedded): i CDN di Pluto TV /
+ * Rakuten servono proprio quei formati e coi decoder "solo PNG/JPEG" i
+ * canali passavano in grezzo al client, che li ritagliava (poster tagliati).
+ *
  * - on-demand: elabora solo i loghi effettivamente richiesti dai client;
  * - cache su disco (data/imgcache) con Cache-Control lungo;
  * - single-flight + concurrency limitata;
- * - qualsiasi problema (formato non PNG/JPEG, timeout, decode) -> 302
- *   all'URL originale: nessuna regressione rispetto a prima.
+ * - qualsiasi problema (formato ignoto, rete, timeout) -> 302 all'URL
+ *   originale: nessuna regressione rispetto a prima.
  */
 
 const crypto = require('crypto');
 const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
-const { PNG } = require('pngjs');
-const jpeg = require('jpeg-js');
+const sharp = require('sharp');
 const { USER_AGENT } = require('./constants');
 
 const CACHE_DIR = process.env.IMGFIT_DIR || path.join(__dirname, '..', 'data', 'imgcache');
-const MAX_BYTES = 4 * 1024 * 1024;
+const MAX_BYTES = 8 * 1024 * 1024; // webp/svg di brand possono pesare
 const MAX_PIXELS = 4096 * 4096;
 const FETCH_TIMEOUT_MS = 6000;
 const CONCURRENCY = 4;
-const MAX_QUEUE = 12;
-const BG = [16, 20, 24]; // #101418, tono scuro da app TV
+const MAX_QUEUE = 24;
+const BG = { r: 16, g: 20, b: 24, alpha: 1 }; // #101418, tono scuro da app TV
 
 const SHAPES = {
   square: [512, 512],     // preset residuo/fallback (posterShape square)
@@ -52,10 +56,11 @@ async function fetchBuf(url) {
     const res = await fetch(url, {
       redirect: 'follow',
       signal: ctrl.signal,
-      headers: { 'User-Agent': USER_AGENT },
+      headers: { 'User-Agent': USER_AGENT, Accept: 'image/*' },
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const buf = Buffer.from(await res.arrayBuffer());
+    if (!buf.length) throw new Error('immagine vuota');
     if (buf.length > MAX_BYTES) throw new Error('immagine troppo grande');
     return buf;
   } finally {
@@ -63,64 +68,46 @@ async function fetchBuf(url) {
   }
 }
 
-/** Decodifica PNG o JPEG; altro formato -> null (il chiamante fa redirect). */
-function decode(buf) {
-  try {
-    if (buf.length > 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) {
-      const png = PNG.sync.read(buf);
-      if (png.width * png.height > MAX_PIXELS) return null;
-      return { width: png.width, height: png.height, rgba: png.data, hasAlpha: true };
-    }
-    if (buf.length > 3 && buf[0] === 0xff && buf[1] === 0xd8) {
-      const img = jpeg.decode(buf, { maxMemoryUsageInMB: 256, useTArray: true });
-      if (img.width * img.height > MAX_PIXELS) return null;
-      return { width: img.width, height: img.height, rgba: img.data, hasAlpha: false };
-    }
-  } catch (_) {
-    return null;
-  }
-  return null;
-}
-
-/** Disegna l'immagine in contain con padding, su fondo scuro opaco. */
-function fitOnCanvas(img, W, H) {
-  const out = Buffer.alloc(W * H * 4);
-  for (let i = 0; i < W * H; i++) {
-    out[i * 4] = BG[0]; out[i * 4 + 1] = BG[1]; out[i * 4 + 2] = BG[2]; out[i * 4 + 3] = 255;
-  }
-  const pad = 0.10;
-  const s = Math.min((W * (1 - 2 * pad)) / img.width, (H * (1 - 2 * pad)) / img.height);
-  const dw = Math.max(1, Math.round(img.width * s));
-  const dh = Math.max(1, Math.round(img.height * s));
-  const ox = Math.round((W - dw) / 2);
-  const oy = Math.round((H - dh) / 2);
-  // nearest-neighbor: veloce su ARM; la tela 512px viene poi ridotta
-  // dolcemente dal client nella griglia
-  for (let y = 0; y < dh; y++) {
-    const sy = Math.min(img.height - 1, Math.floor(y / s));
-    const rowS = sy * img.width;
-    const rowD = (oy + y) * W + ox;
-    for (let x = 0; x < dw; x++) {
-      const sx = Math.min(img.width - 1, Math.floor(x / s));
-      const si = (rowS + sx) * 4;
-      const di = (rowD + x) * 4;
-      const a = img.hasAlpha ? img.rgba[si + 3] / 255 : 1;
-      out[di] = Math.round(img.rgba[si] * a + BG[0] * (1 - a));
-      out[di + 1] = Math.round(img.rgba[si + 1] * a + BG[1] * (1 - a));
-      out[di + 2] = Math.round(img.rgba[si + 2] * a + BG[2] * (1 - a));
-      out[di + 3] = 255;
+/**
+ * ICO: i favicon moderni (es. quelli di Rakuten) incorporano direttamente
+ * un PNG: lo estraiamo e lo diamo a sharp. BMP-in-ICO classici -> null
+ * (il chiamante fa redirect, formato di nicchia).
+ */
+function icoToPng(buf) {
+  // header ICO: reserved(2)=0, type(2)=1, count(2); entry: w,h,pal,res,planes,bitcount,size,offset
+  if (buf.length < 6 || buf[0] !== 0 || buf[1] !== 0 || buf[2] !== 1 || buf[3] !== 0) return null;
+  const count = buf.readUInt16LE(4);
+  let best = null;
+  for (let i = 0; i < count; i++) {
+    const off = 6 + i * 16;
+    if (off + 16 > buf.length) break;
+    const size = buf.readUInt32LE(off + 8);
+    const dataOff = buf.readUInt32LE(off + 12);
+    if (dataOff + size > buf.length) continue;
+    // dentro c'e' un PNG?
+    if (buf[dataOff] === 0x89 && buf[dataOff + 1] === 0x50 && buf[dataOff + 2] === 0x4e && buf[dataOff + 3] === 0x47) {
+      const w = buf[off] || 256;
+      if (!best || w > best.w) best = { w: dataOff, data: buf.subarray(dataOff, dataOff + size) };
     }
   }
-  return out;
+  return best ? best.data : null;
 }
 
 async function produce(url, shape) {
-  const [W, H] = SHAPES[shape] || SHAPES.square;
-  const buf = await fetchBuf(url);
-  const img = decode(buf);
-  if (!img) return null;
-  const rgba = fitOnCanvas(img, W, H);
-  return jpeg.encode({ data: rgba, width: W, height: H }, 82).data;
+  const [W, H] = SHAPES[shape] || SHAPES.landscape;
+  let buf = await fetchBuf(url);
+  const png = icoToPng(buf);
+  if (png) buf = png;
+  // padding ~10%: logo in contain su tela (W-2p)x(H-2p), poi estesa alla
+  // dimensione finale — il client mostra la tela gia' delle sue proporzioni
+  const padX = Math.round(W * 0.10);
+  const padY = Math.round(H * 0.10);
+  return sharp(buf, { limitInputPixels: MAX_PIXELS, density: 150, animated: false })
+    .flatten({ background: BG }) // trasparenza -> fondo scuro (JPEG non ha alpha)
+    .resize(W - 2 * padX, H - 2 * padY, { fit: 'contain', background: BG })
+    .extend({ top: padY, bottom: padY, left: padX, right: padX, background: BG })
+    .jpeg({ quality: 82 })
+    .toBuffer();
 }
 
 function runQueued(fn) {
@@ -138,10 +125,10 @@ function runQueued(fn) {
   });
 }
 
-/** Handler express: GET /imgfit?shape=square&url=https://… */
+/** Handler express: GET /imgfit?shape=landscape&url=https://… */
 async function handle(req, res) {
   const url = String(req.query.url || '');
-  const shape = String(req.query.shape || 'square');
+  const shape = String(req.query.shape || 'landscape');
   if (!/^https?:\/\//i.test(url)) return res.status(400).end();
 
   const key = crypto.createHash('sha1').update(`${shape}|${url}`).digest('hex');
@@ -180,4 +167,4 @@ function purge() {
   try { fs.rmSync(CACHE_DIR, { recursive: true, force: true }); } catch (_) { /* ignora */ }
 }
 
-module.exports = { handle, purge, CACHE_DIR };
+module.exports = { handle, purge, CACHE_DIR, produce, icoToPng };

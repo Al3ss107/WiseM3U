@@ -294,8 +294,11 @@ API usate dalla pagina di configurazione (utili anche per script/automazioni):
 * nome e ID addon, **auto-aggiornamento delle liste** (default: **1440 minuti = una
   volta al giorno**; 0 = disattivato), validità della cache, profondità massima di
   analisi, deduplica globale, **loghi proporzionati nei cataloghi** (i poster dei
-  canali passano da `/imgfit`: contain su tela scura, cosi' i client che ritagliano
-  "cover" non li mostrano zoomati; disattivabile), **token di accesso** (se impostato,
+  canali passano da `/imgfit`: contain su tela scura già delle proporzioni della
+  card — 16:9 landscape — così i client che ritagliano "cover" non li mostrano
+  tagliati. Decodifica via **libvips/sharp**: PNG, JPEG, **WebP, SVG, GIF e ICO**
+  (i CDN dei canali servono spesso formati moderni), fallback 302 all'originale;
+  disattivabile), **token di accesso** (se impostato,
   manifest/playlist/cataloghi richiedono `?token=...`). L'aggiornamento automatico
   scarica solo le liste effettivamente scadute, in background, senza bloccare nulla.
 
