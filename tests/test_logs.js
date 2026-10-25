@@ -158,6 +158,28 @@ async function waitFor(pred, ms, step = 400) {
     assert(stream.status === 200 && (stream.body.streams || []).some((s) => s.url === CHAN_URL),
       `stream: ${JSON.stringify(stream.body).slice(0, 200)}`);
 
+    // eliminazione IN BLOCCO (tasto "Cancella selezionate", v1.4.9): {paths:[...]}
+    // — conteggio nuovi, idempotenza, ripristino via /restore
+    const bulk1 = await apiJ(`/api/lists/${listId}/delete`, {
+      method: 'POST', body: JSON.stringify({ paths: [brPath.path] }),
+    });
+    assert(bulk1.status === 200 && bulk1.body.deleted === 1,
+      `bulk delete: ${JSON.stringify(bulk1.body)}`);
+    const bulk2 = await apiJ(`/api/lists/${listId}/delete`, {
+      method: 'POST', body: JSON.stringify({ paths: [brPath.path] }),
+    });
+    assert(bulk2.body.deleted === 0, `bulk delete idempotente: ${JSON.stringify(bulk2.body)}`);
+    const treeDel = await apiJ(`/api/lists/${listId}/tree`);
+    assert(!(treeDel.body.branches || []).some((b) => b.path === brPath.path),
+      'ramo sparito dalla tree dopo il bulk');
+    const rest = await apiJ(`/api/lists/${listId}/restore`, {
+      method: 'POST', body: JSON.stringify({ path: brPath.path }),
+    });
+    assert(rest.status === 200, `restore: ${JSON.stringify(rest.body)}`);
+    const treeBack = await apiJ(`/api/lists/${listId}/tree`);
+    assert((treeBack.body.branches || []).some((b) => b.path === brPath.path),
+      'ramo ripristinato dopo /restore');
+
     const st = await apiJ('/api/logs?scope=stream&limit=200');
     const stMsgs = st.body.entries.map((e) => e.msg).join('\n');
     assert(/▶/.test(stMsgs) && stMsgs.includes(CHAN_NAME) && stMsgs.includes(LIST_NAME) && stMsgs.includes(CHAN_URL),

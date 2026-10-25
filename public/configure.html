@@ -549,6 +549,7 @@ function renderBranches(list){
       <input type="text" data-act="filter" placeholder="🔎 Filtra playlist…">
       <button class="ghost small" data-act="all" title="Attiva tutte le playlist">✓ Tutto</button>
       <button class="ghost small" data-act="none" title="Disattiva tutte le playlist">✗ Nulla</button>
+      <button class="ghost small" data-act="delsel" title="Sposta nel cestino tutte le playlist spuntate (recuperabili)">✕ Cancella selezionate</button>
       <button class="ghost small" data-act="trash" title="Canali e playlist eliminati: da qui li ripristini">🗑 Cestino${nTrash ? ` (${nTrash})` : ''}</button>
     </div>
   </div>
@@ -566,8 +567,9 @@ function renderBranches(list){
     in fondo alla pagina. In alternativa <b>trascina un canale sopra un'altra playlist</b> per
     spostarvelo (funziona anche tra liste diverse) e <b>trascina una playlist al centro di
     un'altra riga</b> per spostarci dentro tutti i suoi canali (ai bordi invece la riordini).
-    Il pulsante <b>✕</b> elimina il canale o l'intera playlist: nulla è perduto,
-    trovi tutto nel <b>🗑 Cestino</b> da cui puoi ripristinare con un clic.</div>
+    Il pulsante <b>✕</b> elimina il canale o l'intera playlist; se vuoi buttare <b>tante
+    playlist in una volta</b>, spuntale e premi <b>✕ Cancella selezionate</b> in alto.
+    Nulla è perduto: trovi tutto nel <b>🗑 Cestino</b> da cui puoi ripristinare con un clic.</div>
   </details>
   <div class="branches">${rows}</div>
   ${TRASHOPEN.has(list.id) ? renderTrash(list) : ''}
@@ -1390,6 +1392,23 @@ function bindListEvents(){
         renderLists();
         await refreshTrash(id);
         renderLists();
+        return;
+      }
+      if (act === 'delsel'){
+        // cancellazione in blocco delle playlist spuntate (le custom non sono
+        // spuntabili): stesso esito del ✕ singolo ma in una sola chiamata
+        const sel = (branchesOf(id) || []).filter((b) => !b.custom && branchEnabled(list, b.path));
+        if (!sel.length){ toast('Nessuna playlist spuntata da eliminare'); return; }
+        const few = sel.slice(0, 3).map((b) => b.displayName || b.name).join(', ');
+        if (!confirm(`Eliminare ${sel.length} playlist spuntate (${few}${sel.length > 3 ? ', …' : ''}) e tutti i loro canali? Potrai ripristinarle dal 🗑 Cestino.`)) return;
+        try {
+          await api(`/api/lists/${id}/delete`, { method:'POST', body: JSON.stringify({ paths: sel.map((b) => b.path) }) });
+          for (const b of sel){ EXPANDED.delete(`${id}|${b.path}`); delete CHANS[`${id}|${b.path}`]; }
+          toast(`${sel.length} playlist eliminate — recuperabili nel 🗑 Cestino`);
+          await loadConfig();
+          if (TRASHOPEN.has(id)) await refreshTrash(id);
+          renderLists();
+        } catch (e){ toast(e.message, 4000); }
         return;
       }
       if (act === 'toggle'){

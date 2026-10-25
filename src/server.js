@@ -784,8 +784,24 @@ app.post('/api/lists/:id/delete', requireAdmin, (req, res) => {
   if (!list) return res.status(404).json({ error: 'lista non trovata' });
   const path = String((req.body || {}).path || '');
   const name = (req.body || {}).name;
-  if (!path) return res.status(400).json({ error: 'serve il path' });
   const o = list.options;
+
+  // cancellazione IN BLOCCO: { paths: [pathRamo, ...] } — un solo salvataggio.
+  // Usata dal tasto "Cancella selezionate": stessi effetti del delete singolo
+  // (rami nel cestino, ripristinabili da /api/lists/:id/deleted).
+  const bulk = Array.isArray((req.body || {}).paths) ? req.body.paths : null;
+  if (bulk && bulk.length) {
+    o.deletedBranches = o.deletedBranches || [];
+    let added = 0;
+    for (const p of bulk) {
+      const pp = String(p || '');
+      if (pp && !o.deletedBranches.includes(pp)) { o.deletedBranches.push(pp); added++; }
+    }
+    if (added) store.saveConfig(cfg);
+    return res.json({ ok: true, deleted: added });
+  }
+
+  if (!path) return res.status(400).json({ error: 'serve il path' });
 
   if (typeof name === 'string' && name.trim()) {
     const key = `${path}::${name}`;
