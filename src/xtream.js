@@ -94,7 +94,7 @@ async function fetchText(url) {
   try {
     const res = await fetch(url, {
       signal: ctrl.signal,
-      headers: { 'User-Agent': 'WiseM3U/1.4 (+xtream-info)', Accept: 'application/json' },
+      headers: { 'User-Agent': require('./constants').getUserAgent(), Accept: 'application/json' },
     });
     if (!res.ok) {
       const e = new Error(`HTTP ${res.status} dal pannello Xtream`);

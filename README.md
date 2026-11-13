@@ -308,7 +308,11 @@ API usate dalla pagina di configurazione (utili anche per script/automazioni):
   tagliati. Decodifica via **libvips/sharp**: PNG, JPEG, **WebP, SVG, GIF e ICO**
   (i CDN dei canali servono spesso formati moderni), fallback 302 all'originale;
   disattivabile), **token di accesso** (se impostato,
-  manifest/playlist/cataloghi richiedono `?token=...`). L'aggiornamento automatico
+  manifest/playlist/cataloghi richiedono `?token=...`), **User-Agent
+  personalizzato** (una stringa qualsiasi usata per tutte le richieste in
+  uscita: liste, rami, pannello Xtream, loghi. Serve quando un pannello o un
+  CDN risponde `403` riconoscendo WiseM3U: incolla la UA di un browser, di VLC
+  o dell'app che usi; vuoto = default). L'aggiornamento automatico
   scarica solo le liste effettivamente scadute, in background, senza bloccare nulla.
 
 > **AceStream:** `acestream://` serve un client compatibile (Ace Player, Tivimate con
@@ -522,7 +526,7 @@ npm test         # batteria di regressione: log live, diagnostica stream, scaden
 | La risposta è una *pagina web HTML* | Hai incollato un link di anteprima/condivisione (Google, Mega…) e non il file | Copia il **link diretto** alla playlist, cioè quello che finisce in `.m3u` / `get.php?...&type=m3u_plus...` |
 | `Risposta troppo grande (… MB)` | L'URL non è una playlist: punta a un **file video/audio** (film `.mp4/.mkv`, stream di un canale), a un **archivio** (zip/rar) o a un binario. Il messaggio ora riporta content-type e **primi byte** | Non serve premere **Aggiorna** (l'errore è definitivo e segnalato come tale): copia il link della **lista** dal pannello — per Xtream è `.../get.php?username=…&password=…&type=m3u_plus&output=ts`. Se il messaggio dice «ARCHIVIO ZIP» estrai il file `.m3u` e caricalo da file. Le **m3u** non hanno più un limite di MB: sono lette in streaming |
 | Playlist servita in **gzip** (`.m3u.gz`, anche con content-type `application/octet-stream`) | Molti pannelli comprimono la lista e non dichiarano `Content-Encoding` | Gestito **in automatico** dalla 1.5.3: il gzip viene decompresso (con tetto sull'output) e la lista importata. Anche l'**UTF-16** con/senza BOM è decodificato |
-| `HTTP 403` | Il pannello rifiuta l'accesso: credenziali errate, account scaduto, limite connessioni o blocco paese/user-agent | Verifica le credenziali ricopiando l'URL dal pannello, controlla la scadenza dal provider, oppure prova con `output=ts` |
+| `HTTP 403` | Il pannello rifiuta l'accesso: credenziali errate, account scaduto, limite connessioni o blocco paese/user-agent | Verifica le credenziali ricopiando l'URL dal pannello, controlla la scadenza dal provider, oppure prova con `output=ts`. Se il blocco è sullo **User-Agent**, impostane uno personalizzato in *Impostazioni generali* (es. `VLC/3.0.20 LibVLC/3.0.20`) |
 
 Con la build attuale entrambi i casi si sistemano **da soli al riavvio**: non devi toccare il volume.
 Se resti su una build vecchia, i due comandi sopra risolvono immediatamente.

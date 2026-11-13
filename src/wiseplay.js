@@ -21,7 +21,7 @@ const zlib = require('zlib');
 const { parseM3U, epgUrlsFromHeader, parseAttrs, parseExtInf } = require('./m3u');
 const { familyOf, aceHash } = require('./protocols');
 
-const { USER_AGENT } = require('./constants');
+const { getUserAgent } = require('./constants');
 
 const MAX_DEPTH = 8;
 const MAX_NODES = 6000;
@@ -380,7 +380,7 @@ async function fetchText(url, opts = {}) {
       redirect: 'follow',
       signal: ctrl.signal,
       headers: {
-        'User-Agent': USER_AGENT,
+        'User-Agent': (opts && opts.userAgent) || getUserAgent(),
         Accept: 'application/json, text/plain, application/x-mpegurl, */*',
       },
     });
@@ -411,7 +411,7 @@ function nodeFetchText(url, opts = {}, redirectsLeft = 5) {
     const lib = isHttps ? https : http;
     const connectHost = opts.ip || u.hostname;
     const headers = {
-      'User-Agent': USER_AGENT,
+      'User-Agent': (opts && opts.userAgent) || getUserAgent(),
       Accept: 'application/json, text/plain, application/x-mpegurl, */*',
       'Accept-Encoding': 'identity', // niente compressione: qui non viene decompressa
     };
@@ -550,7 +550,7 @@ async function openStream(url, opts = {}) {
       redirect: 'follow',
       signal: ctrl.signal,
       headers: {
-        'User-Agent': USER_AGENT,
+        'User-Agent': (opts && opts.userAgent) || getUserAgent(),
         Accept: 'application/json, text/plain, application/x-mpegurl, */*',
       },
     });

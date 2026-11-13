@@ -18,6 +18,10 @@ const streamdiag = require('./streamdiag');
 const xtream = require('./xtream');
 const C = require('./constants');
 
+// UA personalizzata dalle impostazioni: vale da subito anche per i download
+// in background avviati all'avvio
+C.setCustomUserAgent(store.loadConfig().settings.userAgent);
+
 // dieta RAM: quando la cache evita l'albero parseato di una lista, libera anche
 // le righe flatten memoizzate (stringhe condivise col tree, altrimenti non free)
 cache.setEvictHook((listId) => playlist.clearRows(listId));
@@ -459,6 +463,8 @@ app.put('/api/config', requireAdmin, (req, res) => {
 
     const nextLists = Array.isArray(incoming.lists) ? incoming.lists : current.lists;
     const saved = store.saveConfig({ settings: nextSettings, lists: nextLists });
+    // la UA personalizzata ha effetto immediato (download successivi)
+    C.setCustomUserAgent(saved.settings.userAgent);
 
     // conserva lo stato runtime delle liste esistenti
     for (const l of saved.lists) {

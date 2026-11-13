@@ -51,6 +51,7 @@ function defaultConfig() {
       maxDepth: 8,
       dedupeGlobal: true,
       fitLogos: true, // riproporziona i loghi dei canali in poster "contain" (endpoint /imgfit)
+      userAgent: '', // UA personalizzata per le richieste in uscita (vuota = default)
       streamDiag: false, // diagnostica stream: errore a schermo (video) invece di buffering silente
       personalLists: [], // liste personali: canali pescati da tutte le liste [{id,name,includeInMain,channels:["listId::path::nome"]}]
       token: '',
@@ -176,6 +177,12 @@ function normalizeConfig(raw) {
   const base = defaultConfig();
   const cfg = raw && typeof raw === 'object' ? raw : {};
   const settings = { ...base.settings, ...(cfg.settings || {}) };
+  // UA personalizzata: una sola riga, niente CR/LF (header injection)
+  settings.userAgent = String(settings.userAgent || '')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+    .slice(0, 300);
   settings.publicBaseUrl = String(settings.publicBaseUrl || '').trim().replace(/\/+$/, '');
   if (settings.publicBaseUrl && !/^https?:\/\//i.test(settings.publicBaseUrl)) settings.publicBaseUrl = '';
   // EPG manuale: come l'URL pubblico, accetta solo http(s) altrimenti si azzera

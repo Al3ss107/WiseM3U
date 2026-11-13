@@ -22,7 +22,7 @@ const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
 const sharp = require('sharp');
-const { IMG_USER_AGENT } = require('./constants');
+const { getImgUserAgent } = require('./constants');
 
 const CACHE_DIR = process.env.IMGFIT_DIR || path.join(__dirname, '..', 'data', 'imgcache');
 const MAX_BYTES = 8 * 1024 * 1024; // webp/svg di brand possono pesare
@@ -57,9 +57,9 @@ async function fetchBuf(url) {
       redirect: 'follow',
       signal: ctrl.signal,
       headers: {
-        // niente suffisso WiseM3U (vedi IMG_USER_AGENT) + Accept da browser:
+        // niente suffisso WiseM3U (vedi getImgUserAgent) + Accept da browser:
         // diversi CDN di loghi rispondono 403/i-frame challenge altrimenti
-        'User-Agent': IMG_USER_AGENT,
+        'User-Agent': getImgUserAgent(),
         Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
         'Accept-Language': 'it-IT,it;q=0.9,en;q=0.8',
       },

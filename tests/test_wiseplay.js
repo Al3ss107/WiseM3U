@@ -27,6 +27,7 @@ process.env.WISEM3U_MAX_STATIONS = '1000';
 
 const REPO = path.resolve(__dirname, '..');
 const { buildTree, parseLenientJson } = require(path.join(REPO, 'src', 'wiseplay'));
+const UA = require(path.join(REPO, 'src', 'constants'));
 
 const MOCK_PORT = 9853;
 const BASE = `http://127.0.0.1:${MOCK_PORT}`;
@@ -138,6 +139,7 @@ const ROUTES = {
 };
 
 (async () => {
+  let lastUa = '';
   let videoBytesSent = 0;   // quanto il server riesce a spingere sull'URL "video"
   let endlessClosed = false;
   let bigLiveSent = 0;      // byte effettivamente serviti per l'm3u enorme
@@ -145,6 +147,7 @@ const ROUTES = {
   const BIG_LIVE_TOTAL = 4000 * 115; // stima per eccesso dei byte totali
   const mock = http.createServer((req, res) => {
     const pathname = new URL(req.url, 'http://x').pathname;
+    lastUa = req.headers['user-agent'] || '';
 
     // finto file video con Content-Length esplicito (caso reale: film .mp4
     // incollato al posto della lista). Il client deve rifiutare SENZA scaricare.
@@ -222,6 +225,11 @@ const ROUTES = {
       return res.end(body);
     }
 
+    if (pathname === '/ua.m3u') {
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      return res.end(M3U(1, 'ua'));
+    }
+
     if (ROUTES[pathname] != null) { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end(ROUTES[pathname]); }
     else { res.writeHead(404); res.end(''); }
   });
@@ -271,6 +279,22 @@ const ROUTES = {
   assert(stats.embedded === 2, `contatore embed: ${stats.embedded} atteso 2`);
 
   assert(root.counts.stations === 3 + 2 + 2 + 2 + 2 + 1, `conteggi: ${root.counts.stations}`);
+
+  // --- v1.5.6: User-Agent personalizzato --------------------------------------
+  const customUa = 'VLC/3.0.20 LibVLC/3.0.20';
+  await buildTree(`${BASE}/ua.m3u`, { userAgent: customUa });
+  assert(lastUa === customUa, `UA per-richiesta inviata al pannello: ${lastUa}`);
+
+  UA.setCustomUserAgent('GlobalUA/9.9');
+  await buildTree(`${BASE}/ua.m3u`);
+  assert(lastUa === 'GlobalUA/9.9', `UA globale dalle impostazioni: ${lastUa}`);
+  UA.setCustomUserAgent('');
+  await buildTree(`${BASE}/ua.m3u`);
+  assert(/WiseM3U\//.test(lastUa), `UA di default ripristinata: ${lastUa}`);
+
+  const dirty = UA.setCustomUserAgent('Evil\r\nX-Injected: 1');
+  assert(!/[\r\n]/.test(dirty) && !dirty.includes(': 1\n'), `UA ripulita da CR/LF (header injection): "${dirty}"`);
+  UA.setCustomUserAgent('');
 
   // --- v1.5.2: risposte enormi / non-playlist ---------------------------------
   const t0 = Date.now();

@@ -352,6 +352,15 @@
         <input id="s_maxDepth" type="number" min="1" max="12">
       </div>
       <div>
+        <label>User-Agent personalizzato (opzionale)</label>
+        <input id="s_userAgent" type="text" maxlength="300" spellcheck="false"
+          placeholder="vuoto = predefinito (Chrome 126 + WiseM3U)">
+        <div class="hint">Usata per <b>tutte le richieste in uscita</b> (liste, rami, pannello
+          Xtream, loghi). Serve se un pannello o un CDN risponde <code>403</code> perché
+          riconosce WiseM3U: incolla l'UA di un browser, di VLC o dell'app che usi di solito.
+          Una sola riga; vuoto = comportamento predefinito.</div>
+      </div>
+      <div>
         <label>Token di accesso (vuoto = pubblico)</label>
         <input id="s_token" type="text" placeholder="es. m1o2n3d4">
       </div>
@@ -1824,6 +1833,7 @@ function renderAll(){
   $('#s_cacheTtlMinutes').value = CFG.settings.cacheTtlMinutes;
   $('#s_autoRefreshMinutes').value = CFG.settings.autoRefreshMinutes;
   $('#s_maxDepth').value = CFG.settings.maxDepth;
+  $('#s_userAgent').value = CFG.settings.userAgent || '';
   $('#s_token').value = CFG.settings.token || '';
   $('#s_publicBaseUrl').value = CFG.settings.publicBaseUrl || '';
   $('#s_epgUrl').value = CFG.settings.epgUrl || '';
@@ -1854,6 +1864,8 @@ function readSettings(){
   CFG.settings.cacheTtlMinutes = Number($('#s_cacheTtlMinutes').value) || 1440;
   CFG.settings.autoRefreshMinutes = Number($('#s_autoRefreshMinutes').value) || 0;
   CFG.settings.maxDepth = Number($('#s_maxDepth').value) || 8;
+  // una riga sola: il server ripulisce comunque CR/LF (header injection)
+  CFG.settings.userAgent = $('#s_userAgent').value.replace(/[\r\n\t]+/g, ' ').trim().slice(0, 300);
   CFG.settings.token = $('#s_token').value.trim();
   CFG.settings.publicBaseUrl = $('#s_publicBaseUrl').value.trim();
   CFG.settings.epgUrl = $('#s_epgUrl').value.trim();
