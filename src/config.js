@@ -160,6 +160,9 @@ function normalizeList(list) {
     state: {
       status: (list.state && list.state.status) || 'idle',
       error: (list.state && list.state.error) || '',
+      // true = l'errore non si risolve con un retry (URL sbagliato di natura):
+      // la UI mostra "controlla il link" invece di "riprova con Aggiorna"
+      fatal: !!(list.state && list.state.fatal),
       fetchedAt: (list.state && list.state.fetchedAt) || '',
       stats: (list.state && list.state.stats) || null,
       kind: (list.state && list.state.kind) || '',

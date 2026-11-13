@@ -31,7 +31,9 @@ const FETCH_TIMEOUT_MS = 20000;
 // usati per i singoli rami
 const ROOT_FETCH_TIMEOUT_MS = 60000;
 const ROOT_FETCH_RETRY_DELAY_MS = 1500;
-const MAX_BYTES = 60 * 1024 * 1024;
+// limite di testo per singola risposta (RAM): 60 MB bastano per centinaia di
+// migliaia di canali. Override solo per i test (server finti di pochi KB).
+const MAX_BYTES = Number(process.env.WISEM3U_MAX_LIST_BYTES) || 60 * 1024 * 1024;
 const CONCURRENCY = 32;
 
 /* ------------------------------------------------------------------ */
@@ -166,6 +168,96 @@ function fetchFailure(err, url) {
   return out;
 }
 
+/**
+ * Errore definitivo: riprovare non serve. Il link punta a un'altra cosa
+ * (video, archivio, binario) oppure la playlist supera il limite di memoria.
+ *
+ * v1.5.2: prima si scaricava TUTTO (es. 609 MB) e solo alla fine si notava
+ * che era troppo grande: RAM piena, 60s buttati e "Aggiorna" che rifaceva
+ * lo stesso download da 609 MB. Ora il limite si applica in streaming e il
+ * messaggio dice cosa c'e' davvero in quell'URL.
+ */
+function tooLargeError(size, contentType, head) {
+  const mb = (size / 1048576).toFixed(1);
+  const ct = String(contentType || '').split(';')[0].trim().toLowerCase();
+  const headBuf = head || Buffer.alloc(0);
+  const textish =
+    !ct || /^(text\/|application\/(json|xml|x-mpegurl|vnd\.apple\.mpegurl|javascript))/i.test(ct) || /charset=/i.test(contentType || '');
+  // magic numbers dei file che vengono spesso incollati al posto della lista
+  const magic =
+    headBuf.length >= 4
+      ? (headBuf.slice(0, 4).toString('latin1') === 'ftyp'
+          ? 'video MP4/MOV'
+          : headBuf[0] === 0x1a && headBuf[1] === 0x45 && headBuf[2] === 0xdf && headBuf[3] === 0xa3
+            ? 'video MKV/WebM'
+            : headBuf[0] === 0x50 && headBuf[1] === 0x4b
+              ? 'archivio ZIP'
+              : headBuf[0] === 0x1f && headBuf[1] === 0x8b
+                ? 'archivio GZ'
+                : null)
+      : null;
+  const looksBinary = !textish || magic || headBuf.includes(0) || /[\x00-\x08\x0e-\x1f]/.test(headBuf.slice(0, 512).toString('latin1'));
+
+  let why;
+  if (/^(video|audio)\//.test(ct)) {
+    why =
+      `l'URL risponde con un ${ct.includes('audio') ? 'FILE AUDIO' : 'FILE VIDEO'} (content-type ${ct}), non con una playlist`;
+  } else if (magic) {
+    why = `l'URL risponde con un ${magic.toUpperCase()}, non con una playlist`;
+  } else if (looksBinary) {
+    why = `l'URL risponde con un file BINARIO${ct ? ` (content-type ${ct})` : ''}, non con una playlist`;
+  } else {
+    const limMb = MAX_BYTES / 1048576;
+    const limTxt = `${limMb >= 10 ? Math.round(limMb) : limMb.toFixed(1).replace(/\.0$/, '')} MB`;
+    why =
+      `la playlist supera il limite di ${limTxt} di testo ` +
+      `(${mb} MB): probabilmente l'URL non e' il file della lista`;
+  }
+
+  const err = new FetchError(
+    `Risposta troppo grande (${mb} MB): ${why}. ` +
+      'Controlla il link: per un pannello Xtream serve .../get.php?username=…&password=…&type=m3u_plus&output=ts ' +
+      '(non lo stream di un singolo canale né un file .mp4/.mkv).',
+    0
+  );
+  err.fatal = true; // niente retry inutili (v. fetchRoot)
+  return err;
+}
+
+/** Legge il body applicando il limite DURANTE lo scaricamento (streaming). */
+async function readCapped(res, url) {
+  const ct = res.headers.get('content-type') || '';
+  const len = Number(res.headers.get('content-length') || 0);
+  if (len > MAX_BYTES) {
+    // non serve scaricare nulla: l'header lo dice gia'
+    try { if (res.body) await res.body.cancel(); } catch (_) { /* ignora */ }
+    throw tooLargeError(len, ct, null);
+  }
+  if (!res.body) throw new FetchError(`Risposta senza contenuto da ${url}`, res.status);
+
+  const reader = res.body.getReader();
+  const chunks = [];
+  let size = 0;
+  let head = null;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const c = Buffer.from(value.buffer, value.byteOffset, value.byteLength);
+      if (!head) head = c.slice(0, 512);
+      size += c.length;
+      if (size > MAX_BYTES) {
+        try { await reader.cancel(); } catch (_) { /* ignora */ }
+        throw tooLargeError(size, ct, head);
+      }
+      chunks.push(c);
+    }
+  } finally {
+    if (reader) { try { reader.releaseLock(); } catch (_) { /* ignora */ } }
+  }
+  return Buffer.concat(chunks);
+}
+
 async function fetchText(url, opts = {}) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), opts.timeout || FETCH_TIMEOUT_MS);
@@ -179,10 +271,10 @@ async function fetchText(url, opts = {}) {
       },
     });
     if (!res.ok) throw new FetchError(`HTTP ${res.status} per ${url}`, res.status);
-    const buf = Buffer.from(await res.arrayBuffer());
-    if (buf.length > MAX_BYTES) throw new FetchError(`Risposta troppo grande (${buf.length} byte)`, res.status);
+    const buf = await readCapped(res, url);
     return buf.toString('utf8');
   } catch (err) {
+    if (err && err.fatal) throw err; // gia' diagnosticato, non avvolgere
     throw fetchFailure(err, url);
   } finally {
     clearTimeout(timer);
@@ -234,12 +326,29 @@ function nodeFetchText(url, opts = {}, redirectsLeft = 5) {
       }
       const chunks = [];
       let size = 0;
+      let head = null;
+      let aborted = false;
+      const ct = res.headers['content-type'] || '';
+      const len = Number(res.headers['content-length'] || 0);
+      if (len > MAX_BYTES) {
+        // header esplicito: niente download, errore definitivo e leggibile
+        res.destroy();
+        return reject(tooLargeError(len, ct, null));
+      }
       res.on('data', (c) => {
+        if (aborted) return;
+        if (!head) head = c.slice(0, 512);
         size += c.length;
-        if (size <= MAX_BYTES) chunks.push(c);
+        if (size > MAX_BYTES) {
+          // in streaming: chiude subito il socket invece di leggere 600 MB
+          aborted = true;
+          res.destroy();
+          return reject(tooLargeError(size, ct, head));
+        }
+        chunks.push(c);
       });
       res.on('end', () => {
-        if (size > MAX_BYTES) return reject(new FetchError(`Risposta troppo grande (${size} byte)`, res.statusCode));
+        if (aborted) return;
         resolve(Buffer.concat(chunks).toString('utf8'));
       });
       res.on('error', (e) => reject(fetchFailure(e, url)));
@@ -366,6 +475,9 @@ async function buildTree(rootUrl, options = {}) {
   //  - altri errori transitori -> un secondo tentativo dopo una pausa
   // Gli errori HTTP 4xx (credenziali o URL errati) non vengono riprovati.
   async function recoveryFetch(err, opts) {
+    // errori definitivi (URL che punta a un video/binario, playlist enorme):
+    // inutile riprovare o cambiare trasporto
+    if (err && err.fatal) return null;
     const causeRef = (err && err.causeRef) || {};
     const causeStr = `${causeRef.code || ''} ${causeRef.message || ''} ${(err && err.message) || ''}`;
 
@@ -399,6 +511,7 @@ async function buildTree(rootUrl, options = {}) {
     try {
       return await fetchText(rootUrl, opts);
     } catch (err) {
+      if (err && err.fatal) throw err; // niente secondo download identico
       const recovered = await recoveryFetch(err, opts).catch(() => null);
       if (recovered != null) return recovered;
       const status = err && err.status;
@@ -446,7 +559,7 @@ async function buildTree(rootUrl, options = {}) {
     // se e' una pagina HTML (es. link di anteprima/condivisione o Google
     // incollato al posto del file), lo diciamo esplicitamente
     const isHtml = /<!doctype html|<html[\s>]/i.test(String(rootText).slice(0, 4000));
-    throw new FetchError(
+    const bad = new FetchError(
       'La risposta non sembra una lista WisePlay o M3U valida' +
         (isHtml
           ? ' — la risposta e\' una PAGINA WEB HTML, non una playlist: incolla il LINK DIRETTO al file (es. .../get.php?...&type=m3u_plus&output=ts) e non un link di anteprima'
@@ -454,6 +567,8 @@ async function buildTree(rootUrl, options = {}) {
         (snippet ? ` — inizio risposta: "${snippet}"` : ''),
       0
     );
+    bad.fatal = true; // stesso URL -> stessa risposta: "Aggiorna" non aiuta
+    throw bad;
   }
 
   // m3u_plus: URL EPG (XMLTV) ereditati dalle sorgenti m3u, radice e rami;

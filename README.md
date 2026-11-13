@@ -511,6 +511,7 @@ npm test         # batteria di regressione: log live, diagnostica stream, scaden
 | `ERR_SSL_WRONG_VERSION_NUMBER` | L'URL è `https://` ma il server parla HTTP semplice su quella porta | Gestito **in automatico**: WiseM3U riprova scambiando `https://` in `http://`. Lascia l'URL così com'è |
 | `ENOTFOUND nome.dominio` | Il DNS del container non risolve il dominio (lista scaduta, errore di battitura o DNS di casa) | WiseM3U riprova in automatico coi DNS pubblici (1.1.1.1/8.8.8.8). Se il messaggio resta, il dominio è davvero sparito o c'è un refuso nell'URL |
 | La risposta è una *pagina web HTML* | Hai incollato un link di anteprima/condivisione (Google, Mega…) e non il file | Copia il **link diretto** alla playlist, cioè quello che finisce in `.m3u` / `get.php?...&type=m3u_plus...` |
+| `Risposta troppo grande (… MB)` | L'URL non è una playlist: punta a un **file video/audio** (film `.mp4/.mkv`, stream di un canale) o a una pagina che serve centinaia di MB | Non serve premere **Aggiorna** (l'errore è definitivo e segnalato come tale): copia il link della **lista** dal pannello — per Xtream è `.../get.php?username=…&password=…&type=m3u_plus&output=ts` |
 | `HTTP 403` | Il pannello rifiuta l'accesso: credenziali errate, account scaduto, limite connessioni o blocco paese/user-agent | Verifica le credenziali ricopiando l'URL dal pannello, controlla la scadenza dal provider, oppure prova con `output=ts` |
 
 Con la build attuale entrambi i casi si sistemano **da soli al riavvio**: non devi toccare il volume.

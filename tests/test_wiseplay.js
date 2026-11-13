@@ -10,9 +10,15 @@
  *  - root con "url" che punta a se stessa (solo meta, NON deve ciclare)
  *  - stazioni "embed": true (pagine web Serially/Plex/...): non stream, escluse
  *  - URL m3u con SPAZIO finale: il trim deve salvarlo
+ *  - v1.5.2 risposta enorme (video/archivio/binario incollato al posto della
+ *    lista): errore DEFINITIVO e immediato, senza scaricare tutto e senza retry
  */
 const http = require('http');
 const path = require('path');
+
+// limite piccolo: testiamo in pochi KB il comportamento "risposta enorme"
+// (in produzione 60 MB) senza scaricare centinaia di MB
+process.env.WISEM3U_MAX_LIST_BYTES = String(512 * 1024);
 
 const REPO = path.resolve(__dirname, '..');
 const { buildTree, parseLenientJson } = require(path.join(REPO, 'src', 'wiseplay'));
@@ -127,8 +133,45 @@ const ROUTES = {
 };
 
 (async () => {
+  let videoBytesSent = 0;   // quanto il server riesce a spingere sull'URL "video"
+  let endlessClosed = false;
   const mock = http.createServer((req, res) => {
     const pathname = new URL(req.url, 'http://x').pathname;
+
+    // finto file video con Content-Length esplicito (caso reale: film .mp4
+    // incollato al posto della lista). Il client deve rifiutare SENZA scaricare.
+    if (pathname === '/big-video.mp4') {
+      const body = Buffer.alloc(768 * 1024, 0x47); // 768 KB (> limite test 512 KB)
+      res.writeHead(200, { 'Content-Type': 'video/mp4', 'Content-Length': body.length });
+      res.on('close', () => { /* client ha annullato */ });
+      return res.end(body);
+    }
+    // stream "infinito" senza Content-Length (tipico live .ts): deve essere
+    // interrotto appena supera il limite, non letto fino alla fine
+    if (pathname === '/endless.ts') {
+      res.writeHead(200, { 'Content-Type': 'video/mp2t' });
+      const chunk = Buffer.alloc(64 * 1024, 0x47);
+      const t = setInterval(() => {
+        if (res.destroyed) { clearInterval(t); return; }
+        videoBytesSent += chunk.length;
+        res.write(chunk);
+      }, 5);
+      res.on('close', () => { clearInterval(t); endlessClosed = true; });
+      return;
+    }
+    // testo enorme in chunked encoding: il limite si applica in streaming
+    if (pathname === '/huge.m3u') {
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      let n = 0;
+      const line = '#EXTINF:-1,canale ' + 'x'.repeat(100) + '\n';
+      const t = setInterval(() => {
+        if (res.destroyed || n++ > 20000) { clearInterval(t); return res.end(); }
+        res.write(line);
+      }, 1);
+      res.on('close', () => clearInterval(t));
+      return;
+    }
+
     if (ROUTES[pathname] != null) { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end(ROUTES[pathname]); }
     else { res.writeHead(404); res.end(''); }
   });
@@ -178,6 +221,34 @@ const ROUTES = {
   assert(stats.embedded === 2, `contatore embed: ${stats.embedded} atteso 2`);
 
   assert(root.counts.stations === 3 + 2 + 2 + 2 + 2 + 1, `conteggi: ${root.counts.stations}`);
+
+  // --- v1.5.2: risposte enormi / non-playlist ---------------------------------
+  const t0 = Date.now();
+  let eVideo = null;
+  try { await buildTree(`${BASE}/big-video.mp4`); } catch (e) { eVideo = e; }
+  const dtVideo = Date.now() - t0;
+  assert(eVideo && eVideo.fatal === true, `video con Content-Length -> errore definitivo (${eVideo && eVideo.message.slice(0, 60)}…)`);
+  assert(/FILE VIDEO/i.test((eVideo && eVideo.message) || ''), 'il messaggio dice che e\' un FILE VIDEO, non una playlist');
+  assert(/get\.php/.test((eVideo && eVideo.message) || ''), 'il messaggio suggerisce il link Xtream corretto');
+  assert(dtVideo < 1200, `rifiutato SENZA retry ne download completo: ${dtVideo} ms`);
+
+  const before = videoBytesSent;
+  const t1 = Date.now();
+  let eLive = null;
+  try { await buildTree(`${BASE}/endless.ts`); } catch (e) { eLive = e; }
+  const dtLive = Date.now() - t1;
+  const sentForLive = videoBytesSent - before;
+  await new Promise((r) => setTimeout(r, 40));
+  assert(eLive && eLive.fatal === true, `stream senza Content-Length -> errore definitivo (${eLive && eLive.message.slice(0, 60)}…)`);
+  assert(sentForLive < 2 * 1024 * 1024, `non ha letto lo stream all'infinito: ${(sentForLive / 1024).toFixed(0)} KB prima dello stop`);
+  assert(dtLive < 1500, `interrotto in ${dtLive} ms`);
+  assert(endlessClosed, 'socket del live chiuso dal nostro lato (niente download fantasma)');
+
+  let eHuge = null;
+  try { await buildTree(`${BASE}/huge.m3u`); } catch (e) { eHuge = e; }
+  assert(eHuge && eHuge.fatal === true, 'testo enorme in chunked -> errore definitivo');
+  assert(/limite/i.test((eHuge && eHuge.message) || '') && /MB/i.test((eHuge && eHuge.message) || ''),
+    `il messaggio spiega il limite di dimensione: ${(eHuge && eHuge.message.slice(0, 90))}…`);
 
   mock.close();
   console.log(failures ? `\n${failures} TEST FALLITI ✖` : '\nTUTTI I TEST WISEPLAY PASSATI ✔');

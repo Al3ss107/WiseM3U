@@ -517,7 +517,16 @@ function renderBranches(list){
   const st = (list.state && list.state.status) || 'idle';
   if (!bs){
     if (st === 'fetching') return '<div class="hint" style="margin-top:10px">⏳ Scaricamento della lista in corso… la sezione delle playlist appare appena è pronto.</div>';
-    if (st === 'error') return `<div class="err">Scaricamento fallito: ${esc((list.state&&list.state.error)||'')} — riprova con <b>Aggiorna</b>.</div>`;
+    if (st === 'error'){
+      const fatal = !!(list.state && list.state.fatal);
+      // errore "di natura" (URL che punta a un video, a una pagina HTML, playlist
+      // enorme): ritentare produce lo stesso errore, meglio dirlo chiaramente
+      return `<div class="err">Scaricamento fallito: ${esc((list.state&&list.state.error)||'')} — ${
+        fatal
+          ? 'questo errore <b>non si risolve con Aggiorna</b>: correggi l\'URL della lista e salva.'
+          : 'riprova con <b>Aggiorna</b>.'
+      }</div>`;
+    }
     return '<div class="hint" style="margin-top:10px">Rami non caricati: premi <b>Aggiorna</b> per scaricare la lista.</div>';
   }
   const rows = bs.map((b)=>{

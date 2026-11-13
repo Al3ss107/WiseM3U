@@ -510,6 +510,7 @@ function startRefresh(listId, force = true) {
       store.updateListState(listId, {
         status: 'ready',
         error: '',
+        fatal: false,
         fetchedAt: entry.fetchedAt,
         stats: entry.tree.stats,
         kind: entry.tree.meta.kind || 'wiseplay',
@@ -532,7 +533,9 @@ function startRefresh(listId, force = true) {
     })
     .catch((err) => {
       const msg = err.message || String(err);
-      store.updateListState(listId, { status: 'error', error: msg });
+      // fatal: riprovare non puo' funzionare (URL che punta a un video, lista
+      // enorme, pagina HTML): la UI lo dice invece di suggerire "Aggiorna"
+      store.updateListState(listId, { status: 'error', error: msg, fatal: !!(err && err.fatal) });
       live.add(
         'download',
         'error',
