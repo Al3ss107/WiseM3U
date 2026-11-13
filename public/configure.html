@@ -817,6 +817,7 @@ function renderListCard(l){
       ${s.fetchedAt ? `Ultimo aggiornamento: <b>${esc(new Date(s.fetchedAt).toLocaleString('it-IT'))}</b>` : 'Mai aggiornata'}
       ${stats ? ` · nodi <b>${stats.nodes}</b> · rami esterni <b>${stats.external}</b> · m3u importate <b>${stats.m3u}</b> · stream <b>${stats.stations}</b>${stats.failed?` · errori <b>${stats.failed}</b>`:''}` : ''}
     </div>
+    ${stats && stats.truncated ? `<div class="hint" style="margin-top:6px;color:#f5c451">⚠︎ Lista molto grande: importati i primi <b>${stats.stations}</b> canali (limite di sicurezza). Il resto viene saltato per non esaurire la memoria del container.</div>` : ''}
     ${s.error ? `<div class="err">${esc(s.error)}</div>` : ''}
 
     <details class="fold" open>

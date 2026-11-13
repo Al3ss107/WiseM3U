@@ -150,4 +150,4 @@ function buildM3U(entries, opts = {}) {
   return out.join('\n') + '\n';
 }
 
-module.exports = { parseM3U, buildM3U, epgUrlsFromHeader };
+module.exports = { parseM3U, buildM3U, epgUrlsFromHeader, parseAttrs, parseExtInf };

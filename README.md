@@ -291,6 +291,11 @@ API usate dalla pagina di configurazione (utili anche per script/automazioni):
 
 **Globali**
 
+* **liste enormi (Xtream da centinaia di MB)**: le m3u vengono lette in
+  **streaming**, riga per riga, senza caricare il file in memoria. Non c'è più
+  un tetto di MB; il limite reale è **150.000 canali** (oltre, la lista viene
+  troncata e la pagina di configurazione lo segnala con un avviso), perché è
+  il numero di canali — non la dimensione del file — a pesare in RAM;
 * nome e ID addon, **auto-aggiornamento delle liste** (default: **1440 minuti = una
   volta al giorno**; 0 = disattivato), validità della cache, profondità massima di
   analisi, deduplica globale, **loghi proporzionati nei cataloghi** (i poster dei
@@ -511,7 +516,7 @@ npm test         # batteria di regressione: log live, diagnostica stream, scaden
 | `ERR_SSL_WRONG_VERSION_NUMBER` | L'URL è `https://` ma il server parla HTTP semplice su quella porta | Gestito **in automatico**: WiseM3U riprova scambiando `https://` in `http://`. Lascia l'URL così com'è |
 | `ENOTFOUND nome.dominio` | Il DNS del container non risolve il dominio (lista scaduta, errore di battitura o DNS di casa) | WiseM3U riprova in automatico coi DNS pubblici (1.1.1.1/8.8.8.8). Se il messaggio resta, il dominio è davvero sparito o c'è un refuso nell'URL |
 | La risposta è una *pagina web HTML* | Hai incollato un link di anteprima/condivisione (Google, Mega…) e non il file | Copia il **link diretto** alla playlist, cioè quello che finisce in `.m3u` / `get.php?...&type=m3u_plus...` |
-| `Risposta troppo grande (… MB)` | L'URL non è una playlist: punta a un **file video/audio** (film `.mp4/.mkv`, stream di un canale), a un **archivio** (zip/rar) o a un binario. Il messaggio ora riporta content-type e **primi byte** | Non serve premere **Aggiorna** (l'errore è definitivo e segnalato come tale): copia il link della **lista** dal pannello — per Xtream è `.../get.php?username=…&password=…&type=m3u_plus&output=ts`. Se il messaggio dice «ARCHIVIO ZIP» estrai il file `.m3u` e caricalo da file |
+| `Risposta troppo grande (… MB)` | L'URL non è una playlist: punta a un **file video/audio** (film `.mp4/.mkv`, stream di un canale), a un **archivio** (zip/rar) o a un binario. Il messaggio ora riporta content-type e **primi byte** | Non serve premere **Aggiorna** (l'errore è definitivo e segnalato come tale): copia il link della **lista** dal pannello — per Xtream è `.../get.php?username=…&password=…&type=m3u_plus&output=ts`. Se il messaggio dice «ARCHIVIO ZIP» estrai il file `.m3u` e caricalo da file. Le **m3u** non hanno più un limite di MB: sono lette in streaming |
 | Playlist servita in **gzip** (`.m3u.gz`, anche con content-type `application/octet-stream`) | Molti pannelli comprimono la lista e non dichiarano `Content-Encoding` | Gestito **in automatico** dalla 1.5.3: il gzip viene decompresso (con tetto sull'output) e la lista importata. Anche l'**UTF-16** con/senza BOM è decodificato |
 | `HTTP 403` | Il pannello rifiuta l'accesso: credenziali errate, account scaduto, limite connessioni o blocco paese/user-agent | Verifica le credenziali ricopiando l'URL dal pannello, controlla la scadenza dal provider, oppure prova con `output=ts` |
 

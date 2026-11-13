@@ -12,6 +12,8 @@
  *  - URL m3u con SPAZIO finale: il trim deve salvarlo
  *  - v1.5.2 risposta enorme (video/archivio/binario incollato al posto della
  *    lista): errore DEFINITIVO e immediato, senza scaricare tutto e senza retry
+ *  - v1.5.4 liste Xtream enormi (581 MB di testo): import in STREAMING,
+ *    senza tetto di MB, fermato dal numero di canali e senza scaricare tutto
  */
 const http = require('http');
 const path = require('path');
@@ -20,6 +22,8 @@ const zlib = require('zlib');
 // limite piccolo: testiamo in pochi KB il comportamento "risposta enorme"
 // (in produzione 60 MB) senza scaricare centinaia di MB
 process.env.WISEM3U_MAX_LIST_BYTES = String(512 * 1024);
+// tetto canali basso: verifichiamo il troncamento senza generare 150.000 voci
+process.env.WISEM3U_MAX_STATIONS = '1000';
 
 const REPO = path.resolve(__dirname, '..');
 const { buildTree, parseLenientJson } = require(path.join(REPO, 'src', 'wiseplay'));
@@ -136,6 +140,9 @@ const ROUTES = {
 (async () => {
   let videoBytesSent = 0;   // quanto il server riesce a spingere sull'URL "video"
   let endlessClosed = false;
+  let bigLiveSent = 0;      // byte effettivamente serviti per l'm3u enorme
+  let bigLiveClosed = false;
+  const BIG_LIVE_TOTAL = 4000 * 115; // stima per eccesso dei byte totali
   const mock = http.createServer((req, res) => {
     const pathname = new URL(req.url, 'http://x').pathname;
 
@@ -160,11 +167,33 @@ const ROUTES = {
       res.on('close', () => { clearInterval(t); endlessClosed = true; });
       return;
     }
-    // testo enorme in chunked encoding: il limite si applica in streaming
+    // m3u ENORME in streaming (replica del pannello Xtream da 581 MB): deve
+    // essere importato fino al tetto canali e poi interrotto, senza leggere tutto
+    if (pathname === '/big-live.m3u') {
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      res.write('#EXTM3U\n');
+      let i = 0;
+      const t = setInterval(() => {
+        if (res.destroyed) { clearInterval(t); return; }
+        if (i >= 4000) { clearInterval(t); return res.end(); }
+        let block = '';
+        for (let k = 0; k < 20 && i < 4000; k++, i++) {
+          block +=
+            `#EXTINF:-1 tvg-id="c${i}" tvg-name="Canale ${i}" tvg-logo="http://logo/${i}.png" group-title="LIVE ${i % 40}",Canale ${i}\n` +
+            `http://example.test/live/${i}.ts\n`;
+        }
+        bigLiveSent += Buffer.byteLength(block);
+        res.write(block);
+      }, 1);
+      res.on('close', () => { clearInterval(t); bigLiveClosed = true; });
+      return;
+    }
+
+    // testo enorme in chunked encoding (NON una playlist): qui vale il tetto MB
     if (pathname === '/huge.m3u') {
       res.writeHead(200, { 'Content-Type': 'text/plain' });
       let n = 0;
-      const line = '#EXTINF:-1,canale ' + 'x'.repeat(100) + '\n';
+      const line = 'riga di testo che non e\' una playlist ' + 'x'.repeat(100) + '\n';
       const t = setInterval(() => {
         if (res.destroyed || n++ > 20000) { clearInterval(t); return res.end(); }
         res.write(line);
@@ -277,6 +306,19 @@ const ROUTES = {
   assert(eZip && eZip.fatal === true && /ARCHIVIO ZIP/i.test(eZip.message),
     `zip -> errore definitivo che dice ARCHIVIO ZIP (${(eZip && eZip.message.slice(0, 70))}…)`);
   assert(Date.now() - tZip < 1200, `zip rifiutato dopo pochi KB, non dopo il download (${Date.now() - tZip} ms)`);
+
+  // --- v1.5.4: m3u enorme in streaming ---------------------------------------
+  const tBig = Date.now();
+  const big = await buildTree(`${BASE}/big-live.m3u`);
+  const dtBig = Date.now() - tBig;
+  await new Promise((r) => setTimeout(r, 50));
+  assert(big.stats.stations === 1000, `m3u enorme: importati ${big.stats.stations} canali (tetto 1000)`);
+  assert(big.stats.truncated === true, 'm3u enorme: stats.truncated = true');
+  assert(big.children.length === 40, `m3u enorme: ${big.children.length} gruppi LIVE preservati`);
+  assert(bigLiveSent < BIG_LIVE_TOTAL * 0.6,
+    `interrotto senza scaricare tutto: ${(bigLiveSent / 1024).toFixed(0)} KB su ~${(BIG_LIVE_TOTAL / 1024).toFixed(0)} KB`);
+  assert(bigLiveClosed, 'connessione chiusa dal nostro lato dopo il tetto (niente download fantasma)');
+  assert(dtBig < 5000, `import in streaming in ${dtBig} ms`);
 
   let eHuge = null;
   try { await buildTree(`${BASE}/huge.m3u`); } catch (e) { eHuge = e; }

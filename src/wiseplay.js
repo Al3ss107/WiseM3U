@@ -18,14 +18,18 @@
 const http = require('http');
 const https = require('https');
 const zlib = require('zlib');
-const { parseM3U, epgUrlsFromHeader } = require('./m3u');
+const { parseM3U, epgUrlsFromHeader, parseAttrs, parseExtInf } = require('./m3u');
 const { familyOf, aceHash } = require('./protocols');
 
 const { USER_AGENT } = require('./constants');
 
 const MAX_DEPTH = 8;
 const MAX_NODES = 6000;
-const MAX_STATIONS = 150000;
+// tetti pensati per la RAM del container: il numero di canali (non i MB)
+// e' la vera misura del costo in memoria dell'albero
+const MAX_STATIONS = Number(process.env.WISEM3U_MAX_STATIONS) || 150000;
+// sicurezza contro stream infiniti che fingono di essere m3u: 2 GB
+const MAX_STREAM_BYTES = Number(process.env.WISEM3U_MAX_STREAM_BYTES) || 2 * 1024 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 20000;
 // le sorgenti Xtream/m3u_plus vengono generate dal pannello a ogni richiesta:
 // con migliaia di voci (live+VOD+serie) possono richiedere molto piu' dei 20s
@@ -273,10 +277,12 @@ function tooLargeError(size, contentType, head, opts = {}) {
     const limMb = MAX_BYTES / 1048576;
     const limTxt = `${limMb >= 10 ? Math.round(limMb) : limMb.toFixed(1).replace(/\.0$/, '')} MB`;
     const entries = countM3uEntries(headBuf.toString('latin1'));
-    why =
-      `è una PLAYLIST di testo che supera il limite di ${limTxt}` +
-      (entries ? ` (almeno ${entries} voci nei primi ${(headBuf.length / 1024).toFixed(0)} KB)` : '') +
-      ': il catalogo e\' troppo grande per essere elaborato in un colpo';
+    why = entries
+      ? `è una PLAYLIST di testo che supera il limite di ${limTxt} ` +
+        `(${entries} voci nei primi ${(headBuf.length / 1024).toFixed(0)} KB): il catalogo e' troppo grande`
+      : `è un TESTO che supera il limite di ${limTxt} e non è una m3u ` +
+        `(le liste m3u vengono lette in streaming, senza limite di MB)`;
+    // nota: le m3u non passano di qui (import in streaming in fetchRootAuto)
   } else {
     why =
       `l'URL risponde con un file BINARIO (content-type ${ct || 'assente'}; ${headPreview(headBuf)}), non con una playlist`;
@@ -329,6 +335,27 @@ function decodeBody(buf) {
 
 const SNIFF_BYTES = 4096; // quanti byte bastano per capire cosa stiamo scaricando
 
+/** Accumula i chunk applicando il limite (usato dal percorso "testo"). */
+async function collectCapped(chunks, ct, declared) {
+  const out = [];
+  let size = 0;
+  let head = null;
+  for await (const c of chunks) {
+    if (!head) head = c.slice(0, SNIFF_BYTES);
+    size += c.length;
+    if (size > MAX_BYTES) {
+      throw tooLargeError(size, ct, head, { declared: declared > size ? declared : 0 });
+    }
+    // header gonfiato + contenuto gia' riconoscibile come non-testo:
+    // inutile scaricare 60 MB di un video. Si guardano solo i primi KB.
+    if (declared > MAX_BYTES && size >= SNIFF_BYTES && !looksTextual(head) && magicLabel(head) !== 'ARCHIVIO GZIP') {
+      throw tooLargeError(declared, ct, head, { declared });
+    }
+    out.push(c);
+  }
+  return Buffer.concat(out);
+}
+
 /** Legge il body applicando il limite DURANTE lo scaricamento (streaming). */
 async function readCapped(res, url) {
   const ct = res.headers.get('content-type') || '';
@@ -341,39 +368,8 @@ async function readCapped(res, url) {
     try { await res.body.cancel(); } catch (_) { /* ignora */ }
     throw tooLargeError(declared, ct, null);
   }
-
   const reader = res.body.getReader();
-  const chunks = [];
-  let size = 0;
-  let head = null;
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const c = Buffer.from(value.buffer, value.byteOffset, value.byteLength);
-      if (!head) head = c.slice(0, SNIFF_BYTES);
-      size += c.length;
-      if (size > MAX_BYTES) {
-        try { await reader.cancel(); } catch (_) { /* ignora */ }
-        throw tooLargeError(size, ct, head, { declared: declared > size ? declared : 0 });
-      }
-      // header gonfiato + contenuto gia' riconoscibile come non-testo:
-      // inutile scaricare 60 MB di un video. Si guardano solo i primi KB.
-      if (
-        declared > MAX_BYTES &&
-        size >= SNIFF_BYTES &&
-        !looksTextual(head) &&
-        !/^ARCHIVIO GZIP$/.test(magicLabel(head))
-      ) {
-        try { await reader.cancel(); } catch (_) { /* ignora */ }
-        throw tooLargeError(declared, ct, head, { declared });
-      }
-      chunks.push(c);
-    }
-  } finally {
-    try { reader.releaseLock(); } catch (_) { /* ignora */ }
-  }
-  return Buffer.concat(chunks);
+  return collectCapped(streamChunks(reader, null), ct, declared);
 }
 
 async function fetchText(url, opts = {}) {
@@ -514,16 +510,7 @@ function m3uToWisePlay(text, rootUrl) {
     if (!groups.has(g)) groups.set(g, []);
     groups.get(g).push({ name: e.name, image: e.logo || '', url: e.url });
   }
-  let name = (header.name || header.title || '').toString().trim();
-  if (!name) {
-    try {
-      const u = new URL(rootUrl);
-      const base = decodeURIComponent((u.pathname.split('/').filter(Boolean).pop() || ''));
-      name = base.replace(/\.m3u8?$/i, '') || u.hostname;
-    } catch (_) {
-      name = 'Lista M3U';
-    }
-  }
+  const name = (header.name || header.title || '').toString().trim() || m3uDefaultName(rootUrl);
   return {
     kind: 'm3u',
     name,
@@ -537,6 +524,155 @@ function m3uToWisePlay(text, rootUrl) {
     epgUrls: epgUrlsFromHeader(header),
     groups: [...groups.entries()].map(([g, stations]) => ({ name: g, stations })),
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* Import M3U in STREAMING (liste enormi)                              */
+/* ------------------------------------------------------------------ */
+
+/** Nome leggibile ricavato dall'URL quando l'm3u non lo dichiara. */
+function m3uDefaultName(rootUrl) {
+  try {
+    const u = new URL(rootUrl);
+    const base = decodeURIComponent(u.pathname.split('/').filter(Boolean).pop() || '');
+    return base.replace(/\.m3u8?$/i, '') || u.hostname;
+  } catch (_) {
+    return 'Lista M3U';
+  }
+}
+
+/** Apre la connessione senza consumare il body (per il parsing in streaming). */
+async function openStream(url, opts = {}) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), opts.timeout || FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      redirect: 'follow',
+      signal: ctrl.signal,
+      headers: {
+        'User-Agent': USER_AGENT,
+        Accept: 'application/json, text/plain, application/x-mpegurl, */*',
+      },
+    });
+    if (!res.ok) {
+      clearTimeout(timer);
+      throw new FetchError(`HTTP ${res.status} per ${url}`, res.status);
+    }
+    return { res, timer };
+  } catch (err) {
+    clearTimeout(timer);
+    throw fetchFailure(err, url);
+  }
+}
+
+/** Chunk del body; se il consumatore si ferma prima, chiude la connessione. */
+async function* streamChunks(reader, first) {
+  let finished = false;
+  try {
+    if (first && first.length) yield first;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) {
+        finished = true;
+        return;
+      }
+      yield Buffer.from(value.buffer, value.byteOffset, value.byteLength);
+    }
+  } finally {
+    if (!finished) {
+      try { await reader.cancel(); } catch (_) { /* connessione gia' chiusa */ }
+    }
+    try { reader.releaseLock(); } catch (_) { /* ignora */ }
+  }
+}
+
+/**
+ * Importa un m3u riga per riga, senza tenere in memoria il testo completo.
+ * Il tetto reale diventa il numero di canali (MAX_STATIONS) e non i MB:
+ * una lista da centinaia di MB si importa leggendo solo la parte che serve.
+ *
+ * @param {AsyncIterable<Buffer>} chunks
+ * @param {string} rootUrl
+ * @param {{encoding?:string, onEvent?:Function}} [opts]
+ */
+async function importM3uStream(chunks, rootUrl, opts = {}) {
+  const decoder = new TextDecoder(opts.encoding || 'utf-8');
+  const onEvent = typeof opts.onEvent === 'function' ? opts.onEvent : () => {};
+  const groups = new Map(); // nome gruppo -> { seen:Set, stations:Array }
+  let header = {};
+  let pending = null;
+  let lastExtGrp = '';
+  let carry = '';
+  let bytes = 0;
+  let stations = 0;
+  let stoppedEarly = false;
+
+  const handleLine = (line) => {
+    if (!line) return false;
+    if (line.startsWith('#EXTM3U')) { header = parseAttrs(line); return false; }
+    if (line.startsWith('#EXTINF')) { pending = parseExtInf(line); return false; }
+    if (line.startsWith('#EXTGRP:')) { lastExtGrp = line.slice(8).trim(); return false; }
+    if (line.startsWith('#')) return false; // #EXTVLCOPT, #KODIPROP, commenti
+
+    const meta = pending || {};
+    const gname = ((meta['group-title'] || lastExtGrp || 'Generale') + '').trim() || 'Generale';
+    let g = groups.get(gname);
+    if (!g) {
+      g = { seen: new Set(), stations: [] };
+      groups.set(gname, g);
+    }
+    if (!g.seen.has(line)) {
+      g.seen.add(line);
+      g.stations.push({
+        name: ((meta.title || '') + '').trim() || line,
+        image: ((meta['tvg-logo'] || meta.logo || '') + '').trim(),
+        url: line,
+      });
+      stations++;
+      if (stations % 50000 === 0) onEvent({ type: 'progress', stations, bytes });
+    }
+    pending = null;
+    lastExtGrp = '';
+    // raggiunto il tetto: inutile scaricare il resto (581 MB -> pochi MB)
+    return stations >= MAX_STATIONS;
+  };
+
+  for await (const chunk of chunks) {
+    bytes += chunk.length;
+    if (bytes > MAX_STREAM_BYTES) { stoppedEarly = true; break; }
+    carry += decoder.decode(chunk, { stream: true });
+    if (carry.length > 4 * 1024 * 1024) carry = carry.slice(-4096); // riga assurda
+    let nl;
+    let stop = false;
+    while ((nl = carry.indexOf('\n')) >= 0) {
+      const line = carry.slice(0, nl).replace(/\r$/, '').trim();
+      carry = carry.slice(nl + 1);
+      if (handleLine(line)) { stop = true; break; }
+    }
+    if (stop) { stoppedEarly = true; break; }
+  }
+  if (!stoppedEarly) {
+    carry += decoder.decode(); // flush dei caratteri multibyte residui
+    if (handleLine(carry.replace(/\r$/, '').trim())) stoppedEarly = true;
+  }
+
+  const epg = epgUrlsFromHeader(header);
+  const name = ((header.name || header.title || '') + '').trim() || m3uDefaultName(rootUrl);
+  const json = {
+    kind: 'm3u',
+    name,
+    author: 'M3U',
+    info:
+      `Playlist M3U (${stations} canali)` +
+      (epg.length ? ' · EPG incluso' : '') +
+      (stoppedEarly ? ` · troncata al limite di ${MAX_STATIONS} canali` : ''),
+    url: rootUrl,
+    epgUrls: epg,
+    groups: [...groups.entries()].map(([gName, g]) => ({ name: gName, stations: g.stations })),
+    truncated: stoppedEarly,
+    bytesRead: bytes,
+  };
+  return { json, truncated: stoppedEarly, stations, bytes };
 }
 
 /* ------------------------------------------------------------------ */
@@ -652,22 +788,104 @@ async function buildTree(rootUrl, options = {}) {
     }
   }
 
-  const rootText = await fetchRoot();
+  /**
+   * Radice "intelligente": guarda i primi byte e sceglie il percorso.
+   *  - m3u  -> import in STREAMING: nessun tetto di MB, memoria legata solo
+   *            al numero di canali (le liste Xtream da centinaia di MB
+   *            venivano prima rifiutate a 60 MB)
+   *  - altro -> percorso classico con buffer e tetto (JSON WisePlay, HTML...)
+   * In caso di problema di rete/TLS/DNS delega a fetchRoot() (retry+recovery).
+   */
+  async function fetchRootAuto() {
+    const opts = { ...options, timeout: ROOT_FETCH_TIMEOUT_MS };
+    let opened;
+    try {
+      opened = await openStream(rootUrl, opts);
+    } catch (err) {
+      const text = await fetchRoot();
+      return { kind: 'text', text };
+    }
+    const { res, timer } = opened;
+    try {
+      const ct = res.headers.get('content-type') || '';
+      const declared = Number(res.headers.get('content-length') || 0);
+      if (/^(video|audio)\//.test(ct) && !/mpegurl/.test(ct)) {
+        try { await res.body.cancel(); } catch (_) { /* ignora */ }
+        throw tooLargeError(declared, ct, null);
+      }
 
-  if (!String(rootText || '').trim()) {
-    throw new FetchError(
-      'Il server ha risposto con un contenuto vuoto (0 byte): la playlist e\' disattivata oppure username/password sono errati',
-      0
-    );
+      const reader = res.body.getReader();
+      let first = null;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        first = Buffer.from(value.buffer, value.byteOffset, value.byteLength);
+        if (first.length) break;
+      }
+      if (!first) {
+        try { await reader.cancel(); } catch (_) { /* ignora */ }
+        return { kind: 'text', text: '' };
+      }
+
+      // gzip "nudo": si torna al percorso classico che lo scompatta
+      if (first.length >= 2 && first[0] === 0x1f && first[1] === 0x8b) {
+        try { await reader.cancel(); } catch (_) { /* ignora */ }
+        const text = await fetchRoot();
+        return { kind: 'text', text };
+      }
+
+      const head = first.slice(0, SNIFF_BYTES);
+      const headTxt = head.toString('latin1');
+      const isM3u = /^\uFEFF?\s*#EXTM3U/i.test(headTxt) || /#EXTINF\s*:/.test(headTxt);
+
+      if (!isM3u && !looksTextual(head)) {
+        try { await reader.cancel(); } catch (_) { /* ignora */ }
+        throw tooLargeError(declared || first.length, ct, head, { declared });
+      }
+
+      if (isM3u) {
+        let encoding = 'utf-8';
+        if (first.length >= 2 && first[0] === 0xff && first[1] === 0xfe) encoding = 'utf-16le';
+        else if (first.length >= 2 && first[0] === 0xfe && first[1] === 0xff) encoding = 'utf-16be';
+        else if (isUtf16(first)) encoding = 'utf-16le';
+        const out = await importM3uStream(streamChunks(reader, first), rootUrl, { encoding, onEvent });
+        console.log(
+          `[wiseplay] m3u in streaming: ${out.stations} canali da ${(out.bytes / 1048576).toFixed(1)} MB` +
+            (out.truncated ? ` (troncata al limite di ${MAX_STATIONS})` : '')
+        );
+        return { kind: 'm3u', ...out };
+      }
+
+      const buf = await collectCapped(streamChunks(reader, first), ct, declared);
+      return { kind: 'text', text: decodeBody(buf) };
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
-  const rootKind = guessKind(rootUrl, rootText);
+  const rootFetch = await fetchRootAuto();
   let rootJson;
-  if (rootKind === 'm3u') {
-    rootJson = m3uToWisePlay(rootText, rootUrl);
+  let rootText = '';
+  let rootKind = 'm3u';
+  if (rootFetch.kind === 'm3u') {
+    rootJson = rootFetch.json;
     stats.m3u += 1;
+    if (rootFetch.truncated) stats.truncated = true;
   } else {
-    rootJson = parseLenientJson(rootText);
+    rootText = rootFetch.text;
+    if (!String(rootText || '').trim()) {
+      throw new FetchError(
+        'Il server ha risposto con un contenuto vuoto (0 byte): la playlist e\' disattivata oppure username/password sono errati',
+        0
+      );
+    }
+    rootKind = guessKind(rootUrl, rootText);
+    if (rootKind === 'm3u') {
+      rootJson = m3uToWisePlay(rootText, rootUrl);
+      stats.m3u += 1;
+    } else {
+      rootJson = parseLenientJson(rootText);
+    }
   }
   if (!rootJson || typeof rootJson !== 'object') {
     // tipico con link Xtream copiati male (es. &amp; al posto di &): il server
