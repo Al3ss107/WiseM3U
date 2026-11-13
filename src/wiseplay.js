@@ -17,6 +17,7 @@
 
 const http = require('http');
 const https = require('https');
+const zlib = require('zlib');
 const { parseM3U, epgUrlsFromHeader } = require('./m3u');
 const { familyOf, aceHash } = require('./protocols');
 
@@ -168,54 +169,122 @@ function fetchFailure(err, url) {
   return out;
 }
 
+/* ------------------------------------------------------------------ */
+/* Riconoscimento del contenuto (magic number + testualita')           */
+/* ------------------------------------------------------------------ */
+
+/** Etichetta del formato dai primi byte: dice all'utente cosa ha davvero
+ *  davanti l'URL. '' = non riconosciuto. */
+function magicLabel(b) {
+  if (!b || b.length < 4) return '';
+  const s4 = b.subarray(0, 4).toString('latin1');
+  const ascii4 = (from, to) => (b.length >= to ? b.subarray(from, to).toString('latin1') : '');
+  if (b[0] === 0x1f && b[1] === 0x8b) return 'ARCHIVIO GZIP';
+  if (b[0] === 0x50 && b[1] === 0x4b) return 'ARCHIVIO ZIP';
+  if (s4 === 'Rar!') return 'ARCHIVIO RAR';
+  if (s4 === '7z\u00bc\u00af') return 'ARCHIVIO 7Z';
+  if (ascii4(4, 8) === 'ftyp') return 'VIDEO MP4/MOV';
+  if (b[0] === 0x1a && b[1] === 0x45 && b[2] === 0xdf && b[3] === 0xa3) return 'VIDEO MKV/WEBM';
+  if (s4 === 'FLV\x01') return 'VIDEO FLV';
+  // MPEG-TS: sync byte 0x47 ogni 188 byte (lo "stream" di un canale)
+  if (b.length >= 377 && b[0] === 0x47 && b[188] === 0x47 && b[376] === 0x47) return 'STREAM VIDEO MPEG-TS';
+  if (s4 === '\x00\x00\x01\xba' || s4 === '\x00\x00\x01\xb3') return 'VIDEO MPEG-PS';
+  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e) return 'IMMAGINE PNG';
+  if (b[0] === 0xff && b[1] === 0xd8) return 'IMMAGINE JPEG';
+  if (s4 === 'GIF8') return 'IMMAGINE GIF';
+  if (s4 === 'RIFF' && ascii4(8, 12) === 'AVI ') return 'VIDEO AVI';
+  return '';
+}
+
+/** Testo leggibile (m3u/json/html)? Tollera UTF-16 con i suoi NUL. */
+function looksTextual(b) {
+  const head = b.subarray(0, 2048);
+  if (!head.length) return true;
+  let nul = 0;
+  let ctrl = 0;
+  for (const x of head) {
+    if (x === 0) nul++;
+    else if (x < 9 || (x > 13 && x < 32)) ctrl++;
+  }
+  if (nul > head.length * 0.02) return isUtf16(head);
+  return ctrl <= head.length * 0.02;
+}
+
+/** UTF-16 senza BOM: meta' dei byte a zero, tutti della stessa parita'. */
+function isUtf16(head) {
+  const n = Math.min(head.length, 512);
+  if (n < 16) return false;
+  let zeroEven = 0;
+  let zeroOdd = 0;
+  for (let i = 0; i < n; i++) if (head[i] === 0) (i % 2 === 0 ? zeroEven++ : zeroOdd++);
+  const half = n / 2;
+  return zeroEven > half * 0.6 || zeroOdd > half * 0.6;
+}
+
+/** Anteprima compatta per farci raccontare cosa c'e' dietro l'URL. */
+function headPreview(b) {
+  if (!b || !b.length) return '';
+  const hex = b.subarray(0, 16).toString('hex').replace(/(..)/g, '$1 ').trim();
+  const pretty = b.subarray(0, 60).toString('latin1').replace(/[^\x20-\x7e]/g, '.');
+  return `primi byte: "${pretty}" [${hex}]`;
+}
+
+/** Conteggio rapido delle voci M3U: per distinguere "playlist enorme" da
+ *  "file video" quando si supera il limite. */
+function countM3uEntries(text) {
+  const m = text.match(/#EXTINF/g);
+  return m ? m.length : 0;
+}
+
 /**
  * Errore definitivo: riprovare non serve. Il link punta a un'altra cosa
  * (video, archivio, binario) oppure la playlist supera il limite di memoria.
  *
  * v1.5.2: prima si scaricava TUTTO (es. 609 MB) e solo alla fine si notava
  * che era troppo grande: RAM piena, 60s buttati e "Aggiorna" che rifaceva
- * lo stesso download da 609 MB. Ora il limite si applica in streaming e il
- * messaggio dice cosa c'e' davvero in quell'URL.
+ * lo stesso download da 609 MB.
+ * v1.5.3: il limite si applica in streaming, ma NON si rifiuta piu' sulla
+ * sola fiducia dell'header Content-Length (i pannelli PHP lo sbagliano
+ * spesso): se il body finisce prima del limite la lista si importa.
  */
-function tooLargeError(size, contentType, head) {
+function tooLargeError(size, contentType, head, opts = {}) {
   const mb = (size / 1048576).toFixed(1);
   const ct = String(contentType || '').split(';')[0].trim().toLowerCase();
   const headBuf = head || Buffer.alloc(0);
-  const textish =
-    !ct || /^(text\/|application\/(json|xml|x-mpegurl|vnd\.apple\.mpegurl|javascript))/i.test(ct) || /charset=/i.test(contentType || '');
-  // magic numbers dei file che vengono spesso incollati al posto della lista
-  const magic =
-    headBuf.length >= 4
-      ? (headBuf.slice(0, 4).toString('latin1') === 'ftyp'
-          ? 'video MP4/MOV'
-          : headBuf[0] === 0x1a && headBuf[1] === 0x45 && headBuf[2] === 0xdf && headBuf[3] === 0xa3
-            ? 'video MKV/WebM'
-            : headBuf[0] === 0x50 && headBuf[1] === 0x4b
-              ? 'archivio ZIP'
-              : headBuf[0] === 0x1f && headBuf[1] === 0x8b
-                ? 'archivio GZ'
-                : null)
-      : null;
-  const looksBinary = !textish || magic || headBuf.includes(0) || /[\x00-\x08\x0e-\x1f]/.test(headBuf.slice(0, 512).toString('latin1'));
+  const magic = magicLabel(headBuf);
+  const textual = looksTextual(headBuf);
+  const declared =
+    opts.declared && opts.declared > size * 1.2
+      ? ` (il server ne dichiarava ${(opts.declared / 1048576).toFixed(1)} MB)`
+      : '';
 
   let why;
-  if (/^(video|audio)\//.test(ct)) {
+  if (magic && /ARCHIVIO/.test(magic)) {
     why =
-      `l'URL risponde con un ${ct.includes('audio') ? 'FILE AUDIO' : 'FILE VIDEO'} (content-type ${ct}), non con una playlist`;
+      `l'URL risponde con un ${magic}, non con una playlist` +
+      (magic === 'ARCHIVIO ZIP'
+        ? ': estrai il file .m3u dallo zip e caricalo da file, oppure usa il link get.php diretto'
+        : '');
   } else if (magic) {
-    why = `l'URL risponde con un ${magic.toUpperCase()}, non con una playlist`;
-  } else if (looksBinary) {
-    why = `l'URL risponde con un file BINARIO${ct ? ` (content-type ${ct})` : ''}, non con una playlist`;
-  } else {
+    why = `l'URL risponde con un ${magic}, non con una playlist`;
+  } else if (/^(video|audio)\//.test(ct) && !/mpegurl/.test(ct)) {
+    why = `l'URL risponde con un ${ct.includes('audio') ? 'FILE AUDIO' : 'FILE VIDEO'} (content-type ${ct}), non con una playlist`;
+  } else if (textual) {
     const limMb = MAX_BYTES / 1048576;
     const limTxt = `${limMb >= 10 ? Math.round(limMb) : limMb.toFixed(1).replace(/\.0$/, '')} MB`;
+    const entries = countM3uEntries(headBuf.toString('latin1'));
     why =
-      `la playlist supera il limite di ${limTxt} di testo ` +
-      `(${mb} MB): probabilmente l'URL non e' il file della lista`;
+      `è una PLAYLIST di testo che supera il limite di ${limTxt}` +
+      (entries ? ` (almeno ${entries} voci nei primi ${(headBuf.length / 1024).toFixed(0)} KB)` : '') +
+      ': il catalogo e\' troppo grande per essere elaborato in un colpo';
+  } else {
+    why =
+      `l'URL risponde con un file BINARIO (content-type ${ct || 'assente'}; ${headPreview(headBuf)}), non con una playlist`;
   }
 
+  const intro = size > 0 ? `Risposta troppo grande (${mb} MB)` : 'Risposta non utilizzabile';
   const err = new FetchError(
-    `Risposta troppo grande (${mb} MB): ${why}. ` +
+    `${intro}${declared}: ${why}. ` +
       'Controlla il link: per un pannello Xtream serve .../get.php?username=…&password=…&type=m3u_plus&output=ts ' +
       '(non lo stream di un singolo canale né un file .mp4/.mkv).',
     0
@@ -224,16 +293,54 @@ function tooLargeError(size, contentType, head) {
   return err;
 }
 
+/** Decomprime gzip e normalizza le codifiche di testo (BOM / UTF-16). */
+function decodeBody(buf) {
+  let b = buf;
+  // gzip "nudo" servito come application/octet-stream (niente Content-Encoding):
+  // undici non lo decomprime, lo facciamo noi con un tetto sull'output
+  for (let i = 0; i < 2 && b.length > 2 && b[0] === 0x1f && b[1] === 0x8b; i++) {
+    try {
+      b = zlib.gunzipSync(b, { maxOutputLength: MAX_BYTES });
+    } catch (e) {
+      const err = new FetchError(
+        `La risposta è compressa in gzip ma si espande oltre il limite di ${Math.round(MAX_BYTES / 1048576)} MB ` +
+          `(o è corrotta): non è utilizzabile come playlist.`,
+        0
+      );
+      err.fatal = true;
+      throw err;
+    }
+  }
+  if (b.length >= 3 && b[0] === 0xef && b[1] === 0xbb && b[2] === 0xbf) b = b.subarray(3);
+  if (b.length >= 2 && b[0] === 0xff && b[1] === 0xfe) return b.subarray(2).toString('utf16le');
+  if (b.length >= 2 && b[0] === 0xfe && b[1] === 0xff) {
+    // UTF-16BE -> scambio le coppie e riuso il decoder LE
+    const c = Buffer.from(b.subarray(2));
+    for (let i = 0; i + 1 < c.length; i += 2) {
+      const t = c[i];
+      c[i] = c[i + 1];
+      c[i + 1] = t;
+    }
+    return c.toString('utf16le');
+  }
+  if (isUtf16(b)) return b.toString('utf16le');
+  return b.toString('utf8');
+}
+
+const SNIFF_BYTES = 4096; // quanti byte bastano per capire cosa stiamo scaricando
+
 /** Legge il body applicando il limite DURANTE lo scaricamento (streaming). */
 async function readCapped(res, url) {
   const ct = res.headers.get('content-type') || '';
-  const len = Number(res.headers.get('content-length') || 0);
-  if (len > MAX_BYTES) {
-    // non serve scaricare nulla: l'header lo dice gia'
-    try { if (res.body) await res.body.cancel(); } catch (_) { /* ignora */ }
-    throw tooLargeError(len, ct, null);
-  }
+  const declared = Number(res.headers.get('content-length') || 0);
   if (!res.body) throw new FetchError(`Risposta senza contenuto da ${url}`, res.status);
+
+  // un film/audio esplicito non e' mai una playlist (mpegurl e' il vecchio
+  // MIME delle .m3u: quello lo accettiamo)
+  if (/^(video|audio)\//.test(ct) && !/mpegurl/.test(ct)) {
+    try { await res.body.cancel(); } catch (_) { /* ignora */ }
+    throw tooLargeError(declared, ct, null);
+  }
 
   const reader = res.body.getReader();
   const chunks = [];
@@ -244,16 +351,27 @@ async function readCapped(res, url) {
       const { done, value } = await reader.read();
       if (done) break;
       const c = Buffer.from(value.buffer, value.byteOffset, value.byteLength);
-      if (!head) head = c.slice(0, 512);
+      if (!head) head = c.slice(0, SNIFF_BYTES);
       size += c.length;
       if (size > MAX_BYTES) {
         try { await reader.cancel(); } catch (_) { /* ignora */ }
-        throw tooLargeError(size, ct, head);
+        throw tooLargeError(size, ct, head, { declared: declared > size ? declared : 0 });
+      }
+      // header gonfiato + contenuto gia' riconoscibile come non-testo:
+      // inutile scaricare 60 MB di un video. Si guardano solo i primi KB.
+      if (
+        declared > MAX_BYTES &&
+        size >= SNIFF_BYTES &&
+        !looksTextual(head) &&
+        !/^ARCHIVIO GZIP$/.test(magicLabel(head))
+      ) {
+        try { await reader.cancel(); } catch (_) { /* ignora */ }
+        throw tooLargeError(declared, ct, head, { declared });
       }
       chunks.push(c);
     }
   } finally {
-    if (reader) { try { reader.releaseLock(); } catch (_) { /* ignora */ } }
+    try { reader.releaseLock(); } catch (_) { /* ignora */ }
   }
   return Buffer.concat(chunks);
 }
@@ -272,7 +390,7 @@ async function fetchText(url, opts = {}) {
     });
     if (!res.ok) throw new FetchError(`HTTP ${res.status} per ${url}`, res.status);
     const buf = await readCapped(res, url);
-    return buf.toString('utf8');
+    return decodeBody(buf);
   } catch (err) {
     if (err && err.fatal) throw err; // gia' diagnosticato, non avvolgere
     throw fetchFailure(err, url);
@@ -330,11 +448,6 @@ function nodeFetchText(url, opts = {}, redirectsLeft = 5) {
       let aborted = false;
       const ct = res.headers['content-type'] || '';
       const len = Number(res.headers['content-length'] || 0);
-      if (len > MAX_BYTES) {
-        // header esplicito: niente download, errore definitivo e leggibile
-        res.destroy();
-        return reject(tooLargeError(len, ct, null));
-      }
       res.on('data', (c) => {
         if (aborted) return;
         if (!head) head = c.slice(0, 512);
@@ -343,13 +456,18 @@ function nodeFetchText(url, opts = {}, redirectsLeft = 5) {
           // in streaming: chiude subito il socket invece di leggere 600 MB
           aborted = true;
           res.destroy();
-          return reject(tooLargeError(size, ct, head));
+          return reject(tooLargeError(size, ct, head, { declared: len > size ? len : 0 }));
+        }
+        if (len > MAX_BYTES && size >= SNIFF_BYTES && !looksTextual(head) && magicLabel(head) !== 'ARCHIVIO GZIP') {
+          aborted = true;
+          res.destroy();
+          return reject(tooLargeError(len, ct, head, { declared: len }));
         }
         chunks.push(c);
       });
       res.on('end', () => {
         if (aborted) return;
-        resolve(Buffer.concat(chunks).toString('utf8'));
+        try { resolve(decodeBody(Buffer.concat(chunks))); } catch (e) { reject(e); }
       });
       res.on('error', (e) => reject(fetchFailure(e, url)));
     });

@@ -15,6 +15,7 @@
  */
 const http = require('http');
 const path = require('path');
+const zlib = require('zlib');
 
 // limite piccolo: testiamo in pochi KB il comportamento "risposta enorme"
 // (in produzione 60 MB) senza scaricare centinaia di MB
@@ -172,6 +173,26 @@ const ROUTES = {
       return;
     }
 
+    // m3u servita in gzip "nudo" (application/octet-stream, senza
+    // Content-Encoding): molti pannelli la distribuiscono cosi'
+    if (pathname === '/list.m3u.gz') {
+      const gz = zlib.gzipSync(Buffer.from(M3U(2, 'gzip')));
+      res.writeHead(200, { 'Content-Type': 'application/octet-stream' });
+      return res.end(gz);
+    }
+    // m3u in UTF-16LE con BOM (pannelli legacy)
+    if (pathname === '/utf16.m3u') {
+      const body = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(M3U(2, 'u16'), 'utf16le')]);
+      res.writeHead(200, { 'Content-Type': 'application/octet-stream' });
+      return res.end(body);
+    }
+    // archivio ZIP al posto della playlist
+    if (pathname === '/archivio.zip') {
+      const body = Buffer.concat([Buffer.from('PK\x03\x04'), Buffer.alloc(600 * 1024, 0)]);
+      res.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Length': body.length });
+      return res.end(body);
+    }
+
     if (ROUTES[pathname] != null) { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end(ROUTES[pathname]); }
     else { res.writeHead(404); res.end(''); }
   });
@@ -243,6 +264,19 @@ const ROUTES = {
   assert(sentForLive < 2 * 1024 * 1024, `non ha letto lo stream all'infinito: ${(sentForLive / 1024).toFixed(0)} KB prima dello stop`);
   assert(dtLive < 1500, `interrotto in ${dtLive} ms`);
   assert(endlessClosed, 'socket del live chiuso dal nostro lato (niente download fantasma)');
+
+  // --- v1.5.3: gzip nudo, UTF-16, archivi ------------------------------------
+  const gzTree = await buildTree(`${BASE}/list.m3u.gz`);
+  assert(gzTree.stats.stations === 2, `m3u in gzip servita come octet-stream importata (${gzTree.stats.stations} canali)`);
+  const u16Tree = await buildTree(`${BASE}/utf16.m3u`);
+  assert(u16Tree.stats.stations === 2, `m3u in UTF-16LE con BOM importata (${u16Tree.stats.stations} canali)`);
+
+  const tZip = Date.now();
+  let eZip = null;
+  try { await buildTree(`${BASE}/archivio.zip`); } catch (e) { eZip = e; }
+  assert(eZip && eZip.fatal === true && /ARCHIVIO ZIP/i.test(eZip.message),
+    `zip -> errore definitivo che dice ARCHIVIO ZIP (${(eZip && eZip.message.slice(0, 70))}…)`);
+  assert(Date.now() - tZip < 1200, `zip rifiutato dopo pochi KB, non dopo il download (${Date.now() - tZip} ms)`);
 
   let eHuge = null;
   try { await buildTree(`${BASE}/huge.m3u`); } catch (e) { eHuge = e; }
