@@ -134,6 +134,9 @@
   .pltools{display:flex;gap:6px;flex-wrap:wrap;align-items:center;flex:1 1 330px;justify-content:flex-end}
   .pltools input{flex:1 1 150px;max-width:230px}
   .pltools button{flex:0 0 auto}
+  /* pulsante-filtro attivo (es. "Visualizza attive") */
+  .pltools button.on{border-color:#3c6bd6;background:#1b2b52;color:#dbe7ff;
+    box-shadow:inset 0 0 0 1px #2b4b96;filter:none}
   /* ---------- rami ---------- */
   .branches{max-height:min(520px,62vh);overflow:auto;background:#0b1129;border:1px solid var(--line);
             border-radius:12px;padding:8px;margin-top:10px;scrollbar-width:thin}
@@ -511,6 +514,21 @@ function rebuildOrder(list){
 
 const EXPANDED = new Set();  // "listId|path" dei rami con la lista canali aperta
 const CHANS = {};            // "listId|path" -> [{name, shown, enabled}]
+const BRSQ = {};             // listId -> testo del filtro playlist (persiste ai re-render)
+const BRONLY = new Set();    // listId con "Visualizza attive" attivo
+
+/** Playlist (rami non personali) che rispettano il filtro corrente della scheda.
+ *  E' lo scope su cui agiscono Tutto / Nulla / Cancella selezionate: durante
+ *  una ricerca non si toccano le playlist nascoste. */
+function visibleBranches(list){
+  const q = (BRSQ[list.id] || '').trim().toLowerCase();
+  const onlyActive = BRONLY.has(list.id);
+  return (branchesOf(list.id) || []).filter((b)=>{
+    if (onlyActive && !branchEnabled(list, b.path)) return false;
+    if (!q) return true;
+    return (b.name + ' ' + branchDisplayName(list, b)).toLowerCase().includes(q);
+  });
+}
 
 function renderBranches(list){
   const bs = branchesOf(list.id);
@@ -529,7 +547,13 @@ function renderBranches(list){
     }
     return '<div class="hint" style="margin-top:10px">Rami non caricati: premi <b>Aggiorna</b> per scaricare la lista.</div>';
   }
-  const rows = bs.map((b)=>{
+  const q = (BRSQ[list.id] || '').trim().toLowerCase();
+  const onlyActive = BRONLY.has(list.id);
+  const visible = bs.filter((b)=>
+    (!onlyActive || branchEnabled(list, b.path)) &&
+    (!q || (b.name + ' ' + branchDisplayName(list, b)).toLowerCase().includes(q))
+  );
+  const rows = visible.map((b)=>{
     const on = branchEnabled(list, b.path);
     const shown = branchDisplayName(list, b);
     const renamed = shown !== b.name;
@@ -553,9 +577,13 @@ function renderBranches(list){
   const active = bs.filter(b=>branchEnabled(list, b.path)).length;
   const nTrash = (list.options.deletedChannels || []).length + (list.options.deletedBranches || []).length;
   return `<div class="plhead">
-    <h2>Playlist della lista <span class="badge">${active}/${bs.length} attive</span></h2>
+    <h2>Playlist della lista <span class="badge">${active}/${bs.length} attive</span>${
+      visible.length !== bs.length ? ` <span class="badge" title="Playlist mostrate con i filtri attivi">${visible.length} in vista</span>` : ''
+    }</h2>
     <div class="pltools">
-      <input type="text" data-act="filter" placeholder="🔎 Filtra playlist…">
+      <button class="ghost small ${onlyActive?'on':''}" data-act="onlyactive"
+        title="Mostra solo le playlist attive (e, se c'e' una ricerca, solo quelle che corrispondono)">👁 Visualizza attive</button>
+      <input type="text" data-act="filter" value="${esc(BRSQ[list.id] || '')}" placeholder="🔎 Filtra playlist…">
       <button class="ghost small" data-act="all" title="Attiva tutte le playlist">✓ Tutto</button>
       <button class="ghost small" data-act="none" title="Disattiva tutte le playlist">✗ Nulla</button>
       <button class="ghost small" data-act="delsel" title="Sposta nel cestino tutte le playlist spuntate (recuperabili)">✕ Cancella selezionate</button>
@@ -578,9 +606,16 @@ function renderBranches(list){
     un'altra riga</b> per spostarci dentro tutti i suoi canali (ai bordi invece la riordini).
     Il pulsante <b>✕</b> elimina il canale o l'intera playlist; se vuoi buttare <b>tante
     playlist in una volta</b>, spuntale e premi <b>✕ Cancella selezionate</b> in alto.
+    Il tasto <b>👁 Visualizza attive</b> (a sinistra della ricerca) mostra solo le playlist
+    attive; <b>✓ Tutto</b>, <b>✗ Nulla</b> e <b>✕ Cancella selezionate</b> agiscono
+    <b>solo sulle playlist visibili</b>: con una ricerca attiva non toccano quelle nascoste.
     Nulla è perduto: trovi tutto nel <b>🗑 Cestino</b> da cui puoi ripristinare con un clic.</div>
   </details>
-  <div class="branches">${rows}</div>
+  <div class="branches">
+    <div class="hint brsnone" style="margin-top:10px;${visible.length ? 'display:none' : ''}">Nessuna playlist corrisponde al filtro.
+      <button class="ghost small" data-act="clearfilter">Mostra tutte</button></div>
+    ${rows}
+  </div>
   ${TRASHOPEN.has(list.id) ? renderTrash(list) : ''}
   <datalist id="dl-${list.id}">${bs.map((b) => `<option value="${esc(b.displayName)}">`).join('')}</datalist>`;
 }
@@ -1232,13 +1267,18 @@ function bindListEvents(){
     card.addEventListener('input', ev=>{
       const el = ev.target;
       if (el.dataset && el.dataset.act === 'filter'){
+        BRSQ[id] = el.value;
         const q = el.value.trim().toLowerCase();
+        let anyVisible = false;
         $$('.brow', card).forEach(r=>{
           const show = !q || r.dataset.search.includes(q);
           r.style.display = show ? '' : 'none';
+          if (show) anyVisible = true;
           const ch = r.nextElementSibling;
           if (ch && ch.classList.contains('chans')) ch.style.display = show ? '' : 'none';
         });
+        const brsNone = card.querySelector('.brsnone');
+        if (brsNone) brsNone.style.display = anyVisible ? 'none' : '';
         return;
       }
       if (el.dataset && el.dataset.cfilter !== undefined){
@@ -1407,7 +1447,7 @@ function bindListEvents(){
       if (act === 'delsel'){
         // cancellazione in blocco delle playlist spuntate (le custom non sono
         // spuntabili): stesso esito del ✕ singolo ma in una sola chiamata
-        const sel = (branchesOf(id) || []).filter((b) => !b.custom && branchEnabled(list, b.path));
+        const sel = visibleBranches(list).filter((b) => !b.custom && branchEnabled(list, b.path));
         if (!sel.length){ toast('Nessuna playlist spuntata da eliminare'); return; }
         const few = sel.slice(0, 3).map((b) => b.displayName || b.name).join(', ');
         if (!confirm(`Eliminare ${sel.length} playlist spuntate (${few}${sel.length > 3 ? ', …' : ''}) e tutti i loro canali? Potrai ripristinarle dal 🗑 Cestino.`)) return;
@@ -1492,10 +1532,27 @@ function bindListEvents(){
         }
         return;
       }
-      if (act === 'all' || act === 'none'){
-        const bs = (branchesOf(id) || []).filter((b) => !b.custom);
-        for (const b of bs) setBranchEnabled(list, b.path, act === 'all');
+      if (act === 'onlyactive'){
+        if (BRONLY.has(id)) BRONLY.delete(id); else BRONLY.add(id);
         renderLists();
+        return;
+      }
+      if (act === 'clearfilter'){
+        BRSQ[id] = '';
+        BRONLY.delete(id);
+        renderLists();
+        return;
+      }
+      if (act === 'all' || act === 'none'){
+        // durante una ricerca (o con "solo attive") si agisce SOLO sulle
+        // playlist visibili: cambiare di nascosto quelle filtrate era una trappola
+        const scoped = visibleBranches(list).filter((b) => !b.custom);
+        if (!scoped.length){ toast('Nessuna playlist nei risultati del filtro'); return; }
+        for (const b of scoped) setBranchEnabled(list, b.path, act === 'all');
+        const filtered = !!String(BRSQ[id] || '').trim() || BRONLY.has(id);
+        renderLists();
+        toast(`${act === 'all' ? 'Attivate' : 'Disattivate'} ${scoped.length} playlist` +
+          (filtered ? ' (solo i risultati del filtro)' : ''));
       }
     });
 

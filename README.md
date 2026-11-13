@@ -265,6 +265,10 @@ API usate dalla pagina di configurazione (utili anche per script/automazioni):
 * **Elimina canale / playlist** — il pulsante *✕* accanto a ogni canale lo elimina
   dalla lista; accanto a ogni playlist elimina l'intera playlist con i canali che
   contiene (quelli che avevi già spostato altrove restano dov'è ora).
+* **🔎 Filtri della sezione playlist** — *👁 Visualizza attive* (a sinistra della
+  ricerca) mostra solo le playlist attive; la ricerca filtra per nome originale o
+  rinominato. **✓ Tutto**, **✗ Nulla** e **✕ Cancella selezionate** agiscono
+  **solo sulle playlist visibili**: con una ricerca attiva non toccano quelle nascoste.
 * **🗑 Cestino** — il pulsante *Cestino* nella sezione playlist elenca canali e
   playlist eliminati, con un pulsante **Ripristina** per ognuno: il ripristino è
   fedele, il canale torna nella sua playlist (o nel gruppo in cui l'avevi spostato)
