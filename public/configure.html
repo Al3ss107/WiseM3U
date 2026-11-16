@@ -352,6 +352,7 @@
     .pltools [data-act=none]{order:3}
     .pltools [data-act=trash]{order:4}
     .pltools [data-act=delsel]{order:5;grid-column:1/-1}
+    .pltools [data-act=clearimports]{order:6;grid-column:1/-1}
 
     /* --- rami: riga a griglia, niente scroll annidato su touch --- */
     .branches{max-height:none;overflow:visible;padding:6px;border-radius:11px}
@@ -824,6 +825,7 @@ function renderBranches(list){
       <button class="ghost small" data-act="all" title="Attiva tutte le playlist">✓ Tutto</button>
       <button class="ghost small" data-act="none" title="Disattiva tutte le playlist">✗ Nulla</button>
       <button class="ghost small" data-act="delsel" title="Sposta nel cestino tutte le playlist spuntate (recuperabili)">✕ Cancella selezionate</button>
+      <button class="ghost small" data-act="clearimports" title="Elimina definitivamente solo le playlist e i canali aggiunti da altre liste; il contenuto originale resta">🗑 Svuota aggiunte</button>
       <button class="ghost small" data-act="trash" title="Canali e playlist eliminati: da qui li ripristini">🗑 Cestino${nTrash ? ` (${nTrash})` : ''}</button>
     </div>
   </div>
@@ -922,6 +924,8 @@ function renderChannels(list, b){
   </div>`;
 }
 
+let SKIP_TREE_RELOAD = false; // il drag ha gia' l'ordine in memoria: non rileggerlo dal server
+
 function renderLists(){
   // rendere ricostruibili anche i container CON scroll proprio (.branches):
   // la loro scrollTop va preservata esplicitamente, altrimenti la rebuild interna
@@ -1008,7 +1012,7 @@ function renderSideMenu(){
 
 async function plPopulateBranches(card){
   const lid = card.querySelector('[data-plsel="list"]').value;
-  if (lid) await loadBranches(lid); // sempre fresco: rinomine e gruppi nuovi
+  if (lid && !SKIP_TREE_RELOAD) await loadBranches(lid); // fresco: rinomine e gruppi nuovi
   const bs = (lid && branchesOf(lid)) || [];
   card.querySelector('[data-plsel="branch"]').innerHTML =
     bs.map((b) => `<option value="${esc(b.path)}">${esc(b.displayName)}</option>`).join('');
@@ -1079,7 +1083,7 @@ function renderListCard(l){
       <div class="acts">
         <button class="ghost small" data-act="toggle" style="${o.enabled ? '' : 'opacity:.55;color:var(--warn)'}" title="Attiva/disattiva completamente la lista">${o.enabled ? '⏻ attiva' : '⏻ spenta'}</button>
         <button class="ghost small" data-act="refresh">Aggiorna</button>
-        <button class="ghost small" data-act="preview">Anteprima M3U</button>
+        <button class="ghost small" data-act="origin" title="Annulla unioni e spostamenti: i canali tornano nelle playlist di origine">↩ Ripristina</button>
         <button class="danger small" data-act="del">Elimina</button>
       </div>
     </div>
@@ -1389,8 +1393,12 @@ function applyDrop(card, list){
     const type = DRAG.type;
     const c = DRAG.chan;
     const fromPath = type === 'branch' ? DRAG.el.dataset.path : '';
+    // i nomi servono per la conferma: vanno letti prima di azzerare DRAG
+    const srcName = type === 'branch' ? (DRAG.el.dataset.name || fromPath || 'playlist').trim() : '';
+    const dstName = type === 'branch' ? (DRAG.target.dataset.name || tPath || 'playlist').trim() : '';
     dragCleanup(card);
     if (!tPath) return;
+    if (type === 'branch' && !confirm(`Unire la playlist «${srcName}» dentro «${dstName}»?\nTutti i suoi canali verranno spostati nella playlist di destinazione. Potrai annullare con «↩ Ripristina».`)) return;
     (async ()=>{
       try {
         if (type === 'chan'){
@@ -1412,6 +1420,7 @@ function applyDrop(card, list){
           const r = await api(`/api/lists/${id}/mergebranch`, { method:'POST', body: JSON.stringify({ fromList: srcId, from: fromPath, to: tPath }) });
           toast(r.moved ? `${r.moved} canali spostati dentro la playlist` : 'Nessun canale da spostare');
           await loadConfig();
+          if (srcId !== id) { await loadBranches(id); await loadBranches(srcId); }
           await reloadOpenChans([id, srcId]);
           renderLists();
         }
@@ -1445,7 +1454,11 @@ function applyDrop(card, list){
     }
   }
   dragCleanup(card);
+  // il riordino vive in list.options.order: ricaricare l'albero dal server qui
+  // riporterebbe i rami all'ordine salvato, cancellando il trascinamento appena fatto
+  SKIP_TREE_RELOAD = true;
   renderLists();
+  SKIP_TREE_RELOAD = false;
 }
 
 function bindListEvents(){
@@ -1693,8 +1706,30 @@ function bindListEvents(){
         toast(list.options.enabled ? 'Lista attivata' : 'Lista disattivata');
       }
       if (act === 'refresh') await refreshList(id, btn);
-      if (act === 'del'){ if (confirm('Eliminare la lista?')) await delList(id); }
-      if (act === 'preview') window.open(apiUrl(`/api/lists/${id}/preview.m3u`), '_blank');
+      if (act === 'del'){ if (confirm(`Eliminare definitivamente la lista «${list.name || list.url}» e la sua configurazione?`)) await delList(id); }
+      if (act === 'origin'){
+        if (!confirm(`Riportare «${list.name || list.url}» allo stato originario?\nUnioni e spostamenti dei canali verranno annullati e le aggiunte da altre liste rimosse. Renomine, esclusioni, ordine e cestino restano invariati.`)) return;
+        try {
+          const r = await api(`/api/lists/${id}/restoreorigin`, { method:'POST', body:'{}' });
+          await loadConfig();
+          for (const lid of r.lists || []) await loadBranches(lid);
+          renderLists();
+          toast(`Ripristinata: ${r.moves} spostamenti annullati, ${r.imports} aggiunte esterne rimosse`);
+        } catch (e){ toast(e.message, 4000); }
+        return;
+      }
+      if (act === 'clearimports'){
+        if (!confirm(`Eliminare definitivamente le playlist e i canali aggiunti a «${list.name || list.url}» da altre liste?\nIl contenuto originale di questa lista non viene toccato.`)) return;
+        try {
+          const r = await api(`/api/lists/${id}/clearimports`, { method:'POST', body:'{}' });
+          if (!r.removed){ toast('Nessuna aggiunta da altre liste da eliminare'); return; }
+          await loadConfig();
+          for (const lid of r.lists || []) await loadBranches(lid);
+          renderLists();
+          toast(`${r.removed} aggiunte esterne eliminate`);
+        } catch (e){ toast(e.message, 4000); }
+        return;
+      }
       if (act === 'eptest') await testEasyProxy(card, list, btn);
       if (act === 'copypl'){
         const base = (CFG.settings.publicBaseUrl || location.origin).replace(/\/+$/, '');
@@ -1982,7 +2017,20 @@ pollLogs();
 async function loadBranches(id){
   try {
     const r = await api(`/api/lists/${id}/tree`);
-    TREES[id] = r.fetching ? null : r;
+    if (r.fetching){ TREES[id] = null; return; }
+    // il server ordina i rami secondo options.order SALVATO: riapplica l'ordine
+    // locale (anche non ancora salvato) per non cancellare i trascinamenti in corso
+    const l = CFG && CFG.lists ? CFG.lists.find((x)=>x.id===id) : null;
+    const order = (l && l.options && l.options.order) || [];
+    if (order.length && Array.isArray(r.branches)){
+      const pos = new Map(order.map((p,i)=>[p,i]));
+      r.branches.sort((a,b)=>{
+        const pa = pos.has(a.path) ? pos.get(a.path) : 1e9;
+        const pb = pos.has(b.path) ? pos.get(b.path) : 1e9;
+        return pa - pb;
+      });
+    }
+    TREES[id] = r;
   } catch(e){ TREES[id] = null; }
 }
 

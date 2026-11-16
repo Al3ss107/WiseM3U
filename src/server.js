@@ -964,6 +964,65 @@ app.post('/api/lists/:id/mergebranch', requireAdmin, async (req, res) => {
   res.json({ ok: true, moved: n, from: src.name || src.id });
 });
 
+/** Toglie dalla lista le voci importate da altre liste (merge di playlist
+ *  esterne, quelle con `dst`) e riaccende i canali che erano stati spenti
+ *  nella lista di origine. Le playlist native non vengono toccate.
+ *  Ritorna il numero di voci rimosse. */
+function dropExternalImports(cfg, list) {
+  const o = list.options;
+  const entries = Array.isArray(o.personalEntries) ? o.personalEntries : [];
+  const imports = entries.filter((e) => e && e.dst && e.src);
+  if (!imports.length) return { removed: 0, srcIds: [] };
+  o.personalEntries = entries.filter((e) => !(e && e.dst && e.src));
+
+  // cosa resta importato dopo la pulizia (per non riaccendere canali ancora usati)
+  const stillImported = new Set();
+  for (const l of cfg.lists) {
+    for (const e of l.options.personalEntries || []) {
+      if (e && e.src) stillImported.add(String(e.src));
+    }
+  }
+  const bySrc = new Map();
+  for (const e of imports) {
+    const src = cfg.lists.find((l) => String(e.src).startsWith(`${l.id}::`));
+    if (!src) continue;
+    if (!bySrc.has(src.id)) bySrc.set(src.id, { list: src, keys: new Set() });
+    bySrc.get(src.id).keys.add(String(e.src).slice(src.id.length + 2));
+  }
+  for (const { list: src, keys } of bySrc.values()) {
+    const os = src.options;
+    os.disabledChannels = (os.disabledChannels || []).filter((k) =>
+      !keys.has(k) || stillImported.has(`${src.id}::${k}`)
+    );
+  }
+  return { removed: imports.length, srcIds: [...bySrc.keys()] };
+}
+
+/** Riporta la lista allo stato originario: annulla unioni e spostamenti dei
+ *  canali (channelMoves) e rimuove le playlist/canali importati da altre liste.
+ *  Renomine, esclusioni, ordine e cestino restano come sono. */
+app.post('/api/lists/:id/restoreorigin', requireAdmin, (req, res) => {
+  const cfg = store.loadConfig();
+  const list = store.findList(req.params.id);
+  if (!list) return res.status(404).json({ error: 'lista non trovata' });
+  const moves = Object.keys(list.options.channelMoves || {}).length;
+  list.options.channelMoves = {};
+  const imp = dropExternalImports(cfg, list);
+  store.saveConfig(cfg);
+  res.json({ ok: true, moves, imports: imp.removed, lists: [list.id, ...imp.srcIds] });
+});
+
+/** Svuota le sole aggiunte esterne: elimina definitivamente playlist e canali
+ *  importati da altre liste, senza toccare il contenuto nativo della lista. */
+app.post('/api/lists/:id/clearimports', requireAdmin, (req, res) => {
+  const cfg = store.loadConfig();
+  const list = store.findList(req.params.id);
+  if (!list) return res.status(404).json({ error: 'lista non trovata' });
+  const imp = dropExternalImports(cfg, list);
+  store.saveConfig(cfg);
+  res.json({ ok: true, removed: imp.removed, lists: [list.id, ...imp.srcIds] });
+});
+
 /** Canali di un singolo ramo, per la gestione dalla pagina di configurazione. */
 app.get('/api/lists/:id/channels', requireAdmin, async (req, res) => {
   const list = store.findList(req.params.id);
