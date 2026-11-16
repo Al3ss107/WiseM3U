@@ -1942,8 +1942,8 @@ function collectInfo(container, host, { skip }={}){
   panel.className = 'info sectinfo';
   const sum = document.createElement('summary');
   sum.textContent = 'i';
-  sum.title = 'Informazioni';
-  sum.setAttribute('aria-label', 'Informazioni');
+  sum.title = 'Information';
+  sum.setAttribute('aria-label', 'Information');
   const body = document.createElement('div');
   body.className = 'ibody';
 
@@ -2020,7 +2020,7 @@ function makeSectionToggle(h2, apply, initiallyCollapsed=false){
     apply(collapsed);
     b.textContent = collapsed ? '\u25b8' : '\u25be';
     h2.setAttribute('aria-expanded', String(!collapsed));
-    h2.title = collapsed ? 'Espandi la sezione' : 'Comprimi la sezione';
+    h2.title = collapsed ? 'Expand the section' : 'Collapse the section';
   };
   const toggle = ()=>{ collapsed = !collapsed; sync(); };
   h2.setAttribute('role', 'button');
