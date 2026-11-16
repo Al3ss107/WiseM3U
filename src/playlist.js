@@ -8,6 +8,8 @@
 const { flattenStations, findByPath, pathNames } = require('./wiseplay');
 const { makeBranchSelector, matchesKeywords } = require('./selection');
 const { normalizeStreamUrl, protocolBadge } = require('./protocols');
+const { buildM3U } = require('./m3u');
+const cache = require('./cache');
 
 /**
  * Se la lista ha EasyProxy configurato, riscrive l'URL dello stream come
@@ -24,9 +26,6 @@ function proxyStreamUrl(url, list) {
   if (list.options.easyProxyParams) q.push(list.options.easyProxyParams);
   return `${base}/proxy/manifest.m3u8?${q.join('&')}`;
 }
-const { buildM3U } = require('./m3u');
-const cache = require('./cache');
-
 const JOINER = ' › ';
 
 function listPrefix(list) {

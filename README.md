@@ -509,8 +509,16 @@ Robustezza e prestazioni (misurate sulle due liste di esempio):
 npm install
 npm start        # avvio locale su http://localhost:7000
                  # (nel container la porta host e' la 7300, vedi docker-compose.yml)
-npm test         # batteria di regressione: log live, diagnostica stream, scadenza Xtream
+npm run lint     # ESLint: variabili non definite, duplicati, codice irraggiungibile
+npm test         # regressione: log, diagnostica, Xtream, WisePlay, imgfit, API/cronologia
+npm run test:mem # test della dieta RAM (richiede --expose-gc)
 ```
+
+La pagina di configurazione è divisa in `public/configure.html` (markup),
+`public/configure.css` (stili Material 3) e `public/configure.js` (logica):
+nessun build step, il server inietta solo la versione nella meta tag
+`wm-ui-version`. La mappa dei moduli e le convenzioni sono in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ---
 

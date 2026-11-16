@@ -194,13 +194,13 @@ async function waitFor(pred, ms, step = 400) {
     const after = await apiJ('/api/logs');
     assert(after.body.entries.length === 0, `buffer: ${after.body.entries.length}`);
 
-    // regressione bug v1.4.4→v1.4.5: il marcatore WM_UI_VERSION nella pagina DEVE
-    // essere iniettato dal server = stessa versione del backend (altrimenti l'avviso
+    // regressione bug v1.4.4→v1.4.5: la versione UI nella pagina DEVE essere
+    // iniettata dal server = stessa versione del backend (altrimenti l'avviso
     // "pagina vecchia" resta per sempre anche dopo l'aggiornamento)
     const page = await fetch(`${BASE}/configure`);
     const html = await page.text();
     const pkgV = JSON.parse(fs.readFileSync(path.join(REPO, 'package.json'), 'utf8')).version;
-    assert(html.includes(`WM_UI_VERSION = '${pkgV}'`),
+    assert(html.includes(`name="wm-ui-version" content="${pkgV}"`),
       `marcatore in pagina diverso da package.json (${pkgV})`);
     assert(!html.includes('__WM_UI_VERSION__'), 'placeholder non sostituito in pagina');
   }) && ok;

@@ -232,17 +232,21 @@ supportano: su telefono si riordinano le liste dal menu laterale, non i rami.
 
 | Modulo | Righe | Ruolo |
 | --- | --- | --- |
-| `src/server.js` | 1.326 | HTTP, API, tutte le rotte |
-| `src/wiseplay.js` | 1.295 | import WisePlay/M3U, streaming, recovery |
-| `public/configure.html` | 2.009 | tutta la UI |
-| `src/playlist.js` | 772 | cataloghi, stream, M3U, personali |
-| `src/config.js` | 344 | persistenza e normalizzazione |
-| `src/streamdiag.js` | 332 | diagnostica + video FFmpeg |
+| `src/server.js` | 1.315 | composizione HTTP e rotte principali |
+| `src/routes/*.js` | 359 | moduli cronologia e cestino |
+| `src/wiseplay.js` | 1.316 | import WisePlay/M3U, streaming, recovery |
+| `public/configure.html` | 245 | markup della UI |
+| `public/configure.css` | 499 | stili Material 3 |
+| `public/configure.js` | 2.120 | logica della UI |
+| `src/playlist.js` | 771 | cataloghi, stream, M3U, personali |
+| `src/config.js` | 367 | persistenza, normalizzazione, revisione |
+| `src/history.js` | 311 | snapshot, checkpoint, retention |
+| `src/streamdiag.js` | 331 | diagnostica + video FFmpeg |
 | `src/cache.js` | 288 | snapshot, TTL, hot trees |
 | `src/imgfit.js` | 197 | poster/loghi |
 | `src/xtream.js` | 116 | info account |
 | altri (`m3u`, `constants`, `protocols`, `selection`, `liveLog`) | ~380 | supporto |
-| test | ~1.130 | suite (non nell'immagine) |
+| test | ~1.380 | suite (non nell'immagine) |
 
 **Peso indicativo dell'immagine** (da verificare con `docker images`):
 base Alpine ~50 MB, `ffmpeg` ~80–110 MB, `ttf-dejavu` ~10 MB, `sharp/libvips`

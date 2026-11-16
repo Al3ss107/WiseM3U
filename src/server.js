@@ -11,7 +11,12 @@ const compression = require('compression');
 const store = require('./config');
 const cache = require('./cache');
 const playlist = require('./playlist');
-const { buildTree, treeForUi } = require('./wiseplay');
+const { buildTree, treeForUi, findByPath, flattenStations } = require('./wiseplay');
+const { makeBranchSelector } = require('./selection');
+const { normalizeStreamUrl } = require('./protocols');
+const { buildM3U } = require('./m3u');
+const createHistoryRouter = require('./routes/history');
+const createTrashRouter = require('./routes/trash');
 const imgfit = require('./imgfit');
 const live = require('./liveLog');
 const streamdiag = require('./streamdiag');
@@ -124,6 +129,10 @@ function requireAdmin(req, res, next) {
   if (tokenOf(req) === ADMIN_TOKEN) return next();
   return res.status(401).json({ error: 'ADMIN_TOKEN non valido' });
 }
+
+/* Rotte modulari (endpoint e comportamento invariati). */
+app.use('/api/history', createHistoryRouter({ admin: requireAdmin }));
+app.use('/api/lists', createTrashRouter({ admin: requireAdmin }));
 
 function withToken(url, req) {
   const t = store.loadConfig().settings.token;
@@ -376,20 +385,16 @@ app.get('/playlist.m3u8', (req, res) => {
   res.redirect(307, `/playlist.m3u${qs ? `?${qs}` : ''}`);
 });
 
-/** Anteprima M3U di una singola lista, eventualmente limitata a un ramo. */
-/** M3U di una singola lista (Anteprima e liste personali). */
+/** M3U di una singola lista (anteprima e liste personali). */
 async function listM3U(cfg, list, onlyPath = '') {
   let selector;
   if (onlyPath) {
     selector = (p) => p === onlyPath || p.startsWith(`${onlyPath}.`);
   } else {
-    selector = require('./selection').makeBranchSelector(list.options.disabledPaths);
+    selector = makeBranchSelector(list.options.disabledPaths);
   }
 
   const entry = await playlist.entryFor(cfg, list);
-  const { flattenStations } = require('./wiseplay');
-  const { normalizeStreamUrl } = require('./protocols');
-  const { buildM3U } = require('./m3u');
 
   const prefix = playlist.listPrefix(list);
   const raw = flattenStations(entry.tree, selector, {
@@ -566,79 +571,6 @@ function startRefresh(listId, force = true) {
     })
     .finally(() => refreshing.delete(listId));
 }
-
-/* ------------------------------------------------------------------ */
-/* cronologia configurazione: elenco e ripristino selettivo           */
-/* ------------------------------------------------------------------ */
-
-app.get('/api/history', requireAdmin, (req, res) => {
-  const listId = String(req.query.list || '').trim();
-  res.json({ entries: history.listEntries({ listId }) });
-});
-
-/** Ripristina da uno snapshot: tutto o solo le categorie scelte. */
-app.post('/api/history/:id/restore', requireAdmin, (req, res) => {
-  try {
-    const snap = history.getEntry(req.params.id);
-    if (!snap) return res.status(404).json({ error: 'snapshot non trovato' });
-    const body = req.body || {};
-    const cfg = store.loadConfig();
-    const targetList = body.listId ? String(body.listId) : '';
-    const cats = Array.isArray(body.options)
-      ? [...new Set(body.options.map(String))].filter((c) => c === 'listSettings' || history.CATEGORIES[c])
-      : [];
-    const restored = { settings: false, lists: false, options: {} };
-
-    if (body.settings) {
-      // il token non si ripristina: un vecchio snapshot potrebbe chiudere fuori
-      const s = { ...(snap.config.settings || {}) };
-      delete s.token;
-      cfg.settings = { ...cfg.settings, ...s };
-      restored.settings = true;
-    }
-
-    if (body.lists) {
-      // aggiorna nome/URL delle liste esistenti e riaggiunge quelle sparite;
-      // non elimina le liste create dopo lo snapshot
-      for (const sl of snap.config.lists || []) {
-        const cur = cfg.lists.find((l) => l.id === sl.id);
-        if (cur) {
-          cur.name = sl.name || cur.name;
-          cur.url = sl.url || cur.url;
-          if (sl.kind) cur.kind = sl.kind;
-        } else {
-          cfg.lists.push({ ...sl, state: { status: 'idle' } });
-        }
-      }
-      restored.lists = true;
-    }
-
-    if (cats.length) {
-      const ids = targetList ? [targetList] : (snap.config.lists || []).map((l) => l.id);
-      for (const id of ids) {
-        const sl = (snap.config.lists || []).find((l) => l.id === id);
-        const cl = cfg.lists.find((l) => l.id === id);
-        if (!sl || !cl) continue;
-        cl.options = history.mergeOptions(cl.options, sl.options, cats);
-        restored.options[id] = cats;
-      }
-    }
-
-    if (!restored.settings && !restored.lists && !Object.keys(restored.options).length) {
-      return res.status(400).json({ error: 'nessuna categoria selezionata' });
-    }
-    const ln = targetList ? store.findList(targetList) : null;
-    const saved = store.saveConfig(cfg, {
-      reason: 'ripristino cronologia',
-      listId: targetList,
-      listName: ln ? ln.name || ln.url : '',
-    });
-    if (restored.settings) C.setCustomUserAgent(saved.settings.userAgent);
-    res.json({ ok: true, restored });
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
 
 /** Aggiunge una lista; lo scaricamento parte in background (UI: /state). */
 app.post('/api/lists', requireAdmin, (req, res) => {
@@ -817,7 +749,6 @@ app.post('/api/lists/:id/addchannel', requireAdmin, async (req, res) => {
     walk(tree);
     return hit;
   };
-  const { findByPath } = require('./wiseplay');
   const findAt = (tree, opts, p) => {
     const ren = opts.channelRenames || {};
     const dis = new Set(opts.disabledChannels || []);
@@ -896,132 +827,6 @@ app.post('/api/lists/:id/addchannel', requireAdmin, async (req, res) => {
   res.status(404).json({ error: 'canale non trovato in nessuna lista' });
 });
 
-/** Elimina definitivamente un canale (name presente) o un'intera playlist (solo path). */
-app.post('/api/lists/:id/delete', requireAdmin, (req, res) => {
-  const cfg = store.loadConfig();
-  const list = store.findList(req.params.id);
-  if (!list) return res.status(404).json({ error: 'lista non trovata' });
-  const path = String((req.body || {}).path || '');
-  const name = (req.body || {}).name;
-  const o = list.options;
-  const cp = history.ensureCheckpoint(cfg, {
-    reason: 'prima di eliminare contenuti',
-    listId: list.id,
-    listName: list.name || list.url,
-  });
-  const undo = cp ? { id: cp.id, listIds: [list.id] } : null;
-
-  // cancellazione IN BLOCCO: { paths: [pathRamo, ...] } — un solo salvataggio.
-  // Usata dal tasto "Cancella selezionate": stessi effetti del delete singolo
-  // (rami nel cestino, ripristinabili da /api/lists/:id/deleted).
-  const bulk = Array.isArray((req.body || {}).paths) ? req.body.paths : null;
-  if (bulk && bulk.length) {
-    o.deletedBranches = o.deletedBranches || [];
-    let added = 0;
-    for (const p of bulk) {
-      const pp = String(p || '');
-      if (pp && !o.deletedBranches.includes(pp)) { o.deletedBranches.push(pp); added++; }
-    }
-    if (added) store.saveConfig(cfg, { reason: `${added} playlist eliminate`, listId: list.id, listName: list.name || list.url });
-    return res.json({ ok: true, deleted: added, undo });
-  }
-
-  if (!path) return res.status(400).json({ error: 'serve il path' });
-
-  if (typeof name === 'string' && name.trim()) {
-    const key = `${path}::${name}`;
-    o.deletedChannels = o.deletedChannels || [];
-    if (!o.deletedChannels.includes(key)) o.deletedChannels.push(key);
-    // mosse e disattivazioni restano intatte: il cestino ripristina tutto com'era
-    store.saveConfig(cfg, { reason: 'canale eliminato', listId: list.id, listName: list.name || list.url });
-    return res.json({ ok: true, deleted: key, undo });
-  }
-
-  // playlist (ramo reale o gruppo personale "@Nome"): finisce nel cestino
-  o.deletedBranches = o.deletedBranches || [];
-  if (!o.deletedBranches.includes(path)) o.deletedBranches.push(path);
-  store.saveConfig(cfg, { reason: 'playlist eliminata', listId: list.id, listName: list.name || list.url });
-  res.json({ ok: true, deleted: path, undo });
-});
-
-/** Cestino: canali e playlist eliminati, pronti da ripristinare. */
-app.get('/api/lists/:id/deleted', requireAdmin, async (req, res) => {
-  const list = store.findList(req.params.id);
-  if (!list) return res.status(404).json({ error: 'lista non trovata' });
-  const o = list.options;
-  let entry = null;
-  try { entry = await playlist.entryFor(store.loadConfig(), list); } catch (_) { entry = cache.getEntry(list.id); }
-  const { findByPath } = require('./wiseplay');
-  const renames = o.renames || {};
-  const chRenames = o.channelRenames || {};
-  const moves = o.channelMoves || {};
-
-  const delSet = new Set(o.deletedChannels || []);
-  // stessi conteggi di buildBranches: nativi - eliminati - spostati via + arrivati
-  const countFor = (p, node) => {
-    let out = 0;
-    let inn = 0;
-    for (const [k, v] of Object.entries(moves)) {
-      if (k.startsWith(`${p}::`)) { if (v !== p) out++; }
-      else if (v === p) inn++;
-    }
-    let del = 0;
-    for (const st of (node && node.stations) || []) {
-      if (delSet.has(`${p}::${st.name}`)) del++;
-    }
-    const native = node ? (node.stations || []).length : 0;
-    return Math.max(0, native - del - out) + inn;
-  };
-  const purgedBr = new Set(o.purgedBranches || []);
-  const purgedCh = new Set(o.purgedChannels || []);
-  const branches = [];
-  for (const p of o.deletedBranches || []) {
-    if (purgedBr.has(p)) continue; // cestino svuotato: eliminazione definitiva
-    if (p.startsWith('@')) {
-      const n = Object.values(moves).filter((v) => v === p).length;
-      branches.push({ path: p, name: (renames[p] || p.slice(1)), stations: n, custom: true });
-      continue;
-    }
-    const node = entry && entry.tree ? findByPath(entry.tree, p) : null;
-    branches.push({
-      path: p,
-      name: node ? (renames[p] || node.name) : p,
-      stations: countFor(p, node),
-    });
-  }
-  const channels = [];
-  for (const key of o.deletedChannels || []) {
-    if (purgedCh.has(key)) continue; // cestino svuotato: eliminazione definitiva
-    const i = key.lastIndexOf('::');
-    if (i < 0) continue;
-    const p = key.slice(0, i);
-    const nm = key.slice(i + 2);
-    const node = entry && entry.tree ? findByPath(entry.tree, p) : null;
-    channels.push({ path: p, name: nm, shown: chRenames[key] || nm, branch: node ? (renames[p] || node.name) : p });
-  }
-  res.json({ branches, channels });
-});
-
-/** Ripristina un canale o una playlist dal cestino. */
-app.post('/api/lists/:id/restore', requireAdmin, (req, res) => {
-  const cfg = store.loadConfig();
-  const list = store.findList(req.params.id);
-  if (!list) return res.status(404).json({ error: 'lista non trovata' });
-  const path = String((req.body || {}).path || '');
-  const name = (req.body || {}).name;
-  if (!path) return res.status(400).json({ error: 'serve il path' });
-  const o = list.options;
-  if (typeof name === 'string' && name.trim()) {
-    const key = `${path}::${name}`;
-    o.deletedChannels = (o.deletedChannels || []).filter((k) => k !== key);
-    store.saveConfig(cfg, { reason: 'ripristino dal cestino', listId: list.id, listName: list.name || list.url });
-    return res.json({ ok: true, restored: key });
-  }
-  o.deletedBranches = (o.deletedBranches || []).filter((p) => p !== path);
-  store.saveConfig(cfg, { reason: 'ripristino dal cestino', listId: list.id, listName: list.name || list.url });
-  res.json({ ok: true, restored: path });
-});
-
 /** Sposta TUTTI i canali di una playlist dentro un'altra (trascinamento di una
  *  playlist su un'altra). Stessa lista = spostamento; liste diverse = innesto
  *  nella destinazione e spegnimento nella sorgente. */
@@ -1059,7 +864,6 @@ app.post('/api/lists/:id/mergebranch', requireAdmin, async (req, res) => {
   let e = null;
   try { e = await playlist.entryFor(cfg, src); } catch (_) { /* non scaricata */ }
   if (!e || !e.tree) return res.status(409).json({ error: 'lista di origine non ancora scaricata' });
-  const { findByPath } = require('./wiseplay');
   const node = findByPath(e.tree, from);
   if (!node) return res.status(404).json({ error: 'playlist di origine non trovata' });
   const oS = src.options;
@@ -1090,59 +894,6 @@ app.post('/api/lists/:id/mergebranch', requireAdmin, async (req, res) => {
   }
   store.saveConfig(cfg, { reason: 'unione playlist', listId: target.id, listName: target.name || target.url });
   res.json({ ok: true, moved: n, from: src.name || src.id, undo });
-});
-
-/** Crea un checkpoint nominato: sempre registrato, anche a config invariata. */
-app.post('/api/history/checkpoints', requireAdmin, (req, res) => {
-  try {
-    const name = String((req.body || {}).name || '').trim().slice(0, 80);
-    if (!name) return res.status(400).json({ error: 'serve un nome per il checkpoint' });
-    const e = history.checkpoint(store.loadConfig(), name);
-    if (!e) return res.status(500).json({ error: 'checkpoint non salvato' });
-    res.json({ ok: true, entry: { id: e.id, ts: e.ts, name: e.name } });
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
-
-/** Annulla un'operazione: riporta le liste indicate allo stato precedente. */
-app.post('/api/history/:id/undo', requireAdmin, (req, res) => {
-  try {
-    const snap = history.getEntry(req.params.id);
-    if (!snap) return res.status(404).json({ error: 'snapshot non trovato' });
-    const ids = Array.isArray((req.body || {}).listIds)
-      ? [...new Set(req.body.listIds.map((x) => String(x || '')).filter(Boolean))]
-      : [];
-    if (!ids.length) return res.status(400).json({ error: 'serve la lista da ripristinare' });
-    const cfg = store.loadConfig();
-    const restored = [];
-    for (const id of ids) {
-      const sl = (snap.config.lists || []).find((l) => l.id === id);
-      if (!sl) continue;
-      const cl = cfg.lists.find((l) => l.id === id);
-      if (cl) {
-        cl.name = sl.name || cl.name;
-        cl.url = sl.url || cl.url;
-        if (sl.kind) cl.kind = sl.kind;
-        cl.options = JSON.parse(JSON.stringify(sl.options || {}));
-      } else {
-        // la lista era stata eliminata: la riaggiungo com'era nello snapshot
-        cfg.lists.push({ ...JSON.parse(JSON.stringify(sl)), state: { status: 'idle' } });
-        cache.invalidate(id);
-      }
-      restored.push(id);
-    }
-    if (!restored.length) return res.status(404).json({ error: 'lista non presente nello snapshot' });
-    const first = store.findList(restored[0]);
-    store.saveConfig(cfg, {
-      reason: 'annullamento operazione',
-      listId: restored[0],
-      listName: first ? first.name || first.url : '',
-    });
-    res.json({ ok: true, lists: restored });
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
 });
 
 /** Toglie dalla lista le voci importate da altre liste (merge di playlist
@@ -1209,32 +960,6 @@ app.post('/api/lists/:id/restoreorigin', requireAdmin, (req, res) => {
   });
 });
 
-/** Svuota il cestino: le voci eliminate restano fuori dall'output ma non sono
- *  piu' ripristinabili e spariscono dal cestino. */
-app.post('/api/lists/:id/emptytrash', requireAdmin, (req, res) => {
-  const cfg = store.loadConfig();
-  const list = store.findList(req.params.id);
-  if (!list) return res.status(404).json({ error: 'lista non trovata' });
-  const o = list.options;
-  const cp = history.ensureCheckpoint(cfg, {
-    reason: 'prima di svuotare il cestino',
-    listId: list.id,
-    listName: list.name || list.url,
-  });
-  const purgedCh = new Set(o.purgedChannels || []);
-  const purgedBr = new Set(o.purgedBranches || []);
-  const freshCh = (o.deletedChannels || []).filter((k) => !purgedCh.has(k));
-  const freshBr = (o.deletedBranches || []).filter((p) => !purgedBr.has(p));
-  o.purgedChannels = [...new Set([...purgedCh, ...freshCh])];
-  o.purgedBranches = [...new Set([...purgedBr, ...freshBr])];
-  store.saveConfig(cfg, { reason: 'svuota cestino', listId: list.id, listName: list.name || list.url });
-  res.json({
-    ok: true,
-    removed: freshCh.length + freshBr.length,
-    undo: cp ? { id: cp.id, listIds: [list.id] } : null,
-  });
-});
-
 /** Canali di un singolo ramo, per la gestione dalla pagina di configurazione. */
 app.get('/api/lists/:id/channels', requireAdmin, async (req, res) => {
   const list = store.findList(req.params.id);
@@ -1243,7 +968,6 @@ app.get('/api/lists/:id/channels', requireAdmin, async (req, res) => {
   try { entry = await playlist.entryFor(store.loadConfig(), list); } catch (_) { entry = cache.getEntry(list.id); }
   if (!entry || !entry.tree) return res.status(409).json({ error: 'lista non ancora scaricata' });
   const path = String(req.query.path || '');
-  const { findByPath } = require('./wiseplay');
 
   const renames = list.options.channelRenames || {};
   const branchRenames = list.options.renames || {};
@@ -1511,11 +1235,6 @@ app.get('/healthz', (req, res) => {
     cache: { entries: cs.entries, parsed: cs.parsedEntries, gzMB: Math.round(cs.gzBytes / 1048576), hotLists: cs.maxParsed },
   });
 });
-
-function getUiTree(id) {
-  const entry = cache.getEntry(id);
-  return entry && entry.ui ? entry.ui : null;
-}
 
 /* ------------------------------------------------------------------ */
 

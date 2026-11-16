@@ -224,9 +224,8 @@ function renderErrorVideo(title, bodyLines) {
 
 function actuallyRender(key, title, bodyLines) {
   return new Promise((resolve) => {
-    let stat;
     try {
-      stat = fs.statSync(VIDEOS_DIR);
+      if (!fs.statSync(VIDEOS_DIR).isDirectory()) return resolve(null);
     } catch (_) {
       try { fs.mkdirSync(VIDEOS_DIR, { recursive: true }); } catch (_) { return resolve(null); }
     }

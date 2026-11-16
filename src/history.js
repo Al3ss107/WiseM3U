@@ -42,8 +42,9 @@ function ensureDir() {
 /** Configurazione senza lo stato runtime delle liste (quello non va storicizzato). */
 function stableConfig(cfg) {
   const lists = (cfg && Array.isArray(cfg.lists) ? cfg.lists : []).map((l) => {
-    const { state, ...rest } = l;
-    return rest;
+    const copy = { ...l };
+    delete copy.state; // lo stato runtime non fa parte della cronologia
+    return copy;
   });
   return { settings: (cfg && cfg.settings) || {}, lists };
 }

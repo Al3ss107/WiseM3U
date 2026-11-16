@@ -48,6 +48,21 @@ const mkList = (id, name, opts={}) => ({
   ok(up, 'server avviato');
   if (!up){ app.kill(); process.exit(1); }
 
+  // ---- pagina configurazione: HTML leggero + asset CSS/JS esterni ----
+  const pageRes = await fetch(`${BASE}/configure`);
+  const pageHtml = await pageRes.text();
+  ok(pageRes.status === 200, 'pagina /configure servita');
+  ok(/name="wm-ui-version" content="\d+\.\d+\.\d+"/.test(pageHtml), 'versione iniettata nella meta');
+  ok(!pageHtml.includes('__WM_UI_VERSION__'), 'nessun placeholder versione residuo');
+  ok(pageHtml.includes('/configure.css') && pageHtml.includes('/configure.js'), 'pagina collegata a CSS e JS esterni');
+  ok(!pageHtml.includes('<style>') && !pageHtml.includes('<script>'), 'pagina senza CSS/JS inline');
+  const cssRes = await fetch(`${BASE}/configure.css`);
+  ok(cssRes.status === 200 && /text\/css/.test(cssRes.headers.get('content-type') || ''), 'configure.css servito');
+  const jsRes = await fetch(`${BASE}/configure.js`);
+  const jsText = await jsRes.text();
+  ok(jsRes.status === 200 && /javascript/.test(jsRes.headers.get('content-type') || ''), 'configure.js servito');
+  ok(jsText.includes('wm-ui-version') && !jsText.includes('__WM_UI_VERSION__'), 'il JS legge la versione dalla meta');
+
   // v1: lista A con ordine [X,Y], lista B
   const listA = mkList('l_a', 'Lista A', { order: ['X', 'Y'], renames: { X: 'Vecchio nome' } });
   const listB = mkList('l_b', 'Lista B');
@@ -227,6 +242,6 @@ const mkList = (id, name, opts={}) => ({
 
   app.kill();
   console.log('');
-  console.log(fail === 0 ? 'TUTTI I TEST CRONOLOGIA OK' : `${fail} TEST CRONOLOGIA FALLITI`);
+  console.log(fail === 0 ? `TUTTI I TEST CRONOLOGIA OK (${pass})` : `${fail} TEST CRONOLOGIA FALLITI`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e=>{ console.error(e); process.exit(1); });

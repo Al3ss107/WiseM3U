@@ -17,9 +17,11 @@
 
 const http = require('http');
 const https = require('https');
+const net = require('net');
 const zlib = require('zlib');
+const { Resolver } = require('dns').promises;
 const { parseM3U, epgUrlsFromHeader, parseAttrs, parseExtInf } = require('./m3u');
-const { familyOf, aceHash } = require('./protocols');
+const { familyOf } = require('./protocols');
 
 const { getUserAgent } = require('./constants');
 
@@ -441,7 +443,7 @@ function nodeFetchText(url, opts = {}, redirectsLeft = 5) {
     if (isHttps) {
       if (opts.insecure) requestOpts.rejectUnauthorized = false;
       // SNI: sempre il dominio (mai verso un IP, RFC 6066)
-      if (!require('net').isIP(u.hostname)) requestOpts.servername = u.hostname;
+      if (!net.isIP(u.hostname)) requestOpts.servername = u.hostname;
     }
     const req = lib.get(requestOpts, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && redirectsLeft > 0) {
@@ -489,7 +491,7 @@ function nodeFetchText(url, opts = {}, redirectsLeft = 5) {
 
 /** Risolve un hostname con DNS pubblici (1.1.1.1 / 8.8.8.8). */
 function resolveViaPublicDns(hostname) {
-  const r = new (require('dns').promises.Resolver)();
+  const r = new Resolver();
   r.setServers(['1.1.1.1', '8.8.8.8']);
   return Promise.race([
     r.resolve4(hostname).then((a) => a[0]),
@@ -765,7 +767,7 @@ async function buildTree(rootUrl, options = {}) {
     if (/ENOTFOUND|EAI_AGAIN/i.test(causeRef.code || '')) {
       let host;
       try { host = new URL(rootUrl).hostname; } catch (_) { return null; }
-      if (require('net').isIP(host)) return null;
+      if (net.isIP(host)) return null;
       let ip = null;
       try { ip = await resolveViaPublicDns(host); } catch (_) { ip = null; }
       if (!ip) return null;
