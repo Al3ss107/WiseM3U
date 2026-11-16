@@ -101,7 +101,7 @@
         <label>Custom User-Agent (optional)</label>
         <input id="s_userAgent" type="text" maxlength="300" spellcheck="false"
           placeholder="empty = default (Chrome 126 + WiseM3U)">
-        <div class="hint" data-i18n-html="hint.userAgent">Used for <b>all outgoing requests</b> (lists, branches, Xtream panel,
+        <div class="hint" data-info data-i18n-html="hint.userAgent">Used for <b>all outgoing requests</b> (lists, branches, Xtream panel,
           logos). Useful when a panel or CDN returns <code>403</code> because it
           recognizes WiseM3U: paste the UA of a browser, VLC or the app you normally use.
           One line only; empty = default behavior.</div>
@@ -113,13 +113,13 @@
       <div>
         <label>Public URL (nginx / personal domain)</label>
         <input id="s_publicBaseUrl" type="text" placeholder="https://my.domain">
-        <div class="hint" data-i18n-html="hint.publicUrl">If the addon sits behind nginx with a domain + certificate, enter the public
+        <div class="hint" data-info data-i18n-html="hint.publicUrl">If the addon sits behind nginx with a domain + certificate, enter the public
           base here (e.g. <code>https://tv.mydomain.com</code>): the links shown will use it.</div>
       </div>
       <div>
         <label>EPG XMLTV URL (optional)</label>
         <input id="s_epgUrl" type="text" placeholder="https://my.domain/guide.xml">
-        <div class="hint" data-i18n-html="hint.epg">Declared in the generated playlist header (<code>url-tvg</code>/<code>x-tvg-url</code>).
+        <div class="hint" data-info data-i18n-html="hint.epg">Declared in the generated playlist header (<code>url-tvg</code>/<code>x-tvg-url</code>).
           It is added to the EPGs inherited from m3u_plus/Xtream sources. Empty = only the detected ones.</div>
       </div>
     </div>
@@ -130,10 +130,10 @@
       <div class="spacer"></div>
       <button class="ghost small" id="btnClearCache" style="flex:0 0 auto">Clear cache</button>
     </div>
-    <div class="hint" data-i18n-html="hint.token">If you set a <b>token</b>, manifest/playlist/catalogs will require
+    <div class="hint" data-info data-i18n-html="hint.token">If you set a <b>token</b>, manifest/playlist/catalogs will require
       <code>?token=...</code>: the configuration page already shows the complete URLs to paste into
       Nuvio and Stremio.</div>
-    <div class="hint" data-i18n-html="hint.streamDiag"><b>Stream diagnostics</b>: enable it to understand WHY a channel does not play.
+    <div class="hint" data-info data-i18n-html="hint.streamDiag"><b>Stream diagnostics</b>: enable it to understand WHY a channel does not play.
       Playlists and catalogs will deliver "diagnostic" URLs: if the stream responds correctly, the
       player is redirected to the source (video does NOT pass through the container, no wasted bandwidth);
       if the panel refuses or does not respond, a <b>video explaining the error</b> appears on screen
@@ -155,7 +155,7 @@
       <code id="m3uUrl">…</code>
       <button class="ghost small" id="btnCopyM3u" title="Copy the M3U playlist URL to the clipboard">⧉ copy</button>
     </div>
-    <div class="hint" data-i18n-html="hint.clients">In <b>Nuvio</b>: Settings → Content and discovery → Add-ons, paste the manifest URL.
+    <div class="hint" data-info data-i18n-html="hint.clients">In <b>Nuvio</b>: Settings → Content and discovery → Add-ons, paste the manifest URL.
       In <b>Stremio</b>: Add-ons → Community, paste the same URL.
       The <b>M3U</b> URL works in any IPTV player (it only contains active lists) and is already in
       <b>m3u_plus</b> format: if the sources have an EPG (or you set one in general settings)
@@ -177,7 +177,7 @@
       <span class="spacer"></span>
       <span id="histStatus" class="cnt"></span>
     </div>
-    <div class="hint" data-i18n-html="hint.history">Every configuration change is automatically saved to the history
+    <div class="hint" data-info data-i18n-html="hint.history">Every configuration change is automatically saved to the history
     (on the data volume, last 60 states or 30 days). Choose a state and restore <b>only the categories you
     want</b>: order, names, exclusions, merges, trash or settings. A restore creates a new state of its own,
     so it can always be undone. Lists added after the snapshot are not deleted.

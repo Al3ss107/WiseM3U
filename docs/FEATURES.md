@@ -1,6 +1,6 @@
 # WiseM3U — complete feature inventory
 
-Reference version: **v1.10.0** (branch `arena/7045a7cd-wisem3u`)
+Reference version: **v1.10.1** (branch `arena/7045a7cd-wisem3u`)
 
 > One line: it imports **WisePlay / M3U / Xtream** lists, normalizes them into a
 > tree of groups and channels, applies user customizations and exposes them as a
@@ -142,8 +142,8 @@ tapping the name, playlists have their own collapse button with the respective
 info in the title, and per-list settings stay in the existing `<details>`. The
 open state of lists is preserved across list refreshes. The interface follows
 the **Material 3** design (color tokens, cards, tonal buttons, bordered fields
-with visible focus). The theme is dark amethyst/Dracula on a true-black AMOLED
-background.
+with visible focus). The theme is the dark Dracula palette (deep grey-purple
+background with purple accents).
 
 **On phones (≤ 560 px)** — compact (not sticky) header with a smaller logo,
 list actions in a 2×2 grid, playlist and channel rows on multiple lines (name
