@@ -107,6 +107,35 @@
   details.help>summary:hover{color:#cfe0ff}
   details.help .hint{margin:6px 0 2px;padding:9px 11px;background:rgba(14,21,48,.6);border:1px solid var(--line);border-radius:9px}
 
+  /* ---------- icone info (i) e sezioni comprimibili ---------- */
+  details.info{margin-top:7px}
+  /* un solo aspetto per ogni "i": l'etichetta resta nel DOM per gli screen reader,
+     il cerchio ha un'area di tocco di ~44px grazie al ::after trasparente */
+  details.info>summary,details.help>summary{
+    list-style:none;cursor:pointer;display:inline-grid;place-items:center;position:relative;
+    width:26px;height:26px;border-radius:50%;border:1px solid var(--line2);background:#16203d;
+    color:#9fc1ff;font-size:0;user-select:none;vertical-align:middle;
+    transition:background .15s,border-color .15s,color .15s}
+  details.info>summary::-webkit-details-marker,details.help>summary::-webkit-details-marker{display:none}
+  details.info>summary::before,details.help>summary::before{
+    content:"i";font:italic 700 13px/1 Georgia,"Times New Roman",serif}
+  details.info>summary::after,details.help>summary::after{
+    content:"";position:absolute;inset:-5px -10px -10px -10px;
+    border-radius:50%} /* area di tocco ampia senza coprire il campo sopra */
+  details.info>summary:hover,details.help>summary:hover{border-color:var(--acc);background:#1d2a4e;color:#dbe7ff}
+  details.info[open]>summary,details.help[open]>summary{border-color:var(--acc);background:#22305a;color:#dbe7ff}
+  details.info>.ibody{margin-top:6px}
+  .sectgl{margin-left:auto;flex:0 0 auto;width:30px;height:30px;min-height:30px;padding:0;
+    display:inline-grid;place-items:center;border-radius:8px;border:1px solid transparent;
+    background:transparent;color:var(--mut);font-size:12px;line-height:1;box-shadow:none}
+  .sectgl:hover{background:#1d2849;border-color:var(--line);color:#cfe0ff}
+  .card.collapsed>*:not(h2):not(.listhead){display:none}
+  .listhead .name[data-ltgl]{cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px}
+  .listhead .name[data-ltgl]::before{content:"\25BE";color:var(--acc);font-size:11px;flex:0 0 auto}
+  .listcard.collapsed .listhead .name[data-ltgl]::before{content:"\25B8"}
+  /* ---------- pulsanti flottanti (solo mobile) ---------- */
+  .fabbar{display:none}
+
   /* log live */
   .logbox{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.7;
     background:#050914;border:1px solid var(--line);border-radius:10px;padding:8px 10px;
@@ -224,7 +253,6 @@
     /* 16px: evita lo zoom automatico di iOS al focus degli input */
     input[type=text],input[type=url],input[type=number],input[type=password],select,textarea,
     .crow .cname,.crow .cmove,.chead .cfilter{font-size:16px}
-    body{padding-bottom:calc(150px + env(safe-area-inset-bottom))}
 
     /* --- testata: titolo su una riga, link in una striscia scorrevole --- */
     /* non sticky: su un telefono 90px di barra fissa sono spazio tolto alla lista */
@@ -250,6 +278,7 @@
     button.small{min-height:40px;padding:8px 12px}
     .expbtn{min-height:38px;padding:7px 12px}
     .bhandle{padding:10px 5px;font-size:17px}
+    .sectgl{width:38px;height:38px;min-height:38px;font-size:14px}
     details.fold>summary{padding:10px 11px;font-size:13px}
     details.fold .foldbody{padding:2px 11px 12px}
 
@@ -327,22 +356,37 @@
     .logbar .spacer{display:none}
     .logbox{height:42vh;font-size:11.5px}
 
-    /* --- footer: due righe fisse, il contenuto resta leggibile --- */
-    footer{gap:8px;padding:8px 12px calc(8px + env(safe-area-inset-bottom))}
-    footer #btnSave{flex:1 1 100%;min-height:46px}
-    footer #btnReload{flex:0 0 auto;min-height:40px}
-    footer #status{flex:1 1 auto;min-width:0;text-align:center;font-size:11.5px;line-height:1.35}
-    footer #appVersion{flex:0 0 auto;text-align:right;font-size:10.5px}
+    /* --- footer statico in fondo alla pagina --- */
+    /* prima era fixed: con la tastiera aperta restava a galla sopra i tasti,
+       rubando spazio. Ora numero liste e versione scorrono con la pagina. */
+    body{padding-bottom:0}
+    footer{position:static;left:auto;right:auto;bottom:auto;gap:4px;
+           padding:12px 12px calc(76px + env(safe-area-inset-bottom));
+           border-top:1px solid var(--line);background:transparent;box-shadow:none;
+           backdrop-filter:none;-webkit-backdrop-filter:none}
+    footer #btnSave,footer #btnReload{display:none}
+    footer #status,footer #appVersion{flex:1 1 100%;text-align:center;font-size:11.5px;line-height:1.4}
+    footer #appVersion{font-size:10.5px}
     footer #status{margin-left:0}
 
-    /* --- menu liste: bottom sheet sopra il pulsante flottante --- */
-    #sdToggle{top:auto;right:12px;bottom:calc(128px + env(safe-area-inset-bottom));
-              width:auto;height:46px;padding:0 15px;border-radius:999px;font-size:13px;z-index:61}
-    #sidemenu{left:8px;right:8px;top:auto;bottom:calc(186px + env(safe-area-inset-bottom));
-              width:auto;max-height:50vh;padding:8px}
+    /* --- pulsanti flottanti: Salva e Ricarica sulla stessa riga --- */
+    .fabbar{display:flex;position:fixed;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));
+            gap:8px;z-index:61;transition:opacity .18s,transform .18s}
+    .fabbar button{box-shadow:0 8px 22px rgba(0,0,0,.45)}
+    #fabSave{min-height:46px;padding:0 16px}
+    #fabReload{width:46px;min-height:46px;padding:0;font-size:17px}
+    #sdToggle{top:auto;left:12px;right:auto;bottom:calc(12px + env(safe-area-inset-bottom));
+              width:auto;height:46px;padding:0 14px;border-radius:999px;font-size:13px;z-index:61;
+              transition:opacity .18s,transform .18s}
+    /* tastiera aperta: i pulsanti flottanti si nascondono e non coprono nulla */
+    body.kbd .fabbar,body.kbd #sdToggle{opacity:0;pointer-events:none;transform:translateY(10px)}
+
+    /* --- menu liste: bottom sheet sopra i pulsanti flottanti --- */
+    #sidemenu{left:8px;right:8px;top:auto;bottom:calc(70px + env(safe-area-inset-bottom));
+              width:auto;max-height:56vh;padding:8px}
     .sditem .sdname{padding:10px 12px;font-size:13px;min-height:40px}
     .sditem .updn{padding:0;width:38px;height:38px;min-height:0;font-size:12px}
-    .toast{bottom:calc(186px + env(safe-area-inset-bottom))}
+    .toast{bottom:calc(72px + env(safe-area-inset-bottom))}
 
     /* il titolo della card non finisce a filo del bordo quando si salta da una lista all'altra */
     .listcard{scroll-margin-top:12px}
@@ -354,7 +398,6 @@
     .card{padding:10px}
     header h1{font-size:14px}
     .acts{grid-template-columns:1fr}
-    footer #appVersion{display:none} /* a 320px il footer resterebbe su tre righe */
     header .links{flex-wrap:wrap;overflow:visible}
     a.lnk{flex:1 1 auto;text-align:center}
     .pltools button{font-size:12px;padding:6px}
@@ -457,7 +500,7 @@
       <div>
         <label>Auto-aggiornamento liste (minuti)</label>
         <input id="s_autoRefreshMinutes" type="number" min="0">
-        <div class="hint">1440 = ogni giorno (default). 0 = disattivato.</div>
+        <div class="hint" data-info>1440 = ogni giorno (default). 0 = disattivato.</div>
       </div>
       <div>
         <label>Validità cache (minuti)</label>
@@ -471,7 +514,7 @@
         <label>User-Agent personalizzato (opzionale)</label>
         <input id="s_userAgent" type="text" maxlength="300" spellcheck="false"
           placeholder="vuoto = predefinito (Chrome 126 + WiseM3U)">
-        <div class="hint">Usata per <b>tutte le richieste in uscita</b> (liste, rami, pannello
+        <div class="hint" data-info>Usata per <b>tutte le richieste in uscita</b> (liste, rami, pannello
           Xtream, loghi). Serve se un pannello o un CDN risponde <code>403</code> perché
           riconosce WiseM3U: incolla l'UA di un browser, di VLC o dell'app che usi di solito.
           Una sola riga; vuoto = comportamento predefinito.</div>
@@ -483,13 +526,13 @@
       <div>
         <label>URL pubblico (nginx / dominio personale)</label>
         <input id="s_publicBaseUrl" type="text" placeholder="https://mio.dominio">
-        <div class="hint">Se l'addon sta dietro nginx con dominio + certificato, scrivi qui la base
+        <div class="hint" data-info>Se l'addon sta dietro nginx con dominio + certificato, scrivi qui la base
           pubblica (es. <code>https://tv.miodominio.it</code>): i link mostrati useranno quella.</div>
       </div>
       <div>
         <label>URL EPG XMLTV (opzionale)</label>
         <input id="s_epgUrl" type="text" placeholder="https://mio.dominio/guide.xml">
-        <div class="hint">Dichiarato nell'header della playlist generata (<code>url-tvg</code>/<code>x-tvg-url</code>).
+        <div class="hint" data-info>Dichiarato nell'header della playlist generata (<code>url-tvg</code>/<code>x-tvg-url</code>).
           Si aggiunge agli EPG ereditati dalle sorgenti m3u_plus/Xtream. Vuoto = solo quelli rilevati.</div>
       </div>
     </div>
@@ -500,10 +543,10 @@
       <div class="spacer"></div>
       <button class="ghost small" id="btnClearCache" style="flex:0 0 auto">Svuota cache</button>
     </div>
-    <div class="hint">Se imposti un <b>token</b>, manifest/playlist/cataloghi richiederanno
+    <div class="hint" data-info>Se imposti un <b>token</b>, manifest/playlist/cataloghi richiederanno
       <code>?token=...</code>: la pagina di configurazione mostra già gli URL completi da incollare in
       Nuvio e Stremio.</div>
-    <div class="hint"><b>Diagnostica stream</b>: attiva per capire PERCHÉ un canale non parte.
+    <div class="hint" data-info><b>Diagnostica stream</b>: attiva per capire PERCHÉ un canale non parte.
       Playlist e cataloghi consegneranno URL «diagnostici»: se lo stream risponde correttamente il
       player viene reindirizzato alla fonte (il video NON passa dal container, niente banda sprecata);
       se invece il pannello rifiuta o non risponde, a schermo compare un <b>video che spiega l'errore</b>
@@ -525,7 +568,7 @@
       <code id="m3uUrl">…</code>
       <button class="ghost small" id="btnCopyM3u" title="Copia l'URL della playlist M3U negli appunti">⧉ copia</button>
     </div>
-    <div class="hint">In <b>Nuvio</b>: Impostazioni → Contenuti e scoperta → Componenti aggiuntivi, incolla l'URL del manifest.
+    <div class="hint" data-info>In <b>Nuvio</b>: Impostazioni → Contenuti e scoperta → Componenti aggiuntivi, incolla l'URL del manifest.
       In <b>Stremio</b>: Addon → Community, incolla lo stesso URL.
       L'URL <b>M3U</b> funziona in qualsiasi lettore IPTV (contiene solo le liste attive) ed è già in
       formato <b>m3u_plus</b>: se le sorgenti hanno un EPG (o ne imposti uno nelle impostazioni generali)
@@ -578,6 +621,12 @@
   <span id="status" class="kv"></span>
   <span id="appVersion" class="kv dim"></span>
 </footer>
+
+<!-- su smartphone: Salva e Ricarica flottanti sulla stessa riga (il footer resta in fondo alla pagina) -->
+<div class="fabbar" id="fabbar">
+  <button id="fabSave" title="Salva la configurazione">💾 Salva</button>
+  <button class="ghost" id="fabReload" title="Ricarica la configurazione" aria-label="Ricarica la configurazione">↻</button>
+</div>
 
 <div class="toast" id="toast"></div>
 
@@ -641,6 +690,7 @@ const EXPANDED = new Set();  // "listId|path" dei rami con la lista canali apert
 const CHANS = {};            // "listId|path" -> [{name, shown, enabled}]
 const BRSQ = {};             // listId -> testo del filtro playlist (persiste ai re-render)
 const BRONLY = new Set();    // listId con "Visualizza attive" attivo
+const COLLAPSED_LISTS = new Set(); // id delle schede lista compresse dall'utente
 
 /** Playlist (rami non personali) che rispettano il filtro corrente della scheda.
  *  E' lo scope su cui agiscono Tutto / Nulla / Cancella selezionate: durante
@@ -830,6 +880,7 @@ function renderLists(){
   bindListEvents();
   for (const card of document.querySelectorAll('#lists .listcard')) plPopulateBranches(card);
   renderSideMenu();
+  decorateInfo(root);
   for (const l of CFG.lists) fillXtreamBadge(l);
   requestAnimationFrame(() => {
     if (window.scrollY !== sy) window.scrollTo(0, sy);
@@ -946,9 +997,12 @@ function renderListCard(l){
   const purl = personal
     ? (CFG.settings.publicBaseUrl || location.origin).replace(/\/+$/, '') + '/personal/' + l.id + '.m3u' + tokenQs()
     : '';
-  return `<section class="card listcard" data-id="${esc(l.id)}" ${personal ? 'data-kind="personal"' : ''}>
+  const collapsed = COLLAPSED_LISTS.has(l.id);
+  return `<section class="card listcard${collapsed ? ' collapsed' : ''}" data-id="${esc(l.id)}" ${personal ? 'data-kind="personal"' : ''}>
     <div class="listhead">
-      <span class="name">${personal ? '⭐ ' : ''}${esc(l.name || l.url)}</span>
+      <span class="name" data-ltgl="${esc(l.id)}" role="button" tabindex="0"
+            aria-expanded="${collapsed ? 'false' : 'true'}"
+            title="${collapsed ? 'Espandi' : 'Comprimi'} la lista">${personal ? '⭐ ' : ''}${esc(l.name || l.url)}</span>
       ${personal ? '<span class="badge ready" title="Lista personale: composta da canali e playlist delle tue liste">personale</span>' : ''}
       ${s.kind === 'm3u' ? '<span class="badge ready" title="Sorgente playlist M3U">m3u</span>' : ''}
       <span class="badge ${st}">${st}</span>
@@ -999,7 +1053,7 @@ function renderListCard(l){
           <div>
             <label>Aggiornamento lista (minuti)</label>
             <input type="number" min="5" data-f="options.refreshMinutes" value="${o.refreshMinutes}">
-            <div class="hint">1440 = giornaliero</div>
+            <div class="hint" data-info>1440 = giornaliero</div>
           </div>
           <div>
             <label>Nome catalogo</label>
@@ -1047,7 +1101,7 @@ function renderListCard(l){
     <details class="fold">
       <summary>🌐 EasyProxy (opzionale)</summary>
       <div class="foldbody">
-        <div class="hint" style="margin-top:2px">Le liste <b>"(dns)"</b> spesso non funzionano perche' il <b>client</b>
+        <div class="hint" data-info style="margin-top:2px">Le liste <b>"(dns)"</b> spesso non funzionano perche' il <b>client</b>
           (TV/telefono) non risolve quei domini, indipendentemente dal DNS del server. Con
           <a class="lnk" href="https://github.com/realbestia1/EasyProxy" target="_blank">EasyProxy</a> i flussi
           passano dal server (con il suo DNS/WARP/estrattori): compila l'URL della tua istanza
@@ -1381,6 +1435,11 @@ function bindListEvents(){
       }
     });
 
+    card.addEventListener('keydown', ev=>{
+      const ltl = ev.target.closest('[data-ltgl]');
+      if (ltl && (ev.key === 'Enter' || ev.key === ' ')){ ev.preventDefault(); ltl.click(); }
+    });
+
     card.addEventListener('input', ev=>{
       const el = ev.target;
       if (el.dataset && el.dataset.act === 'filter'){
@@ -1409,6 +1468,15 @@ function bindListEvents(){
     });
 
     card.addEventListener('click', async ev=>{
+      const ltl = ev.target.closest('[data-ltgl]');
+      if (ltl){
+        const lid = ltl.dataset.ltgl;
+        if (COLLAPSED_LISTS.has(lid)) COLLAPSED_LISTS.delete(lid); else COLLAPSED_LISTS.add(lid);
+        const open = !card.classList.toggle('collapsed');
+        ltl.setAttribute('aria-expanded', String(open));
+        ltl.title = `${open ? 'Comprimi' : 'Espandi'} la lista`;
+        return;
+      }
       const cab = ev.target.closest('button[data-caddbtn]');
       if (cab){
         const inp = cab.parentElement.querySelector('[data-cadd]');
@@ -2130,6 +2198,89 @@ $('#btnClearCache').addEventListener('click', async ()=>{
   if(!confirm('Svuotare la cache di tutte le liste?')) return;
   try { await api('/api/cache/clear',{method:'POST'}); toast('Cache svuotata'); } catch(e){ toast(e.message); }
 });
+
+/* ---------------- icone info e sezioni comprimibili ---------------- */
+
+/** Trasforma una scritta informativa in un'icona (i) che si apre al tocco.
+ *  L'etichetta originale resta nel DOM (screen reader) e diventa il tooltip. */
+function wrapInfoHint(hint){
+  if (!hint || hint.closest('details.info')) return;
+  const d = document.createElement('details');
+  d.className = 'info';
+  const sum = document.createElement('summary');
+  const label = hint.textContent.trim().replace(/\s+/g, ' ');
+  sum.textContent = 'i';
+  sum.title = label.slice(0, 90) || 'Informazioni';
+  sum.setAttribute('aria-label', 'Informazioni: ' + (label.slice(0, 80) || 'dettagli'));
+  const body = document.createElement('div');
+  body.className = 'ibody';
+  hint.replaceWith(d);
+  body.appendChild(hint);
+  d.append(sum, body);
+}
+
+/** Applica le icone info a tutto il documento (o a un sottoalbero appena ridisegnato). */
+function decorateInfo(root=document){
+  root.querySelectorAll('[data-info]').forEach(wrapInfoHint);
+  root.querySelectorAll('details.help>summary').forEach(sum=>{
+    if (!sum.title) sum.title = sum.textContent.trim().replace(/^[^A-Za-zÀ-ÿ0-9]+/, '') || 'Informazioni';
+  });
+}
+
+/** Aggiunge il pulsante ▾/▸ accanto al titolo di una sezione. */
+function makeSectionToggle(h2, apply){
+  if (!h2 || h2.querySelector('.sectgl')) return;
+  let collapsed = false;
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'sectgl';
+  b.textContent = '\u25be';
+  b.title = 'Comprimi la sezione';
+  b.setAttribute('aria-expanded', 'true');
+  b.addEventListener('click', ()=>{
+    collapsed = !collapsed;
+    apply(collapsed);
+    b.textContent = collapsed ? '\u25b8' : '\u25be';
+    b.title = collapsed ? 'Espandi la sezione' : 'Comprimi la sezione';
+    b.setAttribute('aria-expanded', String(!collapsed));
+  });
+  h2.appendChild(b);
+}
+
+function initCollapsibleSections(){
+  // sezioni con il titolo dentro (1, 2, 3): si comprime il contenuto, il titolo resta
+  document.querySelectorAll('main > section.card').forEach(sec=>{
+    const h2 = sec.querySelector(':scope > h2');
+    if (h2) makeSectionToggle(h2, (c)=>sec.classList.toggle('collapsed', c));
+  });
+  // Log live: il titolo sta fuori dalla sezione, quindi si nasconde la sezione intera
+  document.querySelectorAll('main > h2.secttl').forEach(h2=>{
+    const sec = h2.nextElementSibling;
+    if (sec && sec.matches('section.card')) makeSectionToggle(h2, (c)=>{ sec.hidden = c; });
+  });
+}
+
+initCollapsibleSections();
+decorateInfo();
+
+/* ---- tastiera: i pulsanti flottanti non devono galleggiare sopra i tasti ---- */
+(function watchKeyboard(){
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const apply = ()=>{
+    // su iOS il layout viewport non cambia: il calo di visualViewport.height e' il segnale
+    const shrunk = (window.innerHeight - vv.height) > 120;
+    document.body.classList.toggle('kbd', shrunk);
+  };
+  vv.addEventListener('resize', apply);
+  vv.addEventListener('scroll', apply);
+  window.addEventListener('orientationchange', ()=>setTimeout(apply, 300));
+  document.addEventListener('focusout', ()=>setTimeout(apply, 50));
+  apply();
+})();
+
+$('#fabSave').addEventListener('click', saveConfig);
+$('#fabReload').addEventListener('click', loadConfig);
 
 loadConfig().catch(e=>{
   $('#lists').innerHTML = `<section class="card"><div class="err">Impossibile caricare la configurazione: ${esc(e.message)}</div></section>`;

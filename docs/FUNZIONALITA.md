@@ -98,12 +98,23 @@ polling 1,5 s; stesse righe in `docker logs -f`.
 
 **Menu laterale liste** — navigazione rapida e riordino delle liste.
 
+**Info e sezioni comprimibili** — ogni spiegazione (le vecchie note sotto i campi
+e i blocchi "ℹ️ …") è racchiusa in un'icona **i** rotonda che si apre e si chiude
+al tocco; l'etichetta resta nel DOM come `aria-label`/tooltip. Tutte le sezioni
+hanno un pulsante **▾/▸** accanto al titolo (Log live compreso), le schede delle
+liste si comprimono toccando il nome, e le impostazioni per lista restano nei
+`<details>` già presenti. Lo stato di compressione delle liste si conserva tra un
+refresh dell'elenco e l'altro.
+
 **Su smartphone (≤ 560 px)** — testata compatta (non fissa), azioni della lista
 in griglia 2×2, righe di playlist e canali disposte su più linee (nome a tutta
 larghezza, conteggi e pulsanti sotto), aree di tocco da 40 px, campi a 16 px per
-evitare lo zoom automatico di iOS e nessuno scorrimento orizzontale. Il menu
-delle liste diventa un *bottom sheet* con il pulsante "☰ Liste" a portata di
-pollice sopra il footer; i link di testata restano tutti raggiungibili.
+evitare lo zoom automatico di iOS e nessuno scorrimento orizzontale. Il footer
+non è più fisso: **Salva** e **Ricarica** sono due pulsanti flottanti sulla stessa
+riga in basso a destra (insieme a "☰ Liste" a sinistra), mentre numero di liste e
+versione restano in fondo alla pagina e scorrono col contenuto. I flottanti si
+nascondono quando la tastiera è aperta (misurato su `visualViewport`), così non
+rubano spazio durante la scrittura.
 Il riordino dei rami resta affidato al drag & drop, che i browser touch non
 supportano: su telefono si riordinano le liste dal menu laterale, non i rami.
 
