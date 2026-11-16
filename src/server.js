@@ -167,6 +167,7 @@ function sanitizeListUrl(url) {
 function publicConfig(cfg) {
   return {
     version: C.VERSION,
+    rev: cfg.rev || 0,
     settings: { ...cfg.settings },
     lists: cfg.lists,
   };
@@ -458,6 +459,17 @@ app.put('/api/config', requireAdmin, (req, res) => {
   try {
     const current = store.loadConfig();
     const incoming = req.body || {};
+    // la UI dichiara la revisione da cui e' partita: se il server e' cambiato
+    // nel frattempo (altra scheda, merge, download...) rifiuta invece di
+    // sovrascrivere silenziosamente le modifiche piu' recenti
+    const hasBase = incoming.baseRev !== undefined && incoming.baseRev !== null && incoming.baseRev !== '';
+    if (hasBase && Number(incoming.baseRev) !== (current.rev || 0)) {
+      return res.status(409).json({
+        error: 'configurazione modificata da un\'altra operazione',
+        rev: current.rev || 0,
+        config: publicConfig(current),
+      });
+    }
     const nextSettings = { ...current.settings, ...(incoming.settings || {}) };
     if (typeof nextSettings.token !== 'string') nextSettings.token = '';
 
@@ -705,11 +717,18 @@ app.delete('/api/lists/:id', requireAdmin, (req, res) => {
   if (next.length === cfg.lists.length) return res.status(404).json({ error: 'lista non trovata' });
   cache.invalidate(req.params.id);
   const gone = cfg.lists.find((l) => l.id === req.params.id);
+  const listName = gone ? gone.name || gone.url : '';
+  // il punto di ripristino per l'undo e' lo stato *prima* dell'eliminazione
+  const cp = history.ensureCheckpoint(cfg, {
+    reason: 'prima di eliminare una lista',
+    listId: req.params.id,
+    listName,
+  });
   store.saveConfig(
     { ...cfg, lists: next },
-    { reason: 'eliminazione lista', listId: req.params.id, listName: gone ? gone.name || gone.url : '' }
+    { reason: 'eliminazione lista', listId: req.params.id, listName }
   );
-  res.json({ ok: true });
+  res.json({ ok: true, undo: cp ? { id: cp.id, listIds: [req.params.id] } : null });
 });
 
 /** Ricarica l'albero di una lista in background. */
@@ -813,6 +832,11 @@ app.post('/api/lists/:id/addchannel', requireAdmin, async (req, res) => {
     return null;
   };
 
+  const undoFor = (ids, reason) => {
+    const cp = history.ensureCheckpoint(cfg, { reason, listId: list.id, listName: list.name || list.url });
+    return cp ? { id: cp.id, listIds: ids } : null;
+  };
+
   // 1) stessa lista: diventa uno spostamento (la sorgente lo perde)
   if (!fromList || fromList === list.id) {
     try {
@@ -820,22 +844,24 @@ app.post('/api/lists/:id/addchannel', requireAdmin, async (req, res) => {
       // canale eliminato in precedenza: riaggiungerlo lo ripristina
       const delKey = home ? `${home}::${val}` : '';
       if (delKey && (list.options.deletedChannels || []).includes(delKey)) {
+        const undo = undoFor([list.id], 'prima di aggiungere un canale');
         list.options.deletedChannels = list.options.deletedChannels.filter((k) => k !== delKey);
         if (path !== home) {
           list.options.channelMoves = list.options.channelMoves || {};
           list.options.channelMoves[delKey] = path;
         }
         store.saveConfig(cfg, { reason: 'canale aggiunto', listId: list.id, listName: list.name || list.url });
-        return res.json({ ok: true, from: list.name || list.id, revived: true });
+        return res.json({ ok: true, from: list.name || list.id, revived: true, undo });
       }
       const hit = e && e.tree
         ? (home ? findAt(e.tree, list.options, home) : null) || findIn(e.tree, list.options, path)
         : null;
       if (hit) {
+        const undo = undoFor([list.id], 'prima di aggiungere un canale');
         list.options.channelMoves = list.options.channelMoves || {};
         list.options.channelMoves[`${hit.home}::${hit.name}`] = path;
         store.saveConfig(cfg, { reason: 'canale spostato', listId: list.id, listName: list.name || list.url });
-        return res.json({ ok: true, from: list.name || list.id });
+        return res.json({ ok: true, from: list.name || list.id, undo });
       }
     } catch (_) { /* albero non disponibile: provo con le altre liste */ }
   }
@@ -853,6 +879,7 @@ app.post('/api/lists/:id/addchannel', requireAdmin, async (req, res) => {
     if (!e || !e.tree) continue;
     const hit = findIn(e.tree, l.options, null);
     if (!hit) continue;
+    const undo = undoFor([list.id, l.id], 'prima di importare un canale');
     list.options.personalEntries = list.options.personalEntries || [];
     list.options.personalEntries.push({
       id: 'e' + Math.random().toString(16).slice(2, 8),
@@ -864,7 +891,7 @@ app.post('/api/lists/:id/addchannel', requireAdmin, async (req, res) => {
       l.options.disabledChannels.push(`${hit.home}::${hit.name}`);
     }
     store.saveConfig(cfg, { reason: 'canale importato', listId: list.id, listName: list.name || list.url });
-    return res.json({ ok: true, from: l.name || l.id });
+    return res.json({ ok: true, from: l.name || l.id, undo });
   }
   res.status(404).json({ error: 'canale non trovato in nessuna lista' });
 });
@@ -877,6 +904,12 @@ app.post('/api/lists/:id/delete', requireAdmin, (req, res) => {
   const path = String((req.body || {}).path || '');
   const name = (req.body || {}).name;
   const o = list.options;
+  const cp = history.ensureCheckpoint(cfg, {
+    reason: 'prima di eliminare contenuti',
+    listId: list.id,
+    listName: list.name || list.url,
+  });
+  const undo = cp ? { id: cp.id, listIds: [list.id] } : null;
 
   // cancellazione IN BLOCCO: { paths: [pathRamo, ...] } — un solo salvataggio.
   // Usata dal tasto "Cancella selezionate": stessi effetti del delete singolo
@@ -890,7 +923,7 @@ app.post('/api/lists/:id/delete', requireAdmin, (req, res) => {
       if (pp && !o.deletedBranches.includes(pp)) { o.deletedBranches.push(pp); added++; }
     }
     if (added) store.saveConfig(cfg, { reason: `${added} playlist eliminate`, listId: list.id, listName: list.name || list.url });
-    return res.json({ ok: true, deleted: added });
+    return res.json({ ok: true, deleted: added, undo });
   }
 
   if (!path) return res.status(400).json({ error: 'serve il path' });
@@ -901,14 +934,14 @@ app.post('/api/lists/:id/delete', requireAdmin, (req, res) => {
     if (!o.deletedChannels.includes(key)) o.deletedChannels.push(key);
     // mosse e disattivazioni restano intatte: il cestino ripristina tutto com'era
     store.saveConfig(cfg, { reason: 'canale eliminato', listId: list.id, listName: list.name || list.url });
-    return res.json({ ok: true, deleted: key });
+    return res.json({ ok: true, deleted: key, undo });
   }
 
   // playlist (ramo reale o gruppo personale "@Nome"): finisce nel cestino
   o.deletedBranches = o.deletedBranches || [];
   if (!o.deletedBranches.includes(path)) o.deletedBranches.push(path);
   store.saveConfig(cfg, { reason: 'playlist eliminata', listId: list.id, listName: list.name || list.url });
-  res.json({ ok: true, deleted: path });
+  res.json({ ok: true, deleted: path, undo });
 });
 
 /** Cestino: canali e playlist eliminati, pronti da ripristinare. */
@@ -1004,6 +1037,13 @@ app.post('/api/lists/:id/mergebranch', requireAdmin, async (req, res) => {
   const src = cfg.lists.find((l) => l.id === fromList);
   if (!src) return res.status(404).json({ error: 'lista di origine non trovata' });
   const oT = target.options;
+  const undoIds = fromList === target.id ? [target.id] : [target.id, src.id];
+  const cp = history.ensureCheckpoint(cfg, {
+    reason: 'prima di unire playlist',
+    listId: target.id,
+    listName: target.name || target.url,
+  });
+  const undo = cp ? { id: cp.id, listIds: undoIds } : null;
 
   // gruppo personale come origine: solo dentro la stessa lista (ridireziona le mosse)
   if (from.startsWith('@')) {
@@ -1013,7 +1053,7 @@ app.post('/api/lists/:id/mergebranch', requireAdmin, async (req, res) => {
       if (v === from) { oT.channelMoves[k] = to; n++; }
     }
     store.saveConfig(cfg, { reason: 'unione playlist', listId: target.id, listName: target.name || target.url });
-    return res.json({ ok: true, moved: n, from: from.slice(1) });
+    return res.json({ ok: true, moved: n, from: from.slice(1), undo });
   }
 
   let e = null;
@@ -1031,7 +1071,7 @@ app.post('/api/lists/:id/mergebranch', requireAdmin, async (req, res) => {
     oT.channelMoves = oT.channelMoves || {};
     for (const st of stations) oT.channelMoves[`${from}::${st.name}`] = to;
     store.saveConfig(cfg, { reason: 'unione playlist', listId: target.id, listName: target.name || target.url });
-    return res.json({ ok: true, moved: stations.length, from: src.name || src.id });
+    return res.json({ ok: true, moved: stations.length, from: src.name || src.id, undo });
   }
 
   if (to.startsWith('@')) return res.status(400).json({ error: 'tra liste diverse la destinazione deve essere una playlist esistente' });
@@ -1049,7 +1089,60 @@ app.post('/api/lists/:id/mergebranch', requireAdmin, async (req, res) => {
     if (!oS.disabledChannels.includes(k)) oS.disabledChannels.push(k);
   }
   store.saveConfig(cfg, { reason: 'unione playlist', listId: target.id, listName: target.name || target.url });
-  res.json({ ok: true, moved: n, from: src.name || src.id });
+  res.json({ ok: true, moved: n, from: src.name || src.id, undo });
+});
+
+/** Crea un checkpoint nominato: sempre registrato, anche a config invariata. */
+app.post('/api/history/checkpoints', requireAdmin, (req, res) => {
+  try {
+    const name = String((req.body || {}).name || '').trim().slice(0, 80);
+    if (!name) return res.status(400).json({ error: 'serve un nome per il checkpoint' });
+    const e = history.checkpoint(store.loadConfig(), name);
+    if (!e) return res.status(500).json({ error: 'checkpoint non salvato' });
+    res.json({ ok: true, entry: { id: e.id, ts: e.ts, name: e.name } });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+/** Annulla un'operazione: riporta le liste indicate allo stato precedente. */
+app.post('/api/history/:id/undo', requireAdmin, (req, res) => {
+  try {
+    const snap = history.getEntry(req.params.id);
+    if (!snap) return res.status(404).json({ error: 'snapshot non trovato' });
+    const ids = Array.isArray((req.body || {}).listIds)
+      ? [...new Set(req.body.listIds.map((x) => String(x || '')).filter(Boolean))]
+      : [];
+    if (!ids.length) return res.status(400).json({ error: 'serve la lista da ripristinare' });
+    const cfg = store.loadConfig();
+    const restored = [];
+    for (const id of ids) {
+      const sl = (snap.config.lists || []).find((l) => l.id === id);
+      if (!sl) continue;
+      const cl = cfg.lists.find((l) => l.id === id);
+      if (cl) {
+        cl.name = sl.name || cl.name;
+        cl.url = sl.url || cl.url;
+        if (sl.kind) cl.kind = sl.kind;
+        cl.options = JSON.parse(JSON.stringify(sl.options || {}));
+      } else {
+        // la lista era stata eliminata: la riaggiungo com'era nello snapshot
+        cfg.lists.push({ ...JSON.parse(JSON.stringify(sl)), state: { status: 'idle' } });
+        cache.invalidate(id);
+      }
+      restored.push(id);
+    }
+    if (!restored.length) return res.status(404).json({ error: 'lista non presente nello snapshot' });
+    const first = store.findList(restored[0]);
+    store.saveConfig(cfg, {
+      reason: 'annullamento operazione',
+      listId: restored[0],
+      listName: first ? first.name || first.url : '',
+    });
+    res.json({ ok: true, lists: restored });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 /** Toglie dalla lista le voci importate da altre liste (merge di playlist
@@ -1093,6 +1186,11 @@ app.post('/api/lists/:id/restoreorigin', requireAdmin, (req, res) => {
   const cfg = store.loadConfig();
   const list = store.findList(req.params.id);
   if (!list) return res.status(404).json({ error: 'lista non trovata' });
+  const cp = history.ensureCheckpoint(cfg, {
+    reason: 'prima del ripristino della lista',
+    listId: list.id,
+    listName: list.name || list.url,
+  });
   // riaccende i canali importati da altre liste prima di azzerare le opzioni
   const imp = dropExternalImports(cfg, list);
   const personal = list.kind === 'personal';
@@ -1103,7 +1201,12 @@ app.post('/api/lists/:id/restoreorigin', requireAdmin, (req, res) => {
   cache.invalidate(list.id);            // niente vecchio albero/snapshot
   playlist.clearRows(list.id);
   startRefresh(list.id, true);          // riscarica da zero
-  res.json({ ok: true, imports: imp.removed, lists: [list.id, ...imp.srcIds] });
+  res.json({
+    ok: true,
+    imports: imp.removed,
+    lists: [list.id, ...imp.srcIds],
+    undo: cp ? { id: cp.id, listIds: [list.id, ...imp.srcIds] } : null,
+  });
 });
 
 /** Svuota il cestino: le voci eliminate restano fuori dall'output ma non sono
@@ -1113,6 +1216,11 @@ app.post('/api/lists/:id/emptytrash', requireAdmin, (req, res) => {
   const list = store.findList(req.params.id);
   if (!list) return res.status(404).json({ error: 'lista non trovata' });
   const o = list.options;
+  const cp = history.ensureCheckpoint(cfg, {
+    reason: 'prima di svuotare il cestino',
+    listId: list.id,
+    listName: list.name || list.url,
+  });
   const purgedCh = new Set(o.purgedChannels || []);
   const purgedBr = new Set(o.purgedBranches || []);
   const freshCh = (o.deletedChannels || []).filter((k) => !purgedCh.has(k));
@@ -1120,7 +1228,11 @@ app.post('/api/lists/:id/emptytrash', requireAdmin, (req, res) => {
   o.purgedChannels = [...new Set([...purgedCh, ...freshCh])];
   o.purgedBranches = [...new Set([...purgedBr, ...freshBr])];
   store.saveConfig(cfg, { reason: 'svuota cestino', listId: list.id, listName: list.name || list.url });
-  res.json({ ok: true, removed: freshCh.length + freshBr.length });
+  res.json({
+    ok: true,
+    removed: freshCh.length + freshBr.length,
+    undo: cp ? { id: cp.id, listIds: [list.id] } : null,
+  });
 });
 
 /** Canali di un singolo ramo, per la gestione dalla pagina di configurazione. */

@@ -44,6 +44,7 @@ function defaultListOptions() {
 function defaultConfig() {
   return {
     version: 1,
+    rev: 0,
     settings: {
       addonName: 'WiseM3U',
       addonId: 'community.wisem3u',
@@ -267,6 +268,9 @@ function normalizeConfig(raw) {
 
   return {
     version: base.version,
+    // revisione della configurazione "stabile": serve a rifiutare i salvataggi
+    // della UI basati su uno stato ormai vecchio (409) invece di sovrascrivere
+    rev: Math.max(0, Number(cfg.rev) || 0),
     settings,
     lists,
   };
@@ -303,6 +307,12 @@ function loadConfig() {
 
 function saveConfig(cfg, meta = {}) {
   const next = normalizeConfig(cfg);
+  const prev = cache;
+  // la revisione cambia solo quando cambia la configurazione "stabile":
+  // gli aggiornamenti di stato (fetching/ready/statistiche) non contano
+  const changed = !prev ||
+    JSON.stringify(history.stableConfig(prev)) !== JSON.stringify(history.stableConfig(next));
+  next.rev = changed ? ((prev && prev.rev) || 0) + 1 : ((prev && prev.rev) || next.rev || 0);
   if (fs.existsSync(CONFIG_FILE) && fs.statSync(CONFIG_FILE).isDirectory()) {
     throw new Error(
       `${CONFIG_FILE} e' una directory, non un file: rimuovila dal volume e riavvia il container.`

@@ -4,7 +4,7 @@
  * Cronologia configurazione: snapshot automatici, dedupe, filtro per lista,
  * ripristino selettivo per categorie e protezione del token admin.
  */
-const { spawn } = require('child_process');
+const { spawn, execFileSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -128,6 +128,98 @@ const mkList = (id, name, opts={}) => ({
   ok(r.status === 404, 'snapshot inesistente -> 404');
   r = await api('/api/history/../config/restore', { method:'POST', body: JSON.stringify({ options: ['order'] }) });
   ok(r.status === 404, 'id non valido -> 404');
+
+  // ---- revisione: salvataggi basati su uno stato vecchio -> 409 ----
+  let cfgRev = (await api('/api/config')).body;
+  ok(typeof cfgRev.rev === 'number' && cfgRev.rev > 0, 'la config espone la revisione');
+  const rev0 = cfgRev.rev;
+  r = await api('/api/config', { method:'PUT', body: JSON.stringify({
+    settings: cfgRev.settings, lists: cfgRev.lists, reason:'identico con rev', baseRev: rev0,
+  }) });
+  ok(r.status === 200 && r.body.rev === rev0, 'rev corretta e nessuna modifica: revisione ferma');
+  r = await api('/api/config', { method:'PUT', body: JSON.stringify({
+    settings: cfgRev.settings, lists: cfgRev.lists, reason:'stato vecchio', baseRev: rev0 - 1,
+  }) });
+  ok(r.status === 409 && r.body.rev === rev0 && r.body.config && r.body.config.settings,
+    'rev vecchia -> 409 con lo stato del server');
+  r = await api('/api/config', { method:'PUT', body: JSON.stringify({
+    settings: { ...cfgRev.settings, addonName:'WiseM3U-rev' }, lists: cfgRev.lists, reason:'modifica con rev', baseRev: rev0,
+  }) });
+  ok(r.status === 200 && r.body.rev > rev0, 'rev corretta + modifica -> nuova revisione');
+
+  // ---- undo delle operazioni distruttive ----
+  let beforeU = (await api('/api/config')).body;
+  const delBefore = beforeU.lists.find((l)=>l.id === 'l_b').options.deletedBranches || [];
+  r = await api('/api/lists/l_b/delete', { method:'POST', body: JSON.stringify({ paths:['X'] }) });
+  ok(r.status === 200 && r.body.undo && r.body.undo.id, 'eliminazione fornisce il punto di undo');
+  ok(((await api('/api/config')).body.lists.find((l)=>l.id === 'l_b').options.deletedBranches || []).includes('X'),
+    'la playlist eliminata finisce nel cestino');
+  const undoDel = await api(`/api/history/${encodeURIComponent(r.body.undo.id)}/undo`, {
+    method:'POST', body: JSON.stringify({ listIds: r.body.undo.listIds }),
+  });
+  ok(undoDel.status === 200, 'undo dell eliminazione risponde ok');
+  let afterU = (await api('/api/config')).body;
+  ok(JSON.stringify(afterU.lists.find((l)=>l.id === 'l_b').options.deletedBranches || []) === JSON.stringify(delBefore),
+    'undo riporta il cestino allo stato precedente');
+
+  const nameB = afterU.lists.find((l)=>l.id === 'l_b').name;
+  r = await api('/api/lists/l_b', { method:'DELETE' });
+  ok(((await api('/api/config')).body.lists.some((l)=>l.id === 'l_b') === false), 'lista eliminata davvero');
+  ok(r.body.undo && r.body.undo.id, 'eliminazione lista fornisce il punto di undo');
+  const undoList = await api(`/api/history/${encodeURIComponent(r.body.undo.id)}/undo`, {
+    method:'POST', body: JSON.stringify({ listIds: r.body.undo.listIds }),
+  });
+  ok(undoList.status === 200, 'undo dell eliminazione lista risponde ok');
+  afterU = (await api('/api/config')).body;
+  const backB = afterU.lists.find((l)=>l.id === 'l_b');
+  ok(!!backB && backB.name === nameB, 'undo ricrea la lista eliminata con lo stesso nome');
+
+  // svuota cestino annullabile (le voci tornano ripristinabili)
+  r = await api('/api/lists/l_b/delete', { method:'POST', body: JSON.stringify({ path:'Y' }) });
+  const purgedBefore = JSON.stringify(((await api('/api/config')).body.lists.find((l)=>l.id === 'l_b').options.purgedBranches) || []);
+  r = await api('/api/lists/l_b/emptytrash', { method:'POST', body:'{}' });
+  ok(r.status === 200 && r.body.undo && r.body.undo.id, 'svuota cestino fornisce il punto di undo');
+  ok(((await api('/api/config')).body.lists.find((l)=>l.id === 'l_b').options.purgedBranches || []).includes('Y'),
+    'la voce svuotata risulta eliminata definitivamente');
+  const undoTrash = await api(`/api/history/${encodeURIComponent(r.body.undo.id)}/undo`, {
+    method:'POST', body: JSON.stringify({ listIds: r.body.undo.listIds }),
+  });
+  ok(undoTrash.status === 200, 'undo dello svuotamento risponde ok');
+  afterU = (await api('/api/config')).body;
+  ok(JSON.stringify(afterU.lists.find((l)=>l.id === 'l_b').options.purgedBranches || []) === purgedBefore,
+    'undo dello svuotamento riaccende le voci nel cestino');
+
+  // ---- checkpoint nominati ----
+  const cpBefore = (await api('/api/history')).body.entries.length;
+  r = await api('/api/history/checkpoints', { method:'POST', body: JSON.stringify({ name:'prima del merge' }) });
+  ok(r.status === 200 && r.body.entry && r.body.entry.id, 'checkpoint creato');
+  hist = (await api('/api/history')).body.entries;
+  const cp = hist.find((e)=>e.id === r.body.entry.id);
+  ok(!!cp && cp.name === 'prima del merge', 'il checkpoint conserva il nome');
+  ok(hist.length === cpBefore + 1, 'il checkpoint crea una voce anche a config invariata');
+  r = await api('/api/history/checkpoints', { method:'POST', body:'{}' });
+  ok(r.status === 400, 'checkpoint senza nome -> 400');
+
+  // ---- retention: i checkpoint nominati non scadono come gli stati automatici ----
+  const hdir = fs.mkdtempSync(path.join(os.tmpdir(), 'wm-hist-ret-'));
+  const script = `
+    const h = require(${JSON.stringify(path.join(REPO, 'src', 'history.js'))});
+    const cfg = (n) => ({ settings: { addonName: 'x' + n }, lists: [] });
+    const wait = (ms) => { const t = Date.now(); while (Date.now() - t < ms) { /* ms distinti */ } };
+    h.record(cfg(1), { reason: 'v1' });
+    wait(3);
+    h.checkpoint(cfg(1), 'vecchio');
+    for (let n = 2; n <= 8; n++) { wait(3); h.record(cfg(n), { reason: 'v' + n }); }
+    console.log(JSON.stringify(h.listEntries({ limit: 50 }).map((e) => ({ name: e.name, reason: e.reason }))));
+  `;
+  const raw = execFileSync('node', ['-e', script], {
+    env: { ...process.env, HISTORY_DIR: hdir, HISTORY_MAX: '5', HISTORY_DAYS: '1' },
+    encoding: 'utf8',
+  });
+  const kept = JSON.parse(raw.trim().split('\n').pop());
+  ok(kept.length === 6, `retention: 5 stati automatici + il checkpoint (${kept.length})`);
+  ok(kept.some((e) => e.name === 'vecchio'), 'il checkpoint nominato sopravvive alla retention');
+  ok(kept.filter((e) => !e.name).map((e) => e.reason).join(',') === 'v8,v7,v6,v5,v4', 'restano gli stati automatici piu recenti');
 
   // pulizia manuale non prevista: i file restano sul volume
   const files = fs.readdirSync(path.join(dir, 'history')).filter(f=>f.endsWith('.json'));

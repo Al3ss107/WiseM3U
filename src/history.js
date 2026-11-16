@@ -102,12 +102,13 @@ function prune() {
   const entries = sortedEntries();
   const cutoff = Date.now() - MAX_DAYS * 24 * 60 * 60 * 1000;
   const keep = new Set(entries.slice(Math.max(0, entries.length - MAX_ENTRIES)).map((e) => e._file));
+  // i checkpoint nominati non scadono; se sono troppi restano i 50 piu' recenti
+  const namedKeep = new Set(entries.filter((e) => e.name).slice(-50).map((e) => e._file));
   for (const e of entries) {
-    let old = !keep.has(e._file);
-    if (!old) {
-      const t = Date.parse(e.ts) || 0;
-      old = t < cutoff;
-    }
+    // i nominati si contano solo tra loro: non scadono con MAX_ENTRIES/MAX_DAYS
+    const old = e.name
+      ? !namedKeep.has(e._file)
+      : (!keep.has(e._file) || (Date.parse(e.ts) || 0) < cutoff);
     if (old) {
       try { fs.unlinkSync(e._file); } catch (_) { /* ignore */ }
     }
@@ -126,11 +127,11 @@ function latestHash() {
 }
 
 /** Registra la configurazione se e' cambiata rispetto all'ultimo snapshot. */
-function record(cfg, meta = {}) {
+function record(cfg, meta = {}, opts = {}) {
   try {
     const data = stableConfig(cfg);
     const h = hashConfig(data);
-    if (latestHash() === h) return null; // niente modifiche "stabili"
+    if (!opts.force && latestHash() === h) return null; // niente modifiche "stabili"
     ensureDir();
     const now = new Date();
     const stamp = now.toISOString().replace(/[-:.]/g, '').replace(/Z$/, '');
@@ -139,6 +140,7 @@ function record(cfg, meta = {}) {
       id,
       ts: now.toISOString(),
       reason: String(meta.reason || 'modifica configurazione').slice(0, 160),
+      name: String(meta.name || '').slice(0, 80),
       listId: String(meta.listId || ''),
       listName: String(meta.listName || ''),
       hash: h,
@@ -220,6 +222,7 @@ function listEntries({ listId = '', limit = MAX_ENTRIES } = {}) {
       id: e.id,
       ts: e.ts,
       reason: e.reason || '',
+      name: e.name || '',
       listId: e.listId || '',
       listName: e.listName || '',
       hasList: listId ? (e.config.lists || []).some((l) => l.id === listId) : undefined,
@@ -233,6 +236,7 @@ function listEntries({ listId = '', limit = MAX_ENTRIES } = {}) {
       id: e.id,
       ts: e.ts,
       reason: e.reason || '',
+      name: e.name || '',
       listId: e.listId || '',
       listName: e.listName || '',
       hasList: listId ? (e.config.lists || []).some((l) => l.id === listId) : undefined,
@@ -249,6 +253,23 @@ function listEntries({ listId = '', limit = MAX_ENTRIES } = {}) {
       (e.first || e.changes.settings || e.changes.lists || Object.keys(e.changes.options).length));
   }
   return res.slice(0, Math.max(1, Number(limit) || MAX_ENTRIES));
+}
+
+/** Crea un checkpoint nominato (sempre, anche se la config non e' cambiata). */
+function checkpoint(cfg, name, meta = {}) {
+  return record(cfg, { ...meta, name, reason: meta.reason || 'checkpoint manuale' }, { force: true });
+}
+
+/** Restituisce (creandolo se serve) lo snapshot che rappresenta lo stato
+ *  attuale: e' il punto di ripristino per l'undo di un'operazione. */
+function ensureCheckpoint(cfg, meta = {}) {
+  const h = hashConfig(stableConfig(cfg));
+  const entries = sortedEntries();
+  for (let i = entries.length - 1; i >= 0; i--) {
+    if (entries[i].hash === h) return { id: entries[i].id, ts: entries[i].ts };
+  }
+  const e = record(cfg, meta, { force: true });
+  return e ? { id: e.id, ts: e.ts } : null;
 }
 
 function getEntry(id) {
@@ -279,6 +300,8 @@ module.exports = {
   CATEGORIES,
   stableConfig,
   record,
+  checkpoint,
+  ensureCheckpoint,
   listEntries,
   getEntry,
   mergeOptions,

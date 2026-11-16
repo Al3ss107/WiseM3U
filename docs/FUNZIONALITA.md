@@ -112,6 +112,26 @@ ripristinato. Il ripristino crea a sua volta un nuovo stato, quindi è
 annullabile. Gli snapshot contengono URL e credenziali: restano sul volume dati
 e le API sono protette da `ADMIN_TOKEN`.
 
+**Annulla dal toast** — le operazioni distruttive (eliminazione di una lista,
+di una playlist o di un canale, unione, svuota cestino, ripristino lista)
+mostrano in basso un toast con il pulsante **Annulla** per 9 secondi. L'undo
+riporta le liste coinvolte allo stato immediatamente precedente (per una lista
+eliminata la ricrea) e viene registrato a sua volta in cronologia.
+
+**Revisione e conflitti** — `GET /api/config` espone `rev`, incrementata a ogni
+modifica "stabile" (gli aggiornamenti di stato non contano). La pagina invia
+`baseRev` nel PUT: se nel frattempo un'altra scheda, un merge o un'operazione
+automatica hanno cambiato la configurazione, il server risponde **409** con lo
+stato corrente invece di sovrascriverlo. La UI chiede se ricaricare la versione
+del server o annullare il salvataggio.
+
+**Checkpoint nominati** — con **★ Checkpoint** nella sezione cronologia si salva
+uno stato con un nome scelto (es. «prima del merge»). I checkpoint vengono
+registrati anche a configurazione invariata, compaiono con il loro nome e non
+scadono con la retention automatica (restano i 50 più recenti). Il ripristino
+di un checkpoint richiede la stessa conferma esplicita degli altri snapshot e
+propone tutte le categorie già spuntate (togli quelle che non vuoi).
+
 **Log live** — buffer circolare (1000 eventi, `LIVE_LOG_BUFFER`), aree
 stream/download/playlist/catalogo/sistema, filtro testo, pausa, svuota, scarica,
 polling 1,5 s; stesse righe in `docker logs -f`.

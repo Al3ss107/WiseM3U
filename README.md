@@ -183,7 +183,7 @@ API usate dalla pagina di configurazione (utili anche per script/automazioni):
 
 | Endpoint | Descrizione |
 | --- | --- |
-| `GET/PUT /api/config` | leggi/salva la configurazione |
+| `GET/PUT /api/config` | leggi/salva la configurazione; il PUT accetta `baseRev` e risponde **409** se lo stato è stato modificato altrove |
 | `POST /api/lists` `{url,name}` | aggiunge una lista (scaricamento in background) |
 | `DELETE /api/lists/:id` | elimina una lista |
 | `POST /api/lists/:id/refresh` | riscarica la lista in background |
@@ -196,6 +196,8 @@ API usate dalla pagina di configurazione (utili anche per script/automazioni):
 | `POST /api/cache/clear` | svuota la cache |
 | `GET /api/history?list=:id` | cronologia automatica della configurazione (filtro opzionale per lista) |
 | `POST /api/history/:id/restore` | ripristina uno snapshot, in tutto o solo per categorie scelte |
+| `POST /api/history/checkpoints` `{name}` | salva un checkpoint nominato (non scade con la retention) |
+| `POST /api/history/:id/undo` `{listIds}` | annulla un'operazione distruttiva riportando le liste allo stato precedente |
 
 ---
 
@@ -491,8 +493,8 @@ Robustezza e prestazioni (misurate sulle due liste di esempio):
 | `CONFIG_FILE` | `/data/config.json` | percorso del file di configurazione |
 | `CACHE_DIR` | `/data/cache` | cartella degli snapshot gzip |
 | `HISTORY_DIR` | `/data/history` | cronologia della configurazione (snapshot JSON) |
-| `HISTORY_MAX` | `60` | numero massimo di stati conservati nella cronologia |
-| `HISTORY_DAYS` | `30` | eta' massima (giorni) degli stati conservati |
+| `HISTORY_MAX` | `60` | numero massimo di stati automatici conservati (i checkpoint nominati restano, fino a 50) |
+| `HISTORY_DAYS` | `30` | eta' massima (giorni) degli stati automatici (i checkpoint nominati non scadono) |
 | `ADMIN_TOKEN` | *(vuoto)* | se impostato, protegge `/configure` e le API `/api/*` |
 | `LIVE_LOG_BUFFER` | `1000` | numero di eventi mantenuti nel buffer dei **log live** |
 | `WM_HOT_TREES` | `1` | quante liste restano **parseate in RAM** insieme (LRU): alzalo se i client saltano spesso tra liste grandi, abbassa se la RAM scarseggia |

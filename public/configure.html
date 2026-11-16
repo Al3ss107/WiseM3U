@@ -297,6 +297,12 @@
          transition:.25s;pointer-events:none;max-width:90vw;box-shadow:0 8px 26px rgba(0,0,0,.5);
          font-size:14px;font-weight:500}
   .toast.show{opacity:1;transform:translate(-50%,0)}
+  .toast.has-act{pointer-events:auto;display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap}
+  .toast.has-act span{flex:1 1 auto;min-width:0}
+  .toast-act{flex:0 0 auto;border:0;border-radius:10px;padding:9px 14px;min-height:38px;
+             background:#284777;color:#d8e2ff;font:inherit;font-weight:700;cursor:pointer}
+  .toast-act:hover{background:#345a91}
+  .toast-act:active{background:#1f3a63}
   /* le tendine aperte usano il fondo chiaro di sistema: forza il contrasto */
   select option, datalist option{background:#101725;color:#e8eef7}
   /* ---------- tablet ---------- */
@@ -664,13 +670,17 @@
       <label for="histList">Lista</label>
       <select id="histList" title="Filtra la cronologia per lista"><option value="">Tutte le liste</option></select>
       <button class="ghost small" id="histReload" title="Ricarica la cronologia">↻ Aggiorna</button>
+      <button class="ghost small" id="histCheckpoint" title="Salva uno stato con un nome, prima di una modifica importante">★ Checkpoint…</button>
       <span class="spacer"></span>
       <span id="histStatus" class="cnt"></span>
     </div>
     <div class="hint" data-info>Ogni modifica alla configurazione viene salvata in automatico nella cronologia
     (sul volume dati, ultimi 60 stati o 30 giorni). Scegli uno stato e ripristina <b>solo le categorie che
     vuoi</b>: ordine, nomi, esclusioni, unioni, cestino o impostazioni. Il ripristino crea a sua volta un
-    nuovo stato, quindi è sempre annullabile. Le liste aggiunte dopo lo snapshot non vengono eliminate.</div>
+    nuovo stato, quindi è sempre annullabile. Le liste aggiunte dopo lo snapshot non vengono eliminate.
+    Con <b>★ Checkpoint</b> salvi uno stato con un nome (es. prima di un merge): i checkpoint non scadono.
+    Se la configurazione cambia altrove mentre stai modificando, il salvataggio viene bloccato e ti viene
+    chiesto se ricaricare la versione del server.</div>
     <div id="histBody" class="histlist"><div class="hint">Apertura della cronologia…</div></div>
   </section>
 
@@ -737,9 +747,56 @@ let TREES = {};   // id -> { meta, fetchedAt, branches:[{path,name,displayName,s
 
 const PROTO_LABEL = { http:'HTTP/HLS', ace:'AceStream', rtmp:'RTMP', rtsp:'RTSP', other:'altri' };
 
-function toast(msg, ms=2600){
-  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
-  clearTimeout(t._h); t._h = setTimeout(()=>t.classList.remove('show'), ms);
+function toast(msg, ms=2600, opts={}){
+  const t = $('#toast');
+  if (!t) return;
+  clearTimeout(t._h);
+  const hide = () => { clearTimeout(t._h); t.classList.remove('show'); };
+  t.textContent = '';
+  const span = document.createElement('span');
+  span.textContent = msg;
+  t.appendChild(span);
+  const act = opts && opts.action;
+  if (act && typeof act.onClick === 'function'){
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'toast-act';
+    b.textContent = act.label || 'Annulla';
+    b.addEventListener('click', () => { hide(); act.onClick(); });
+    t.appendChild(b);
+    t.classList.add('has-act');
+  } else {
+    t.classList.remove('has-act');
+  }
+  t.classList.add('show');
+  if (ms > 0) t._h = setTimeout(hide, ms);
+}
+
+/** Ricarica la UI dopo un annullamento: config, alberi, cestino e cronologia. */
+async function reloadAfterUndo(ids){
+  await loadConfig();
+  for (const id of ids || []){
+    if (!CFG.lists.some((l)=>l.id === id)) continue;
+    if (TRASHOPEN.has(id)) await refreshTrash(id);
+  }
+  renderLists();
+  loadHistory();
+}
+
+/** Mostra il toast con «Annulla»; se il server non ha fornito un punto di
+ *  ripristino (undo nullo) mostra il messaggio normale. */
+function showUndo(msg, undo){
+  if (!undo || !undo.id){ toast(msg); return; }
+  toast(msg, 9000, { action: { label: 'Annulla', onClick: async () => {
+    try {
+      const r = await api(`/api/history/${encodeURIComponent(undo.id)}/undo`, {
+        method: 'POST',
+        body: JSON.stringify({ listIds: undo.listIds || [] }),
+      });
+      toast('Operazione annullata ✔');
+      await reloadAfterUndo(r.lists || undo.listIds || []);
+    } catch (e){ toast('Errore: ' + e.message, 5000); }
+  }}});
 }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function tokenQs(){ const t = CFG && CFG.settings.token; return t ? `?token=${encodeURIComponent(t)}` : ''; }
@@ -1327,8 +1384,18 @@ async function applyChannelMove(list, c, target, curPath){
   // salva subito sul server: albero e canali vengono riletti da li', quindi
   // lo spostamento deve gia' essere registrato perche' la UI lo mostri
   try {
-    await api('/api/config', { method:'PUT', body: JSON.stringify({ settings: CFG.settings, lists: CFG.lists, reason: 'spostamento canale' }) });
-  } catch(e){ toast('Errore: '+e.message, 4000); return; }
+    const saved = await api('/api/config', {
+      method:'PUT',
+      body: JSON.stringify({ settings: CFG.settings, lists: CFG.lists, reason: 'spostamento canale', baseRev: CFG.rev }),
+    });
+    CFG.rev = saved.rev;
+  } catch(e){
+    if (e.status === 409){
+      toast('Configurazione cambiata altrove: ricarico lo stato del server', 6000);
+      await loadConfig();
+    } else toast('Errore: '+e.message, 4000);
+    return;
+  }
   await loadBranches(list.id); // aggiorna conteggi e gruppi personali
   for (const p of new Set([curPath, target])) {
     const k = `${list.id}|${p}`;
@@ -1454,7 +1521,7 @@ function applyDrop(card, list){
             toast('Canale spostato');
           } else {
             const r = await api(`/api/lists/${id}/addchannel`, { method:'POST', body: JSON.stringify({ path: tPath, name: c.name, home: c.home, fromList: srcId }) });
-            toast(r.revived ? 'Canale ripristinato e spostato qui' : `Canale spostato qui (era in: ${r.from})`);
+            showUndo(r.revived ? 'Canale ripristinato e spostato qui' : `Canale spostato qui (era in: ${r.from})`, r.undo);
             await loadConfig();
             await reloadOpenChans([id, srcId]);
             renderLists();
@@ -1462,7 +1529,7 @@ function applyDrop(card, list){
         } else {
           if (srcId === id && fromPath === tPath){ toast('Stessa playlist'); return; }
           const r = await api(`/api/lists/${id}/mergebranch`, { method:'POST', body: JSON.stringify({ fromList: srcId, from: fromPath, to: tPath }) });
-          toast(r.moved ? `${r.moved} canali spostati dentro la playlist` : 'Nessun canale da spostare');
+          showUndo(r.moved ? `${r.moved} canali spostati dentro la playlist` : 'Nessun canale da spostare', r.undo);
           await loadConfig();
           if (srcId !== id) { await loadBranches(id); await loadBranches(srcId); }
           await reloadOpenChans([id, srcId]);
@@ -1628,7 +1695,7 @@ function bindListEvents(){
             method: 'POST',
             body: JSON.stringify({ path: cab.dataset.caddbtn, name: v }),
           });
-          toast(`Canale aggiunto qui (presi da: ${r.from})`);
+          showUndo(`Canale aggiunto qui (presi da: ${r.from})`, r.undo);
           if (inp) inp.value = '';
           await loadConfig();          // risincronizza la config (mosse/voci lato server)
           await reloadOpenChans([id]);
@@ -1644,7 +1711,7 @@ function bindListEvents(){
         if (!confirm(`Eliminare definitivamente ${n} voci dal cestino?\nNon saranno piu' ripristinabili: resteranno fuori dalla lista per sempre.`)) return;
         try {
           const r = await api(`/api/lists/${id}/emptytrash`, { method:'POST', body:'{}' });
-          toast(`Cestino svuotato: ${r.removed} voci eliminate definitivamente`);
+          showUndo(`Cestino svuotato: ${r.removed} voci eliminate definitivamente`, r.undo);
           await loadConfig();
           await reloadOpenChans([id]);
           await refreshTrash(id);
@@ -1684,8 +1751,8 @@ function bindListEvents(){
         if (!c) return;
         if (!confirm(`Eliminare "${c.shown || c.name}" da questa lista? Potrai ripristinarlo dal 🗑 Cestino.`)) return;
         try {
-          await api(`/api/lists/${id}/delete`, { method:'POST', body: JSON.stringify({ path: c.home || path, name: c.name }) });
-          toast('Canale eliminato — recuperabile nel 🗑 Cestino');
+          const r = await api(`/api/lists/${id}/delete`, { method:'POST', body: JSON.stringify({ path: c.home || path, name: c.name }) });
+          showUndo('Canale eliminato — recuperabile nel 🗑 Cestino', r.undo);
           await loadConfig();
           await reloadOpenChans([id]);
           if (TRASHOPEN.has(id)) await refreshTrash(id);
@@ -1700,10 +1767,10 @@ function bindListEvents(){
         const nm = b ? (b.displayName || b.name) : path;
         if (!confirm(`Eliminare la playlist "${nm}" e tutti i suoi canali? Potrai ripristinarla dal 🗑 Cestino.`)) return;
         try {
-          await api(`/api/lists/${id}/delete`, { method:'POST', body: JSON.stringify({ path }) });
+          const r = await api(`/api/lists/${id}/delete`, { method:'POST', body: JSON.stringify({ path }) });
           EXPANDED.delete(`${id}|${path}`);
           delete CHANS[`${id}|${path}`];
-          toast('Playlist eliminata — recuperabile nel 🗑 Cestino');
+          showUndo('Playlist eliminata — recuperabile nel 🗑 Cestino', r.undo);
           await loadConfig();
           if (TRASHOPEN.has(id)) await refreshTrash(id);
           renderLists();
@@ -1750,9 +1817,9 @@ function bindListEvents(){
         const few = sel.slice(0, 3).map((b) => b.displayName || b.name).join(', ');
         if (!confirm(`Eliminare ${sel.length} playlist spuntate (${few}${sel.length > 3 ? ', …' : ''}) e tutti i loro canali? Potrai ripristinarle dal 🗑 Cestino.`)) return;
         try {
-          await api(`/api/lists/${id}/delete`, { method:'POST', body: JSON.stringify({ paths: sel.map((b) => b.path) }) });
+          const r = await api(`/api/lists/${id}/delete`, { method:'POST', body: JSON.stringify({ paths: sel.map((b) => b.path) }) });
           for (const b of sel){ EXPANDED.delete(`${id}|${b.path}`); delete CHANS[`${id}|${b.path}`]; }
-          toast(`${sel.length} playlist eliminate — recuperabili nel 🗑 Cestino`);
+          showUndo(`${sel.length} playlist eliminate — recuperabili nel 🗑 Cestino`, r.undo);
           await loadConfig();
           if (TRASHOPEN.has(id)) await refreshTrash(id);
           renderLists();
@@ -1774,7 +1841,7 @@ function bindListEvents(){
           await loadConfig();
           for (const lid of r.lists || []) await loadBranches(lid);
           renderLists();
-          toast('Lista ripristinata: riscaricamento in corso…');
+          showUndo('Lista ripristinata: riscaricamento in corso…', r.undo);
           await pollUntilReady(id);
         } catch (e){ toast(e.message, 4000); }
         return;
@@ -1986,7 +2053,12 @@ async function api(path, opts={}){
   }
   const ct = res.headers.get('content-type')||'';
   const body = ct.includes('json') ? await res.json() : await res.text();
-  if (!res.ok) throw new Error((body && body.error) || res.statusText);
+  if (!res.ok){
+    const err = new Error((body && body.error) || res.statusText);
+    err.status = res.status;
+    err.body = body;
+    throw err;
+  }
   return body;
 }
 
@@ -2107,7 +2179,10 @@ async function waitReady(id){
     if (mine) mine.state = s;
     if (s.status !== last){ last = s.status; renderLists(); }
     if (s.status === 'ready'){
-      if (mine && !mine.name && fresh.name) mine.name = fresh.name; // nome assegnato dal server
+      if (mine && !mine.name && fresh.name){
+        mine.name = fresh.name; // nome assegnato dal server...
+        if (cfg.rev) CFG.rev = cfg.rev; // ...che ha anche incrementato la revisione
+      }
       await loadBranches(id);
       renderLists();
       return true;
@@ -2189,14 +2264,28 @@ function readSettings(){
 
 async function saveConfig(){
   readSettings();
-  const payload = { settings: CFG.settings, lists: CFG.lists, reason: 'salvataggio manuale' };
+  const payload = { settings: CFG.settings, lists: CFG.lists, reason: 'salvataggio manuale', baseRev: CFG.rev };
   try {
     const saved = await api('/api/config', { method:'PUT', body: JSON.stringify(payload) });
     CFG = saved;
     renderAll();
     loadHistory();
     toast('Configurazione salvata ✔');
-  } catch(e){ toast('Errore: '+e.message, 4000); }
+  } catch(e){
+    if (e.status === 409){
+      // qualcun altro (altra scheda, merge automatico, refresh) ha cambiato la
+      // configurazione: non sovrascrivere, chiedi se riallinearsi al server
+      if (confirm('La configurazione è cambiata altrove (altra scheda o operazione automatica).\nRicaricare la versione del server? Le modifiche non ancora salvate in questa pagina andranno perse.')){
+        await loadConfig();
+        loadHistory();
+        toast('Configurazione ricaricata dal server');
+      } else {
+        toast('Salvataggio annullato: il server ha una versione più recente', 6000);
+      }
+      return;
+    }
+    toast('Errore: '+e.message, 4000);
+  }
 }
 
 async function refreshList(id, btn){
@@ -2213,8 +2302,12 @@ async function refreshList(id, btn){
 }
 
 async function delList(id){
-  try { await api(`/api/lists/${id}`, { method:'DELETE' }); delete TREES[id]; await loadConfig(); toast('Lista eliminata'); }
-  catch(e){ toast('Errore: '+e.message); }
+  try {
+    const r = await api(`/api/lists/${id}`, { method:'DELETE' });
+    delete TREES[id];
+    await loadConfig();
+    showUndo('Lista eliminata', r.undo);
+  } catch(e){ toast('Errore: '+e.message); }
 }
 
 /** URL incollato da pagine/messaggi HTML: &amp;/&#38; tornano a & (v. anche lato server). */
@@ -2431,9 +2524,10 @@ function renderHistory(){
     return `<div class="histrow" data-hrow="${esc(e.id)}">
       <div class="histhead">
         <b>${esc(when)}</b>
+        ${e.name ? `<span class="badge ready">★ ${esc(e.name)}</span>` : ''}
         ${e.reason ? `<span class="badge idle">${esc(e.reason)}</span>` : ''}
         ${e.listName ? `<span class="cnt">${esc(e.listName)}</span>` : ''}
-        <div class="histactions"><button class="ghost small" data-hpick="${esc(e.id)}">↩ Ripristina…</button></div>
+        <div class="histactions"><button class="ghost small" data-hpick="${esc(e.id)}">${e.name ? '↩ Ripristina checkpoint…' : '↩ Ripristina…'}</button></div>
       </div>
       <div class="histchanges">${esc(describeChanges(e.changes))}</div>
       <div class="histrestore" hidden data-hpanel="${esc(e.id)}"></div>
@@ -2443,13 +2537,16 @@ function renderHistory(){
 
 function histPanelHtml(entry){
   const listId = $('#histList').value;
+  // un checkpoint rappresenta lo stato completo: parti con tutte le categorie
+  // spuntate (l'utente puo' comunque toglierne alcune)
+  const all = !!entry.name;
   const cats = HIST_CATS
     .filter(([k])=>!(k === 'lists' && listId))
     .map(([k,label])=>`<label class="hopt"><input type="checkbox" name="hcat" value="${k}" ${
-      (k === 'settings' || k === 'lists') ? '' : 'checked'}>${esc(label)}</label>`)
+      (all || (k !== 'settings' && k !== 'lists')) ? 'checked' : ''}>${esc(label)}</label>`)
     .join('');
   const when = new Date(entry.ts).toLocaleString('it-IT');
-  return `<div class="hint">Stato del <b>${esc(when)}</b>${entry.listName ? ` · ${esc(entry.listName)}` : ''}.
+  return `<div class="hint">${all ? `Checkpoint <b>★ ${esc(entry.name)}</b> del <b>${esc(when)}</b>. Tutte le categorie sono spuntate: togli la spunta a quelle che non vuoi ripristinare.` : `Stato del <b>${esc(when)}</b>${entry.listName ? ` · ${esc(entry.listName)}` : ''}.`}
       ${listId ? 'Le categorie si applicano solo alla lista selezionata.' : 'Le categorie delle opzioni si applicano a tutte le liste.'}
       <br>Il ripristino verrà registrato come nuovo stato: potrai annullarlo.</div>
     <div class="hcats">${cats}</div>
@@ -2457,6 +2554,18 @@ function histPanelHtml(entry){
       <button class="danger small" data-hgo="${esc(entry.id)}">Ripristina selezionato</button>
       <button class="ghost small" data-hcancel="1">Annulla</button>
     </div>`;
+}
+
+async function saveCheckpoint(){
+  const name = (prompt('Nome del checkpoint (es. «prima del merge»):') || '').trim().slice(0, 80);
+  if (!name) return;
+  try {
+    await api('/api/history/checkpoints', { method:'POST', body: JSON.stringify({ name }) });
+    // il checkpoint e' globale: togli il filtro per vederlo subito in elenco
+    $('#histList').value = '';
+    toast('Checkpoint «' + name + '» salvato ✔');
+    await loadHistory();
+  } catch(e){ toast('Errore: '+e.message, 4000); }
 }
 
 async function loadHistory(){
@@ -2481,6 +2590,7 @@ async function loadHistory(){
   const card = $('#historyCard');
   if (!card) return;
   $('#histReload').addEventListener('click', loadHistory);
+  $('#histCheckpoint').addEventListener('click', saveCheckpoint);
   $('#histList').addEventListener('change', loadHistory);
   card.addEventListener('click', async (ev)=>{
     const pick = ev.target.closest('[data-hpick]');
@@ -2507,7 +2617,10 @@ async function loadHistory(){
     const cats = [...panel.querySelectorAll('input[name="hcat"]:checked')].map((i)=>i.value);
     if (!cats.length){ toast('Spunta almeno una categoria da ripristinare'); return; }
     const when = new Date(entry.ts).toLocaleString('it-IT');
-    if (!confirm(`Ripristinare le categorie selezionate dallo stato del ${when}?\nVerrà creato un nuovo stato, quindi potrai annullare anche questo ripristino.`)) return;
+    const msg = entry.name
+      ? `Ripristinare le categorie selezionate dal checkpoint «${entry.name}»?`
+      : `Ripristinare le categorie selezionate dallo stato del ${when}?`;
+    if (!confirm(msg + '\nVerrà creato un nuovo stato, quindi potrai annullare anche questo ripristino.')) return;
     go.disabled = true;
     try {
       const r = await api(`/api/history/${encodeURIComponent(entry.id)}/restore`, {
