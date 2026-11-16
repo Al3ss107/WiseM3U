@@ -166,7 +166,7 @@ function sanitizeListUrl(url) {
 function publicConfig(cfg) {
   return {
     version: C.VERSION,
-    settings: { ...cfg.settings, configPassword: cfg.settings.configPassword ? '***' : '' },
+    settings: { ...cfg.settings },
     lists: cfg.lists,
   };
 }
@@ -458,7 +458,6 @@ app.put('/api/config', requireAdmin, (req, res) => {
     const current = store.loadConfig();
     const incoming = req.body || {};
     const nextSettings = { ...current.settings, ...(incoming.settings || {}) };
-    if (nextSettings.configPassword === '***') nextSettings.configPassword = current.settings.configPassword;
     if (typeof nextSettings.token !== 'string') nextSettings.token = '';
 
     const nextLists = Array.isArray(incoming.lists) ? incoming.lists : current.lists;

@@ -19,14 +19,13 @@ const http = require('http');
 const path = require('path');
 const zlib = require('zlib');
 
-// limite piccolo: testiamo in pochi KB il comportamento "risposta enorme"
-// (in produzione 60 MB) senza scaricare centinaia di MB
-process.env.WISEM3U_MAX_LIST_BYTES = String(512 * 1024);
+// il limite di byte non e' piu' un override d'ambiente: i test del tetto
+// chiamano collectCapped con un limite esplicito (v. sezione risposte enormi)
 // tetto canali basso: verifichiamo il troncamento senza generare 150.000 voci
 process.env.WISEM3U_MAX_STATIONS = '1000';
 
 const REPO = path.resolve(__dirname, '..');
-const { buildTree, parseLenientJson } = require(path.join(REPO, 'src', 'wiseplay'));
+const { buildTree, parseLenientJson, __test } = require(path.join(REPO, 'src', 'wiseplay'));
 const UA = require(path.join(REPO, 'src', 'constants'));
 
 const MOCK_PORT = 9853;
@@ -149,16 +148,16 @@ const ROUTES = {
     const pathname = new URL(req.url, 'http://x').pathname;
     lastUa = req.headers['user-agent'] || '';
 
-    // finto file video con Content-Length esplicito (caso reale: film .mp4
-    // incollato al posto della lista). Il client deve rifiutare SENZA scaricare.
+    // finto file video (caso reale: film .mp4 incollato al posto della lista).
+    // Il content-type video/* basta a rifiutare senza scaricare nulla.
     if (pathname === '/big-video.mp4') {
-      const body = Buffer.alloc(768 * 1024, 0x47); // 768 KB (> limite test 512 KB)
+      const body = Buffer.alloc(768 * 1024, 0x47);
       res.writeHead(200, { 'Content-Type': 'video/mp4', 'Content-Length': body.length });
       res.on('close', () => { /* client ha annullato */ });
       return res.end(body);
     }
-    // stream "infinito" senza Content-Length (tipico live .ts): deve essere
-    // interrotto appena supera il limite, non letto fino alla fine
+    // stream "infinito" senza Content-Length (tipico live .ts): il
+    // content-type video/mp2t fa rifiutare subito, senza leggere lo stream
     if (pathname === '/endless.ts') {
       res.writeHead(200, { 'Content-Type': 'video/mp2t' });
       const chunk = Buffer.alloc(64 * 1024, 0x47);
@@ -189,19 +188,6 @@ const ROUTES = {
         res.write(block);
       }, 1);
       res.on('close', () => { clearInterval(t); bigLiveClosed = true; });
-      return;
-    }
-
-    // testo enorme in chunked encoding (NON una playlist): qui vale il tetto MB
-    if (pathname === '/huge.m3u') {
-      res.writeHead(200, { 'Content-Type': 'text/plain' });
-      let n = 0;
-      const line = 'riga di testo che non e\' una playlist ' + 'x'.repeat(100) + '\n';
-      const t = setInterval(() => {
-        if (res.destroyed || n++ > 20000) { clearInterval(t); return res.end(); }
-        res.write(line);
-      }, 1);
-      res.on('close', () => clearInterval(t));
       return;
     }
 
@@ -344,11 +330,16 @@ const ROUTES = {
   assert(bigLiveClosed, 'connessione chiusa dal nostro lato dopo il tetto (niente download fantasma)');
   assert(dtBig < 5000, `import in streaming in ${dtBig} ms`);
 
+  // testo enorme: collectCapped con limite esplicito di 1 MB (in produzione
+  // il limite vale 60 MB, ma le m3u vere passano dal parser in streaming)
   let eHuge = null;
-  try { await buildTree(`${BASE}/huge.m3u`); } catch (e) { eHuge = e; }
-  assert(eHuge && eHuge.fatal === true, 'testo enorme in chunked -> errore definitivo');
-  assert(/limite/i.test((eHuge && eHuge.message) || '') && /MB/i.test((eHuge && eHuge.message) || ''),
-    `il messaggio spiega il limite di dimensione: ${(eHuge && eHuge.message.slice(0, 90))}…`);
+  const bigText = (async function* () {
+    for (let i = 0; i < 12; i++) yield Buffer.from('riga di testo non playlist ' + 'x'.repeat(100 * 1024));
+  })();
+  try { await __test.collectCapped(bigText, 'text/plain', 0, 1024 * 1024); } catch (e) { eHuge = e; }
+  assert(eHuge && eHuge.fatal === true, 'testo oltre il limite -> errore definitivo');
+  assert(/limite/i.test((eHuge && eHuge.message) || '') && /1 MB/.test((eHuge && eHuge.message) || ''),
+    `il messaggio spiega il limite di dimensione: ${(eHuge && eHuge.message.slice(0, 100))}…`);
 
   mock.close();
   console.log(failures ? `\n${failures} TEST FALLITI ✖` : '\nTUTTI I TEST WISEPLAY PASSATI ✔');

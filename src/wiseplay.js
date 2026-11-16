@@ -29,16 +29,16 @@ const MAX_NODES = 6000;
 // e' la vera misura del costo in memoria dell'albero
 const MAX_STATIONS = Number(process.env.WISEM3U_MAX_STATIONS) || 150000;
 // sicurezza contro stream infiniti che fingono di essere m3u: 2 GB
-const MAX_STREAM_BYTES = Number(process.env.WISEM3U_MAX_STREAM_BYTES) || 2 * 1024 * 1024 * 1024;
+const MAX_STREAM_BYTES = 2 * 1024 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 20000;
 // le sorgenti Xtream/m3u_plus vengono generate dal pannello a ogni richiesta:
 // con migliaia di voci (live+VOD+serie) possono richiedere molto piu' dei 20s
 // usati per i singoli rami
 const ROOT_FETCH_TIMEOUT_MS = 60000;
 const ROOT_FETCH_RETRY_DELAY_MS = 1500;
-// limite di testo per singola risposta (RAM): 60 MB bastano per centinaia di
-// migliaia di canali. Override solo per i test (server finti di pochi KB).
-const MAX_BYTES = Number(process.env.WISEM3U_MAX_LIST_BYTES) || 60 * 1024 * 1024;
+// limite di testo per una risposta NON-m3u (RAM): le m3u vere passano dal
+// parser in streaming, qui restano JSON/HTML e simili. 60 MB sono abbondanti.
+const MAX_BYTES = 60 * 1024 * 1024;
 const CONCURRENCY = 32;
 
 /* ------------------------------------------------------------------ */
@@ -220,8 +220,22 @@ function isUtf16(head) {
   if (n < 16) return false;
   let zeroEven = 0;
   let zeroOdd = 0;
-  for (let i = 0; i < n; i++) if (head[i] === 0) (i % 2 === 0 ? zeroEven++ : zeroOdd++);
+  let printable = 0;
+  let nonZero = 0;
+  for (let i = 0; i < n; i++) {
+    const x = head[i];
+    if (x === 0) {
+      if (i % 2 === 0) zeroEven++; else zeroOdd++;
+    } else {
+      nonZero++;
+      if ((x >= 9 && x <= 13) || (x >= 32 && x < 127)) printable++;
+    }
+  }
   const half = n / 2;
+  // il testo UTF-16 ha ~meta' byte non nulli e quasi tutti stampabili: un
+  // binario con pochi byte utili e tanti zeri (zip, video) NON e' UTF-16
+  if (nonZero < n * 0.2) return false;
+  if (printable < nonZero * 0.85) return false;
   return zeroEven > half * 0.6 || zeroOdd > half * 0.6;
 }
 
@@ -274,7 +288,7 @@ function tooLargeError(size, contentType, head, opts = {}) {
   } else if (/^(video|audio)\//.test(ct) && !/mpegurl/.test(ct)) {
     why = `l'URL risponde con un ${ct.includes('audio') ? 'FILE AUDIO' : 'FILE VIDEO'} (content-type ${ct}), non con una playlist`;
   } else if (textual) {
-    const limMb = MAX_BYTES / 1048576;
+    const limMb = (opts.limit || MAX_BYTES) / 1048576;
     const limTxt = `${limMb >= 10 ? Math.round(limMb) : limMb.toFixed(1).replace(/\.0$/, '')} MB`;
     const entries = countM3uEntries(headBuf.toString('latin1'));
     why = entries
@@ -335,21 +349,22 @@ function decodeBody(buf) {
 
 const SNIFF_BYTES = 4096; // quanti byte bastano per capire cosa stiamo scaricando
 
-/** Accumula i chunk applicando il limite (usato dal percorso "testo"). */
-async function collectCapped(chunks, ct, declared) {
+/** Accumula i chunk applicando il limite (usato dal percorso "testo").
+ *  `limit` e' parametrizzato solo per i test: in produzione e' MAX_BYTES. */
+async function collectCapped(chunks, ct, declared, limit = MAX_BYTES) {
   const out = [];
   let size = 0;
   let head = null;
   for await (const c of chunks) {
     if (!head) head = c.slice(0, SNIFF_BYTES);
     size += c.length;
-    if (size > MAX_BYTES) {
-      throw tooLargeError(size, ct, head, { declared: declared > size ? declared : 0 });
+    if (size > limit) {
+      throw tooLargeError(size, ct, head, { declared: declared > size ? declared : 0, limit });
     }
     // header gonfiato + contenuto gia' riconoscibile come non-testo:
     // inutile scaricare 60 MB di un video. Si guardano solo i primi KB.
-    if (declared > MAX_BYTES && size >= SNIFF_BYTES && !looksTextual(head) && magicLabel(head) !== 'ARCHIVIO GZIP') {
-      throw tooLargeError(declared, ct, head, { declared });
+    if (declared > limit && size >= SNIFF_BYTES && !looksTextual(head) && magicLabel(head) !== 'ARCHIVIO GZIP') {
+      throw tooLargeError(declared, ct, head, { declared, limit });
     }
     out.push(c);
   }
@@ -838,7 +853,9 @@ async function buildTree(rootUrl, options = {}) {
       const headTxt = head.toString('latin1');
       const isM3u = /^\uFEFF?\s*#EXTM3U/i.test(headTxt) || /#EXTINF\s*:/.test(headTxt);
 
-      if (!isM3u && !looksTextual(head)) {
+      const magic = magicLabel(head);
+      if (!isM3u && (magic || !looksTextual(head))) {
+        // video, archivi, immagini: si chiude subito (nessun download inutile)
         try { await reader.cancel(); } catch (_) { /* ignora */ }
         throw tooLargeError(declared || first.length, ct, head, { declared });
       }
@@ -1292,4 +1309,6 @@ module.exports = {
   // riusati dalla sonda Xtream (scadenze account)
   nodeFetchText,
   resolveViaPublicDns,
+  // solo per i test: limiti come parametri espliciti, nessun override da env
+  __test: { collectCapped, tooLargeError, decodeBody },
 };

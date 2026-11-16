@@ -55,7 +55,6 @@ function defaultConfig() {
       streamDiag: false, // diagnostica stream: errore a schermo (video) invece di buffering silente
       personalLists: [], // liste personali: canali pescati da tutte le liste [{id,name,includeInMain,channels:["listId::path::nome"]}]
       token: '',
-      configPassword: '',
       publicBaseUrl: '', // URL pubblico (es. https://mio.dominio con nginx+cert): base per i link mostrati
       epgUrl: '', // URL XMLTV manuale da dichiarare nella playlist generata (si aggiunge agli EPG ereditati dalle sorgenti m3u_plus)
     },
@@ -177,6 +176,9 @@ function normalizeConfig(raw) {
   const base = defaultConfig();
   const cfg = raw && typeof raw === 'object' ? raw : {};
   const settings = { ...base.settings, ...(cfg.settings || {}) };
+  // campo rimosso (mai verificato da nessuna rotta): non deve restare nei
+  // config vecchi dopo il salvataggio
+  delete settings.configPassword;
   // UA personalizzata: una sola riga, niente CR/LF (header injection)
   settings.userAgent = String(settings.userAgent || '')
     .replace(/[\r\n\t]+/g, ' ')
