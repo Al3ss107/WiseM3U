@@ -110,6 +110,14 @@ function normalizeList(list) {
   options.deletedBranches = Array.isArray(options.deletedBranches)
     ? options.deletedBranches.map(String)
     : [];
+  // voci il cui cestino e' stato svuotato: restano eliminate ma non compaiono
+  // piu' nel cestino (non sono piu' ripristinabili)
+  options.purgedChannels = Array.isArray(options.purgedChannels)
+    ? options.purgedChannels.map(String)
+    : [];
+  options.purgedBranches = Array.isArray(options.purgedBranches)
+    ? options.purgedBranches.map(String)
+    : [];
   options.channelOrder =
     options.channelOrder && typeof options.channelOrder === 'object' && !Array.isArray(options.channelOrder)
       ? Object.fromEntries(

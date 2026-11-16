@@ -855,8 +855,11 @@ app.get('/api/lists/:id/deleted', requireAdmin, async (req, res) => {
     const native = node ? (node.stations || []).length : 0;
     return Math.max(0, native - del - out) + inn;
   };
+  const purgedBr = new Set(o.purgedBranches || []);
+  const purgedCh = new Set(o.purgedChannels || []);
   const branches = [];
   for (const p of o.deletedBranches || []) {
+    if (purgedBr.has(p)) continue; // cestino svuotato: eliminazione definitiva
     if (p.startsWith('@')) {
       const n = Object.values(moves).filter((v) => v === p).length;
       branches.push({ path: p, name: (renames[p] || p.slice(1)), stations: n, custom: true });
@@ -871,6 +874,7 @@ app.get('/api/lists/:id/deleted', requireAdmin, async (req, res) => {
   }
   const channels = [];
   for (const key of o.deletedChannels || []) {
+    if (purgedCh.has(key)) continue; // cestino svuotato: eliminazione definitiva
     const i = key.lastIndexOf('::');
     if (i < 0) continue;
     const p = key.slice(0, i);
@@ -998,29 +1002,41 @@ function dropExternalImports(cfg, list) {
   return { removed: imports.length, srcIds: [...bySrc.keys()] };
 }
 
-/** Riporta la lista allo stato originario: annulla unioni e spostamenti dei
- *  canali (channelMoves) e rimuove le playlist/canali importati da altre liste.
- *  Renomine, esclusioni, ordine e cestino restano come sono. */
+/** Riporta la lista allo stato di quando viene aggiunta: azzera tutte le
+ *  personalizzazioni locali (rinomine, esclusioni, ordine, unioni, spostamenti,
+ *  cestino) e riscarica la lista dalla sua URL. */
 app.post('/api/lists/:id/restoreorigin', requireAdmin, (req, res) => {
   const cfg = store.loadConfig();
   const list = store.findList(req.params.id);
   if (!list) return res.status(404).json({ error: 'lista non trovata' });
-  const moves = Object.keys(list.options.channelMoves || {}).length;
-  list.options.channelMoves = {};
+  // riaccende i canali importati da altre liste prima di azzerare le opzioni
   const imp = dropExternalImports(cfg, list);
+  const personal = list.kind === 'personal';
+  list.options = store.defaultListOptions();
+  if (personal) list.options.inCatalog = false; // come una lista personale appena creata
+  list.state = { status: 'idle', error: '', fatal: false, fetchedAt: '', stats: null, kind: '' };
   store.saveConfig(cfg);
-  res.json({ ok: true, moves, imports: imp.removed, lists: [list.id, ...imp.srcIds] });
+  cache.invalidate(list.id);            // niente vecchio albero/snapshot
+  playlist.clearRows(list.id);
+  startRefresh(list.id, true);          // riscarica da zero
+  res.json({ ok: true, imports: imp.removed, lists: [list.id, ...imp.srcIds] });
 });
 
-/** Svuota le sole aggiunte esterne: elimina definitivamente playlist e canali
- *  importati da altre liste, senza toccare il contenuto nativo della lista. */
-app.post('/api/lists/:id/clearimports', requireAdmin, (req, res) => {
+/** Svuota il cestino: le voci eliminate restano fuori dall'output ma non sono
+ *  piu' ripristinabili e spariscono dal cestino. */
+app.post('/api/lists/:id/emptytrash', requireAdmin, (req, res) => {
   const cfg = store.loadConfig();
   const list = store.findList(req.params.id);
   if (!list) return res.status(404).json({ error: 'lista non trovata' });
-  const imp = dropExternalImports(cfg, list);
+  const o = list.options;
+  const purgedCh = new Set(o.purgedChannels || []);
+  const purgedBr = new Set(o.purgedBranches || []);
+  const freshCh = (o.deletedChannels || []).filter((k) => !purgedCh.has(k));
+  const freshBr = (o.deletedBranches || []).filter((p) => !purgedBr.has(p));
+  o.purgedChannels = [...new Set([...purgedCh, ...freshCh])];
+  o.purgedBranches = [...new Set([...purgedBr, ...freshBr])];
   store.saveConfig(cfg);
-  res.json({ ok: true, removed: imp.removed, lists: [list.id, ...imp.srcIds] });
+  res.json({ ok: true, removed: freshCh.length + freshBr.length });
 });
 
 /** Canali di un singolo ramo, per la gestione dalla pagina di configurazione. */

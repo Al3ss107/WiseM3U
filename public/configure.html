@@ -352,7 +352,6 @@
     .pltools [data-act=none]{order:3}
     .pltools [data-act=trash]{order:4}
     .pltools [data-act=delsel]{order:5;grid-column:1/-1}
-    .pltools [data-act=clearimports]{order:6;grid-column:1/-1}
 
     /* --- rami: riga a griglia, niente scroll annidato su touch --- */
     .branches{max-height:none;overflow:visible;padding:6px;border-radius:11px}
@@ -810,7 +809,10 @@ function renderBranches(list){
   }).join('');
 
   const active = bs.filter(b=>branchEnabled(list, b.path)).length;
-  const nTrash = (list.options.deletedChannels || []).length + (list.options.deletedBranches || []).length;
+  const purgedCh = new Set(list.options.purgedChannels || []);
+  const purgedBr = new Set(list.options.purgedBranches || []);
+  const nTrash = (list.options.deletedChannels || []).filter((k)=>!purgedCh.has(k)).length
+    + (list.options.deletedBranches || []).filter((p)=>!purgedBr.has(p)).length;
   const plOpen = PLAYLISTS_OPEN.has(list.id);
   return `<div class="plwrap${plOpen ? '' : ' collapsed'}">
   <div class="plhead">
@@ -825,7 +827,6 @@ function renderBranches(list){
       <button class="ghost small" data-act="all" title="Attiva tutte le playlist">✓ Tutto</button>
       <button class="ghost small" data-act="none" title="Disattiva tutte le playlist">✗ Nulla</button>
       <button class="ghost small" data-act="delsel" title="Sposta nel cestino tutte le playlist spuntate (recuperabili)">✕ Cancella selezionate</button>
-      <button class="ghost small" data-act="clearimports" title="Elimina definitivamente solo le playlist e i canali aggiunti da altre liste; il contenuto originale resta">🗑 Svuota aggiunte</button>
       <button class="ghost small" data-act="trash" title="Canali e playlist eliminati: da qui li ripristini">🗑 Cestino${nTrash ? ` (${nTrash})` : ''}</button>
     </div>
   </div>
@@ -878,8 +879,12 @@ function renderTrash(list){
       <button class="ghost small" data-rchan="1" data-rpath="${esc(c.path)}" data-rname="${esc(c.name)}">↩ Ripristina</button>
     </div>`).join('');
   const empty = !br && !ch ? '<div class="hint">Il cestino è vuoto.</div>' : '';
+  const tot = (t.branches || []).length + (t.channels || []).length;
   return `<div class="trash" data-trash>
-    <div class="row" style="align-items:center;gap:8px"><b>🗑 Cestino</b><span class="cnt">elementi eliminati da questa lista</span></div>
+    <div class="row" style="align-items:center;gap:8px"><b>🗑 Cestino</b><span class="cnt">elementi eliminati da questa lista</span>
+      <div class="spacer" style="flex:1"></div>
+      ${tot ? `<button class="danger small" data-etrash="1" title="Elimina definitivamente tutte le voci del cestino (non saranno piu' ripristinabili)">🗑 Svuota cestino</button>` : ''}
+    </div>
     ${empty}${br}${ch}
   </div>`;
 }
@@ -1592,6 +1597,22 @@ function bindListEvents(){
         } catch (e){ toast(e.message, 4000); }
         return;
       }
+      const et = ev.target.closest('button[data-etrash]');
+      if (et){
+        const t = TRASH[id] || { branches: [], channels: [] };
+        const n = (t.branches || []).length + (t.channels || []).length;
+        if (!n){ toast('Il cestino e\' gia\' vuoto'); return; }
+        if (!confirm(`Eliminare definitivamente ${n} voci dal cestino?\nNon saranno piu' ripristinabili: resteranno fuori dalla lista per sempre.`)) return;
+        try {
+          const r = await api(`/api/lists/${id}/emptytrash`, { method:'POST', body:'{}' });
+          toast(`Cestino svuotato: ${r.removed} voci eliminate definitivamente`);
+          await loadConfig();
+          await reloadOpenChans([id]);
+          await refreshTrash(id);
+          renderLists();
+        } catch (e){ toast(e.message, 4000); }
+        return;
+      }
       const rb = ev.target.closest('button[data-rbranch]');
       if (rb){
         try {
@@ -1708,25 +1729,14 @@ function bindListEvents(){
       if (act === 'refresh') await refreshList(id, btn);
       if (act === 'del'){ if (confirm(`Eliminare definitivamente la lista «${list.name || list.url}» e la sua configurazione?`)) await delList(id); }
       if (act === 'origin'){
-        if (!confirm(`Riportare «${list.name || list.url}» allo stato originario?\nUnioni e spostamenti dei canali verranno annullati e le aggiunte da altre liste rimosse. Renomine, esclusioni, ordine e cestino restano invariati.`)) return;
+        if (!confirm(`Riportare «${list.name || list.url}» allo stato di quando e' stata aggiunta?\nVerranno azzerate tutte le personalizzazioni (rinomine, esclusioni, ordine, unioni, spostamenti, cestino) e la lista verra' riscaricata.`)) return;
         try {
           const r = await api(`/api/lists/${id}/restoreorigin`, { method:'POST', body:'{}' });
           await loadConfig();
           for (const lid of r.lists || []) await loadBranches(lid);
           renderLists();
-          toast(`Ripristinata: ${r.moves} spostamenti annullati, ${r.imports} aggiunte esterne rimosse`);
-        } catch (e){ toast(e.message, 4000); }
-        return;
-      }
-      if (act === 'clearimports'){
-        if (!confirm(`Eliminare definitivamente le playlist e i canali aggiunti a «${list.name || list.url}» da altre liste?\nIl contenuto originale di questa lista non viene toccato.`)) return;
-        try {
-          const r = await api(`/api/lists/${id}/clearimports`, { method:'POST', body:'{}' });
-          if (!r.removed){ toast('Nessuna aggiunta da altre liste da eliminare'); return; }
-          await loadConfig();
-          for (const lid of r.lists || []) await loadBranches(lid);
-          renderLists();
-          toast(`${r.removed} aggiunte esterne eliminate`);
+          toast('Lista ripristinata: riscaricamento in corso…');
+          await pollUntilReady(id);
         } catch (e){ toast(e.message, 4000); }
         return;
       }

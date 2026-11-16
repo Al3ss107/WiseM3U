@@ -74,8 +74,9 @@ scaricamento in background con stato e statistiche.
 
 **Per ogni lista**
 
-- attiva/disattiva (`⏻`), Aggiorna, **↩ Ripristina** (annulla unioni e
-  spostamenti riportando i canali nelle playlist di origine), elimina, link M3U
+- attiva/disattiva (`⏻`), Aggiorna, **↩ Ripristina** (riporta la lista allo
+  stato di quando è stata aggiunta: azzera rinomine, esclusioni, ordine,
+  unioni, spostamenti e cestino e la riscarica dalla URL), elimina, link M3U
   personale;
 - badge **scadenza account Xtream** (da `player_api.php`, cache 30 min);
 - impostazioni: prefisso/livelli group-title, protocolli, AceStream, deduplica,
@@ -84,9 +85,11 @@ scaricamento in background con stato e statistiche.
 - **Playlist della lista**: spunta, rinomina, riordino drag (l'ordine resta
   anche dopo altri trascinamenti finché non salvi), filtro, **Visualizza
   attive**, **Tutto/Nulla** (limitati ai risultati del filtro), **Cancella
-  selezionate**, **🗑 Svuota aggiunte** (elimina solo le playlist e i canali
-  importati da altre liste), cestino; trascinare una playlist su un'altra la
-  unisce e chiede conferma, come l'eliminazione e il ripristino;
+  selezionate**, cestino; trascinare una playlist su un'altra la unisce e
+  chiede conferma, come l'eliminazione e il ripristino;
+- **Cestino**: ripristino delle singole voci e **Svuota cestino**, che elimina
+  definitivamente solo le voci presenti nel cestino (non più ripristinabili),
+  senza toccare il resto della lista;
 - **Canali**: espandi, spunta, rinomina, riordino, sposta (campo gruppo +
   ➜/↺ oppure drag), aggiungi canale da altre liste, elimina; gestione gruppi
   personali;
