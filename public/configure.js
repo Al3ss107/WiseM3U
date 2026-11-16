@@ -1,7 +1,7 @@
 'use strict';
 
-/* WiseM3U — pagina di configurazione: logica lato browser */
-// versione iniettata dal server nella meta tag (mai hardcoded nel sorgente)
+/* WiseM3U — configuration page: browser-side logic */
+// version injected by the server into the meta tag (never hardcoded in the source)
 const WM_UI_VERSION = (document.querySelector('meta[name="wm-ui-version"]') || {}).content || '';
 const $ = (s, r=document) => r.querySelector(s);
 const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
@@ -24,7 +24,7 @@ function toast(msg, ms=2600, opts={}){
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'toast-act';
-    b.textContent = act.label || 'Annulla';
+    b.textContent = act.label || '↩ Annulla';
     b.addEventListener('click', () => { hide(); act.onClick(); });
     t.appendChild(b);
     t.classList.add('has-act');
@@ -35,7 +35,7 @@ function toast(msg, ms=2600, opts={}){
   if (ms > 0) t._h = setTimeout(hide, ms);
 }
 
-/** Ricarica la UI dopo un annullamento: config, alberi, cestino e cronologia. */
+/** Reloads the UI after an undo: config, trees, trash and history. */
 async function reloadAfterUndo(ids){
   await loadConfig();
   for (const id of ids || []){
@@ -46,8 +46,8 @@ async function reloadAfterUndo(ids){
   loadHistory();
 }
 
-/** Mostra il toast con «Annulla»; se il server non ha fornito un punto di
- *  ripristino (undo nullo) mostra il messaggio normale. */
+/** Shows the toast with «Undo»; if the server did not provide a restore
+ *  point (null undo) it shows the normal message. */
 function showUndo(msg, undo){
   if (!undo || !undo.id){ toast(msg); return; }
   toast(msg, 9000, { action: { label: 'Annulla', onClick: async () => {
@@ -72,11 +72,11 @@ function apiUrl(p){
 }
 const sleep = (ms) => new Promise(r=>setTimeout(r, ms));
 
-/* ---------------- rami: stato locale ---------------- */
-/* L'ordine mostrato è quello del server (già ordinato secondo options.order).
-   Le modifiche locali (attiva/disattiva, rinomina, sposta) aggiornano
-   options.disabledPaths / options.renames / options.order; il salvataggio
-   finale passa da PUT /api/config come tutto il resto. */
+/* ---------------- branches: local state ---------------- */
+/* The displayed order is the server's (already sorted by options.order).
+   Local changes (enable/disable, rename, move) update
+   options.disabledPaths / options.renames / options.order; the final
+   save goes through PUT /api/config like everything else. */
 
 function branchesOf(id){ return (TREES[id] && TREES[id].branches) || null; }
 
@@ -110,9 +110,9 @@ const BRONLY = new Set();    // listId con "Visualizza attive" attivo
 const OPEN_LISTS = new Set();      // schede lista aperte (di default sono tutte chiuse)
 const PLAYLISTS_OPEN = new Set();  // id delle liste con il blocco "Playlist della lista" aperto
 
-/** Playlist (rami non personali) che rispettano il filtro corrente della scheda.
- *  E' lo scope su cui agiscono Tutto / Nulla / Cancella selezionate: durante
- *  una ricerca non si toccano le playlist nascoste. */
+/** Playlists (non-personal branches) that match the current tab filter.
+ *  This is the scope for All / None / Delete selected: during
+ *  a search, hidden playlists are not touched. */
 function visibleBranches(list){
   const q = (BRSQ[list.id] || '').trim().toLowerCase();
   const onlyActive = BRONLY.has(list.id);
@@ -130,8 +130,8 @@ function renderBranches(list){
     if (st === 'fetching') return '<div class="hint" style="margin-top:10px">⏳ Scaricamento della lista in corso… la sezione delle playlist appare appena è pronto.</div>';
     if (st === 'error'){
       const fatal = !!(list.state && list.state.fatal);
-      // errore "di natura" (URL che punta a un video, a una pagina HTML, playlist
-      // enorme): ritentare produce lo stesso errore, meglio dirlo chiaramente
+      // "inherent" error (URL pointing to a video, an HTML page, a huge playlist):
+      // retrying yields the same error, better to say it clearly
       return `<div class="err">Scaricamento fallito: ${esc((list.state&&list.state.error)||'')} — ${
         fatal
           ? 'questo errore <b>non si risolve con Aggiorna</b>: correggi l\'URL della lista e salva.'
@@ -192,7 +192,7 @@ function renderBranches(list){
   ${bs.length ? '' : '<div class="hint" style="margin-top:10px">Nessuna playlist (ramo con canali) trovata nella lista.</div>'}
   <details class="help">
     <summary>ℹ️ Come si usa: rinomina, riordina, canali, spostamenti, cestino</summary>
-    <div class="hint">Ogni riga è una playlist: spuntala per includerla, scrivi nel campo per <b>rinominarla</b>,
+    <div class="hint" data-i18n-html="hint.usage">Ogni riga è una playlist: spuntala per includerla, scrivi nel campo per <b>rinominarla</b>,
     trascinala dalla maniglia <b>☰</b> per <b>riordinare</b>. Con <b>▸ canali</b> apri la playlist e gestisci i
     <b>singoli canali</b>: escludi, rinomina, riordina e — col <b>campo gruppo</b> a destra —
     <b>spostali in un'altra playlist o in un gruppo personale</b>: la tendina suggerisce i gruppi
@@ -220,7 +220,7 @@ function renderBranches(list){
   </div>`;
 }
 
-/* ---------------- cestino: eliminati recuperabili ---------------- */
+/* ---------------- trash: recoverable deleted items ---------------- */
 const TRASHOPEN = new Set(); // id delle liste col cestino aperto
 const TRASH = {};            // id -> {branches:[], channels:[]}
 
@@ -291,9 +291,9 @@ function renderChannels(list, b){
 let SKIP_TREE_RELOAD = false; // il drag ha gia' l'ordine in memoria: non rileggerlo dal server
 
 function renderLists(){
-  // rendere ricostruibili anche i container CON scroll proprio (.branches):
-  // la loro scrollTop va preservata esplicitamente, altrimenti la rebuild interna
-  // riporta la vista in cima alla "Playlist della lista" di quella scheda
+  // make containers WITH their own scroll (.branches) rebuildable too:
+  // their scrollTop must be preserved explicitly, otherwise the internal rebuild
+  // brings the view back to the top of that card's "Playlist"
   const sy = window.scrollY;
   const bTops = {};
   document.querySelectorAll('#lists .listcard').forEach(c=>{
@@ -325,7 +325,7 @@ function renderLists(){
 /* -------- scadenza account Xtream (player_api.php) -------- */
 
 function fmtItDate(iso){
-  try { return new Date(iso).toLocaleDateString('it-IT', { day:'numeric', month:'short', year:'numeric' }); }
+  try { return new Date(iso).toLocaleDateString((window.WM_I18N && WM_I18N.locale()) || 'en', { day:'numeric', month:'short', year:'numeric' }); }
   catch(_) { return iso; }
 }
 
@@ -345,11 +345,11 @@ async function fillXtreamBadge(l, force){
         ? '⏳ senza scadenza'
         : `⏳ scade il ${fmtItDate(u.expiryIso)} (${days} gg)`;
     const conn = u.maxConnections ? ` · max ${u.maxConnections} conn` : '';
-    const color = u.expired ? 'background:#3b1519;color:#ffb4ab'
-      : days == null ? 'background:#173823;color:#9be7b4'
-      : days <= 7 ? 'background:#3b1519;color:#ffb4ab'
-      : days <= 30 ? 'background:#3a2c0d;color:#ffd479'
-      : 'background:#173823;color:#9be7b4';
+    const color = u.expired ? 'background:#3a0d14;color:#ffb4ab'
+      : days == null ? 'background:#0e2a17;color:#50fa7b'
+      : days <= 7 ? 'background:#3a0d14;color:#ffb4ab'
+      : days <= 30 ? 'background:#2b2410;color:#f1fa8c'
+      : 'background:#0e2a17;color:#50fa7b';
     el.innerHTML = `<span class="badge" data-xtream="${esc(l.id)}" style="${color};cursor:pointer" title="Account Xtream: ${esc(u.status)} · aggiornato ${fmtItDate(r.fetchedAt)} — click per rileggere">${expTxt}${conn}</span>`;
   } catch (_) { /* nessun dato: badge vuoto */ }
 }
@@ -358,7 +358,7 @@ async function refreshXtreamBadge(id){
   if (l) fillXtreamBadge(l, true);
 }
 
-/* --------- menu laterale: riordino liste + accesso rapido --------- */
+/* --------- side menu: list reordering + quick access --------- */
 
 function renderSideMenu(){
   const el = $('#sidemenu');
@@ -372,7 +372,7 @@ function renderSideMenu(){
 }
 
 
-/* -------- liste personali: tendine a cascata del picker "aggiungi contenuto" -------- */
+/* -------- personal lists: cascading dropdowns of the "add content" picker -------- */
 
 async function plPopulateBranches(card){
   const lid = card.querySelector('[data-plsel="list"]').value;
@@ -396,7 +396,7 @@ async function plPopulateChans(card){
   } catch (e){ dl.innerHTML = ''; }
 }
 
-/** Risolve il campo canale: '*' = playlist intera, altrimenti il canale (nome scritto o suggerito). */
+/** Resolves the channel field: '*' = whole playlist, otherwise the channel (typed or suggested name). */
 async function plResolveChan(lid, bp, value){
   const v = String(value || '').trim();
   if (!v || v === '*' || v === '— tutta la playlist —') return { wild: true };
@@ -445,7 +445,7 @@ function renderListCard(l){
       <span class="xtbadge" id="xt_${esc(l.id)}"></span>
       <div class="spacer" style="flex:1"></div>
       <div class="acts">
-        <button class="ghost small" data-act="toggle" style="${o.enabled ? '' : 'opacity:.55;color:var(--warn)'}" title="Attiva/disattiva completamente la lista">${o.enabled ? '⏻ attiva' : '⏻ spenta'}</button>
+        <button class="ghost small" data-act="toggle" style="${o.enabled ? '' : 'opacity:.55;color:var(--warn)'}" title="Attiva/disattiva completamente la lista">${o.enabled ? 'on' : 'off'}</button>
         <button class="ghost small" data-act="refresh">Aggiorna</button>
         <button class="ghost small" data-act="origin" title="Annulla unioni e spostamenti: i canali tornano nelle playlist di origine">↩ Ripristina</button>
         <button class="danger small" data-act="del">Elimina</button>
@@ -456,7 +456,7 @@ function renderListCard(l){
          Link M3U: <code>${esc(purl)}</code> <button class="ghost small" data-act="copypl" style="margin-left:6px">⧉ copia</button></div>`
       : `<div class="url">${esc(l.url)}</div>`}
     <div class="kv" style="margin-top:6px">
-      ${s.fetchedAt ? `Ultimo aggiornamento: <b>${esc(new Date(s.fetchedAt).toLocaleString('it-IT'))}</b>` : 'Mai aggiornata'}
+      ${s.fetchedAt ? `Ultimo aggiornamento: <b>${esc(new Date(s.fetchedAt).toLocaleString((window.WM_I18N && WM_I18N.locale()) || 'en'))}</b>` : 'Mai aggiornata'}
       ${stats ? ` · nodi <b>${stats.nodes}</b> · rami esterni <b>${stats.external}</b> · m3u importate <b>${stats.m3u}</b> · stream <b>${stats.stations}</b>${stats.failed?` · errori <b>${stats.failed}</b>`:''}` : ''}
     </div>
     ${stats && stats.truncated ? `<div class="hint" style="margin-top:6px;color:#f5c451">⚠︎ Lista molto grande: importati i primi <b>${stats.stations}</b> canali (limite di sicurezza). Il resto viene saltato per non esaurire la memoria del container.</div>` : ''}
@@ -537,7 +537,7 @@ function renderListCard(l){
     <details class="fold">
       <summary>🌐 EasyProxy (opzionale)</summary>
       <div class="foldbody">
-        <div class="hint" data-info style="margin-top:2px">Le liste <b>"(dns)"</b> spesso non funzionano perche' il <b>client</b>
+        <div class="hint" data-info data-i18n-html="hint.easyProxy" style="margin-top:2px">Le liste <b>"(dns)"</b> spesso non funzionano perche' il <b>client</b>
           (TV/telefono) non risolve quei domini, indipendentemente dal DNS del server. Con
           <a class="lnk" href="https://github.com/realbestia1/EasyProxy" target="_blank">EasyProxy</a> i flussi
           passano dal server (con il suo DNS/WARP/estrattori): compila l'URL della tua istanza
@@ -564,7 +564,7 @@ function renderListCard(l){
         </div>
         <details class="help">
           <summary>ℹ️ Come interpretare il test (avvisi non bloccanti)</summary>
-          <div class="hint">Scrivi <b>IP oppure dominio</b>: funziona cosi' com'e', senza configurazioni speciali.
+          <div class="hint" data-i18n-html="hint.easyProxyTest">Scrivi <b>IP oppure dominio</b>: funziona cosi' com'e', senza configurazioni speciali.
             L'addon si limita a <b>riscrivere gli stream</b> verso EasyProxy: sara' il <b>client</b> (TV/telefono) a
             connettersi. Il <b>Test</b> qui sotto e' solo indicativo: su molte reti di
             casa il container Docker non riesce a raggiungere il proprio dominio pubblico (manca il NAT hairpin) o non
@@ -597,7 +597,7 @@ function renderListCard(l){
         <datalist id="pldl-${l.id}" data-pldl></datalist>
         <details class="help">
           <summary>ℹ️ Come funziona l'importazione</summary>
-          <div class="hint">Da un'<b>altra</b> lista importi canali o <b>— tutta la playlist —</b> come playlist aggiuntive
+          <div class="hint" data-i18n-html="hint.import">Da un'<b>altra</b> lista importi canali o <b>— tutta la playlist —</b> come playlist aggiuntive
             di questa lista. Dalla <b>stessa</b> lista sposti i canali in un'altra playlist o in una
             <b>playlist personalizzata</b> (creala con <b>+ Nuova playlist</b>: compare tra le playlist e ci porti i
             canali anche col campo gruppo e ➜). Il campo canale e' <b>scrivibile</b>: i suggerimenti arrivano dalla
@@ -610,7 +610,7 @@ function renderListCard(l){
   </section>`;
 }
 
-/* ---------------- canali: stato e modifiche ---------------- */
+/* ---------------- channels: state and changes ---------------- */
 const chanKey = (path, name) => `${path}::${name}`;
 
 function setChannelEnabled(list, path, name, on){
@@ -627,8 +627,8 @@ function setChannelName(list, path, name, value){
   else list.options.channelRenames[k] = v;
 }
 
-/** Risolve il valore del campo gruppo: il nome di un ramo/gruppo esistente,
- *  oppure testo libero = nuovo gruppo personale. Vuoto = ramo originale. */
+/** Resolves the group field value: the name of an existing branch/group,
+ *  or free text = new personal group. Empty = original branch. */
 function resolveGroupTarget(list, value){
   const v = String(value || '').trim();
   if (!v) return null;
@@ -636,16 +636,16 @@ function resolveGroupTarget(list, value){
   return hit ? hit.path : '@' + v;
 }
 
-/** Sposta un canale in un altro ramo o in un gruppo personale ("@Nome").
- *  La chiave resta quella originale (home::nome): rename/esclusioni/ordini
- *  continuano a funzionare anche dopo lo spostamento. */
+/** Moves a channel to another branch or to a personal group ("@Name").
+ *  The key remains the original one (home::name): rename/exclusions/order
+ *  keep working even after the move. */
 async function applyChannelMove(list, c, target, curPath){
   list.options.channelMoves = list.options.channelMoves || {};
   const key = chanKey(c.home, c.name);
   if (!target || target === c.home) delete list.options.channelMoves[key];
   else list.options.channelMoves[key] = target;
-  // salva subito sul server: albero e canali vengono riletti da li', quindi
-  // lo spostamento deve gia' essere registrato perche' la UI lo mostri
+  // save immediately on the server: tree and channels are re-read from there, so
+  // the move must already be recorded for the UI to show it
   try {
     const saved = await api('/api/config', {
       method:'PUT',
@@ -672,7 +672,7 @@ async function applyChannelMove(list, c, target, curPath){
   renderLists();
 }
 
-/* ricarica i canali dei rami aperti (dopo spostamenti/eliminazioni tra liste) */
+/* reloads the channels of open branches (after moves/deletions across lists) */
 async function reloadOpenChans(listIds){
   for (const key of [...EXPANDED]){
     const i = key.indexOf('|');
@@ -708,7 +708,7 @@ async function toggleExpand(card, list, path){
   const row = card.querySelector(q);
   const btn = card.querySelector(`button[data-exp="${CSS.escape(path)}"]`);
   const existing = card.querySelector(`.chans[data-chans="${CSS.escape(path)}"]`);
-  // scroll del container playlist della scheda (agiato da .branches): non deve muoversi
+  // scroll of the card's playlist container (handled by .branches): it must not move
   const brBox = card.querySelector('.branches');
   const bTop = brBox ? brBox.scrollTop : 0;
 
@@ -740,12 +740,12 @@ async function toggleExpand(card, list, path){
   const el = card.querySelector(`.chans[data-chans="${CSS.escape(path)}"]`);
   if (b && el) {
     el.outerHTML = renderChannels(list, b);
-    // dopo la sostituzione del contenuto ripristina esplicitamente la scrollTop
+    // after replacing the content, explicitly restore scrollTop
     if (brBox) requestAnimationFrame(()=>{ brBox.scrollTop = bTop; });
   }
 }
 
-/* ---------------- drag & drop (rami e canali) ---------------- */
+/* ---------------- drag & drop (branches and channels) ---------------- */
 let DRAG = null; // {type:'branch'|'chan', el, chans?, target?, after?}
 
 function dragCleanup(card){
@@ -758,8 +758,8 @@ function applyDrop(card, list){
   if (!DRAG || !DRAG.target){ dragCleanup(card); return; }
   const id = list.id;
   if (DRAG.into){
-    // rilascio "dentro" una playlist: il canale (o tutti i canali del ramo
-    // trascinato) si sposta nella playlist di destinazione
+    // drop "inside" a playlist: the channel (or all channels of the dragged
+    // branch) moves to the destination playlist
     const tPath = DRAG.target.classList.contains('brow')
       ? DRAG.target.dataset.path
       : ((DRAG.target.closest('.chans') || {}).dataset || {}).chans;
@@ -767,7 +767,7 @@ function applyDrop(card, list){
     const type = DRAG.type;
     const c = DRAG.chan;
     const fromPath = type === 'branch' ? DRAG.el.dataset.path : '';
-    // i nomi servono per la conferma: vanno letti prima di azzerare DRAG
+    // names are needed for confirmation: read them before clearing DRAG
     const srcName = type === 'branch' ? (DRAG.el.dataset.name || fromPath || 'playlist').trim() : '';
     const dstName = type === 'branch' ? (DRAG.target.dataset.name || tPath || 'playlist').trim() : '';
     dragCleanup(card);
@@ -828,8 +828,8 @@ function applyDrop(card, list){
     }
   }
   dragCleanup(card);
-  // il riordino vive in list.options.order: ricaricare l'albero dal server qui
-  // riporterebbe i rami all'ordine salvato, cancellando il trascinamento appena fatto
+  // reordering lives in list.options.order: reloading the tree from the server here
+  // would bring branches back to the saved order, cancelling the drag just performed
   SKIP_TREE_RELOAD = true;
   renderLists();
   SKIP_TREE_RELOAD = false;
@@ -845,7 +845,7 @@ function bindListEvents(){
       if (el.dataset && el.dataset.plsel === 'list'){ await plPopulateBranches(card); return; }
       if (el.dataset && el.dataset.plsel === 'branch'){ await plPopulateChans(card); return; }
       if (el.dataset && el.dataset.cch !== undefined){
-        // spunta di un singolo canale
+        // single channel checkbox
         const chDiv = el.closest('.chans');
         const path = chDiv.dataset.chans;
         const chans = CHANS[`${id}|${path}`];
@@ -859,7 +859,7 @@ function bindListEvents(){
         return;
       }
       if (el.classList && el.classList.contains('cname')){
-        // rinomina di un singolo canale
+        // single channel rename
         const row = el.closest('.crow');
         const path = row.closest('.chans').dataset.chans;
         const orig = row.dataset.cname;
@@ -934,7 +934,7 @@ function bindListEvents(){
       }
       const ptgl = ev.target.closest('[data-ptgl]');
       if (ptgl){
-        // le note info stanno dentro il titolo ma non devono comprimere la sezione
+        // info notes live inside the title but must not squeeze the section
         if (ev.target.closest('details.info, a, button, input, select, label, summary')) return;
         const lid = ptgl.dataset.ptgl;
         if (PLAYLISTS_OPEN.has(lid)) PLAYLISTS_OPEN.delete(lid); else PLAYLISTS_OPEN.add(lid);
@@ -1042,7 +1042,7 @@ function bindListEvents(){
       }
       const ap = ev.target.closest('button[data-capply]');
       if (ap){
-        // sposta il canale nel gruppo scelto/scritto nel campo accanto
+        // moves the channel to the group chosen/typed in the adjacent field
         const row = ap.closest('.crow');
         const path = row.closest('.chans').dataset.chans;
         const c = CHANS[`${id}|${path}`][Number(ap.dataset.capply)];
@@ -1052,7 +1052,7 @@ function bindListEvents(){
       }
       const rs = ev.target.closest('button[data-creset]');
       if (rs){
-        // riporta il canale nella playlist originale
+        // returns the channel to the original playlist
         const row = rs.closest('.crow');
         const path = row.closest('.chans').dataset.chans;
         const c = CHANS[`${id}|${path}`][Number(rs.dataset.creset)];
@@ -1073,8 +1073,8 @@ function bindListEvents(){
         return;
       }
       if (act === 'delsel'){
-        // cancellazione in blocco delle playlist spuntate (le custom non sono
-        // spuntabili): stesso esito del ✕ singolo ma in una sola chiamata
+        // bulk deletion of checked playlists (custom ones are not
+        // checkable): same outcome as the single ✕ but in one call
         const sel = visibleBranches(list).filter((b) => !b.custom && branchEnabled(list, b.path));
         if (!sel.length){ toast('Nessuna playlist spuntata da eliminare'); return; }
         const few = sel.slice(0, 3).map((b) => b.displayName || b.name).join(', ');
@@ -1141,7 +1141,7 @@ function bindListEvents(){
         const cv = card.querySelector('[data-plchan]').value;
         if (!lid || bp == null || bp === ''){ toast('Scegli lista e playlist/ramo'); return; }
         if (lid === id){
-          // stessa lista: sposta il canale nella playlist/gruppo scelto
+          // same list: moves the channel to the chosen playlist/group
           const res = await plResolveChan(lid, bp, cv).catch(() => null);
           if (!res || res.wild){ toast('Per spostare, scrivi o scegli un singolo canale'); return; }
           const c = res.chan;
@@ -1158,7 +1158,7 @@ function bindListEvents(){
           await loadBranches(id);
           renderLists();
         } else {
-          // altra lista: importa il canale o l'intera playlist come ramo nuovo
+          // other list: imports the channel or the whole playlist as a new branch
           const res = await plResolveChan(lid, bp, cv).catch(() => null);
           if (!res){ toast('Canale non trovato nella playlist scelta'); return; }
           const src = `${lid}::${bp}::${res.wild ? '*' : res.chan.name}`;
@@ -1183,8 +1183,8 @@ function bindListEvents(){
         return;
       }
       if (act === 'all' || act === 'none'){
-        // durante una ricerca (o con "solo attive") si agisce SOLO sulle
-        // playlist visibili: cambiare di nascosto quelle filtrate era una trappola
+        // during a search (or with "active only") act ONLY on
+        // visible playlists: silently changing filtered ones was a trap
         const scoped = visibleBranches(list).filter((b) => !b.custom);
         if (!scoped.length){ toast('Nessuna playlist nei risultati del filtro'); return; }
         for (const b of scoped) setBranchEnabled(list, b.path, act === 'all');
@@ -1236,7 +1236,7 @@ function bindListEvents(){
         DRAG.target = target;
         return;
       }
-      // ramo: bordi = riordina, centro = sposta tutti i canali dentro
+      // branch: edges = reorder, center = move all channels inside
       const brow = ev.target.closest('.brow');
       if (!brow || brow === DRAG.el) return;
       ev.preventDefault();
@@ -1256,7 +1256,7 @@ function bindListEvents(){
 
     card.addEventListener('dragend', ()=>dragCleanup(card));
 
-    // al primo focus sul campo "aggiungi canale" carica i suggerimenti
+    // on first focus of the "add channel" field, load suggestions
     card.addEventListener('focusin', async ev=>{
       const inp = ev.target.closest('[data-cadd]');
       if (inp){
@@ -1356,7 +1356,7 @@ function renderLogs(){
     (scope === 'all' || e.scope === scope) &&
     (!f || e.msg.toLowerCase().includes(f) || e.scope.includes(f))
   );
-  // auto-scroll solo se l'utente e' gia' in fondo
+  // auto-scroll only if the user is already at the bottom
   const atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
   box.innerHTML = rows.length
     ? rows.map(e =>
@@ -1402,8 +1402,8 @@ async function loadBranches(id){
   try {
     const r = await api(`/api/lists/${id}/tree`);
     if (r.fetching){ TREES[id] = null; return; }
-    // il server ordina i rami secondo options.order SALVATO: riapplica l'ordine
-    // locale (anche non ancora salvato) per non cancellare i trascinamenti in corso
+    // the server sorts branches by the SAVED options.order: reapply the local
+    // order (even if not yet saved) to avoid cancelling drags in progress
     const l = CFG && CFG.lists ? CFG.lists.find((x)=>x.id===id) : null;
     const order = (l && l.options && l.options.order) || [];
     if (order.length && Array.isArray(r.branches)){
@@ -1418,9 +1418,9 @@ async function loadBranches(id){
   } catch(e){ TREES[id] = null; }
 }
 
-/** Attende che lo scaricamento in background finisca, aggiornando la UI.
- *  Interroga /api/config: esiste sempre e il server lo usa anche per far
- *  ripartire da solo gli scaricamenti interrotti (es. dopo un riavvio). */
+/** Waits for the background download to finish, updating the UI.
+ *  Polls /api/config: it always exists and the server also uses it to resume
+ *  interrupted downloads by itself (e.g. after a restart). */
 const POLLING = new Map(); // id -> promise, un solo polling per lista
 
 async function waitReady(id){
@@ -1463,7 +1463,7 @@ function pollUntilReady(id){
   return p;
 }
 
-/** Avvia il polling per le liste gia' in scaricamento (es. a pagina appena aperta). */
+/** Starts polling for lists already downloading (e.g. page just opened). */
 function monitorFetching(){
   for (const l of CFG.lists){
     if (l.state && l.state.status === 'fetching') pollUntilReady(l.id);
@@ -1499,7 +1499,7 @@ function renderAll(){
   renderLists();
   $('#status').textContent = `${CFG.lists.length} liste · ${CFG.lists.filter(l=>l.options.enabled).length} attive`;
   if (CFG.version && String(CFG.version) !== WM_UI_VERSION){
-    // pagina stale dal browser: l'UI e il server non sono allineati (bug "fantasma" possibili)
+    // page stale in the browser: UI and server are not aligned (possible "ghost" bugs)
     const el = $('#appVersion');
     el.textContent = `WiseM3U v${CFG.version} ⚠ pagina UI v${WM_UI_VERSION}: aggiorna con Ctrl+Maiusc+R`;
     el.style.color = 'var(--warn)';
@@ -1515,7 +1515,7 @@ function readSettings(){
   CFG.settings.cacheTtlMinutes = Number($('#s_cacheTtlMinutes').value) || 1440;
   CFG.settings.autoRefreshMinutes = Number($('#s_autoRefreshMinutes').value) || 0;
   CFG.settings.maxDepth = Number($('#s_maxDepth').value) || 8;
-  // una riga sola: il server ripulisce comunque CR/LF (header injection)
+  // single line: the server still strips CR/LF (header injection)
   CFG.settings.userAgent = $('#s_userAgent').value.replace(/[\r\n\t]+/g, ' ').trim().slice(0, 300);
   CFG.settings.token = $('#s_token').value.trim();
   CFG.settings.publicBaseUrl = $('#s_publicBaseUrl').value.trim();
@@ -1536,8 +1536,8 @@ async function saveConfig(){
     toast('Configurazione salvata ✔');
   } catch(e){
     if (e.status === 409){
-      // qualcun altro (altra scheda, merge automatico, refresh) ha cambiato la
-      // configurazione: non sovrascrivere, chiedi se riallinearsi al server
+      // someone else (another tab, automatic merge, refresh) changed the
+      // configuration: do not overwrite, ask whether to realign with the server
       if (confirm('La configurazione è cambiata altrove (altra scheda o operazione automatica).\nRicaricare la versione del server? Le modifiche non ancora salvate in questa pagina andranno perse.')){
         await loadConfig();
         loadHistory();
@@ -1573,7 +1573,7 @@ async function delList(id){
   } catch(e){ toast('Errore: '+e.message); }
 }
 
-/** URL incollato da pagine/messaggi HTML: &amp;/&#38; tornano a & (v. anche lato server). */
+/** URL pasted from HTML pages/messages: &amp;/&#38; go back to & (see also server side). */
 function cleanListUrl(s){
   return String(s || '').trim().replace(/&amp;/gi, '&').replace(/&#0?38;/gi, '&');
 }
@@ -1638,12 +1638,12 @@ async function testEasyProxy(card, list, btn){
   finally { btn.disabled = false; }
 }
 
-/** Vero se l'errore del test e' di rete/certificato: non bloccante, perche' a connettersi e' il client. */
+/** True if the test error is network/certificate: non-blocking, because the client is the one connecting. */
 function epNetErr(err){
   return /timeout|ECONNREFUSED|EHOSTUNREACH|ENETUNREACH|ENOTFOUND|EAI_AGAIN|getaddrinfo|certificate|self signed|self-signed|unable to verify|SSL routines|DNS pubblici/i.test(String(err || ''));
 }
 
-/** Suggerimento mirato in base al tipo di errore del test EasyProxy. */
+/** Targeted hint based on the EasyProxy test error type. */
 function epHint(err){
   const e = String(err || '');
   if (/certificate|self signed|self-signed|unable to verify|SSL routines/i.test(e)) {
@@ -1715,7 +1715,7 @@ $('#sidemenu').addEventListener('click', async (ev) => {
       card.scrollIntoView({ behavior: 'smooth', block: 'start' });
       card.classList.remove('flash'); void card.offsetWidth; card.classList.add('flash');
     }
-    // su smartphone il menu è un bottom sheet: chiudilo, altrimenti copre la lista raggiunta
+    // on smartphones the menu is a bottom sheet: close it, otherwise it covers the reached list
     ev.currentTarget.hidden = true;
     return;
   }
@@ -1738,7 +1738,7 @@ $('#btnClearCache').addEventListener('click', async ()=>{
   try { await api('/api/cache/clear',{method:'POST'}); toast('Cache svuotata'); } catch(e){ toast(e.message); }
 });
 
-/* ---------------- cronologia configurazione ---------------- */
+/* ---------------- configuration history ---------------- */
 
 const HIST = { entries: [] };
 
@@ -1771,7 +1771,10 @@ function describeChanges(ch){
   if (ch.lists) parts.push('elenco liste');
   const cats = new Set();
   for (const arr of Object.values(ch.options || {})) (arr || []).forEach((c)=>cats.add(c));
-  for (const c of cats) parts.push((HIST_LABEL[c] || c).toLowerCase());
+  for (const c of cats){
+    const label = HIST_LABEL[c] || c;
+    parts.push((window.WM_I18N && WM_I18N.translate(label)) || label);
+  }
   return parts.length ? `Cambia: ${parts.join(', ')}` : 'Nessuna differenza';
 }
 
@@ -1783,7 +1786,7 @@ function renderHistory(){
     return;
   }
   box.innerHTML = HIST.entries.map((e)=>{
-    const when = new Date(e.ts).toLocaleString('it-IT');
+    const when = new Date(e.ts).toLocaleString((window.WM_I18N && WM_I18N.locale()) || 'en');
     return `<div class="histrow" data-hrow="${esc(e.id)}">
       <div class="histhead">
         <b>${esc(when)}</b>
@@ -1800,15 +1803,15 @@ function renderHistory(){
 
 function histPanelHtml(entry){
   const listId = $('#histList').value;
-  // un checkpoint rappresenta lo stato completo: parti con tutte le categorie
-  // spuntate (l'utente puo' comunque toglierne alcune)
+  // a checkpoint represents the full state: start with all categories
+  // checked (the user can still uncheck some)
   const all = !!entry.name;
   const cats = HIST_CATS
     .filter(([k])=>!(k === 'lists' && listId))
     .map(([k,label])=>`<label class="hopt"><input type="checkbox" name="hcat" value="${k}" ${
       (all || (k !== 'settings' && k !== 'lists')) ? 'checked' : ''}>${esc(label)}</label>`)
     .join('');
-  const when = new Date(entry.ts).toLocaleString('it-IT');
+  const when = new Date(entry.ts).toLocaleString((window.WM_I18N && WM_I18N.locale()) || 'en');
   return `<div class="hint">${all ? `Checkpoint <b>★ ${esc(entry.name)}</b> del <b>${esc(when)}</b>. Tutte le categorie sono spuntate: togli la spunta a quelle che non vuoi ripristinare.` : `Stato del <b>${esc(when)}</b>${entry.listName ? ` · ${esc(entry.listName)}` : ''}.`}
       ${listId ? 'Le categorie si applicano solo alla lista selezionata.' : 'Le categorie delle opzioni si applicano a tutte le liste.'}
       <br>Il ripristino verrà registrato come nuovo stato: potrai annullarlo.</div>
@@ -1824,7 +1827,7 @@ async function saveCheckpoint(){
   if (!name) return;
   try {
     await api('/api/history/checkpoints', { method:'POST', body: JSON.stringify({ name }) });
-    // il checkpoint e' globale: togli il filtro per vederlo subito in elenco
+    // the checkpoint is global: remove the filter to see it immediately in the list
     $('#histList').value = '';
     toast('Checkpoint «' + name + '» salvato ✔');
     await loadHistory();
@@ -1879,7 +1882,7 @@ async function loadHistory(){
     const listId = $('#histList').value;
     const cats = [...panel.querySelectorAll('input[name="hcat"]:checked')].map((i)=>i.value);
     if (!cats.length){ toast('Spunta almeno una categoria da ripristinare'); return; }
-    const when = new Date(entry.ts).toLocaleString('it-IT');
+    const when = new Date(entry.ts).toLocaleString((window.WM_I18N && WM_I18N.locale()) || 'en');
     const msg = entry.name
       ? `Ripristinare le categorie selezionate dal checkpoint «${entry.name}»?`
       : `Ripristinare le categorie selezionate dallo stato del ${when}?`;
@@ -1906,10 +1909,17 @@ async function loadHistory(){
   });
 })();
 
+/* language change: redraw the parts with dates/numbers formatted in the chosen locale */
+document.addEventListener('wm:language', () => {
+  if (CFG) { renderLists(); renderSideMenu(); }
+  if (typeof HIST !== 'undefined' && HIST.entries.length) renderHistory();
+  renderLogs();
+});
+
 /* ---------------- icone info e sezioni comprimibili ---------------- */
 
-/** Racchiude il testo del titolo in uno span (.ttl) cosi' che numero, titolo,
- *  icona info e pulsante di espansione restano sempre sulla stessa riga. */
+/** Wraps the title text in a span (.ttl) so that number, title,
+ *  info icon and expand button always stay on the same line. */
 function wrapHeadingText(h2){
   if (!h2 || h2.querySelector(':scope > .ttl')) return;
   const texts = [...h2.childNodes].filter(n => n.nodeType === 3 && n.textContent.trim());
@@ -1968,7 +1978,7 @@ function collectInfo(container, host, { skip }={}){
   host.appendChild(panel);
 }
 
-/** Sezioni statiche (1, 2, 3, 5): info nel titolo. */
+/** Static sections (1, 2, 3, 5): info in the title. */
 function decorateSections(){
   document.querySelectorAll('main > section.card').forEach(sec=>{
     const h2 = sec.querySelector(':scope > h2');
@@ -1986,7 +1996,7 @@ function decorateSections(){
   });
 }
 
-/** Schede lista: info accanto al nome; il blocco playlist ha il suo pannello. */
+/** List cards: info next to the name; the playlist block has its own panel. */
 function decorateCards(root=document){
   root.querySelectorAll('.listcard').forEach(card=>{
     if (card.dataset.deco) return;
@@ -1999,7 +2009,7 @@ function decorateCards(root=document){
   });
 }
 
-/** Rende il titolo della sezione cliccabile (▾/▸ e' solo un indicatore). */
+/** Makes the section title clickable (▾/▸ is just an indicator). */
 function makeSectionToggle(h2, apply, initiallyCollapsed=false){
   if (!h2 || h2.querySelector('.sectgl')) return;
   let collapsed = false;
@@ -2016,7 +2026,7 @@ function makeSectionToggle(h2, apply, initiallyCollapsed=false){
   h2.setAttribute('role', 'button');
   h2.tabIndex = 0;
   h2.addEventListener('click', ev=>{
-    // l'icona info e gli eventuali comandi dentro il titolo non comprimono la sezione
+    // the info icon and any controls inside the title do not squeeze the section
     if (ev.target.closest('details.info, a, button, input, select, label, summary')) return;
     toggle();
   });
@@ -2030,12 +2040,12 @@ function makeSectionToggle(h2, apply, initiallyCollapsed=false){
 }
 
 function initCollapsibleSections(){
-  // sezioni con il titolo dentro (1, 2, 3): si comprime il contenuto, il titolo resta
+  // sections with the title inside (1, 2, 3): the content collapses, the title stays
   document.querySelectorAll('main > section.card').forEach(sec=>{
     const h2 = sec.querySelector(':scope > h2');
     if (h2) makeSectionToggle(h2, (c)=>sec.classList.toggle('collapsed', c), sec.dataset.collapsed === '1');
   });
-  // Log live: il titolo sta fuori dalla sezione, quindi si nasconde la sezione intera
+  // Live log: the title is outside the section, so the whole section is hidden
   document.querySelectorAll('main > h2.secttl').forEach(h2=>{
     const sec = h2.nextElementSibling;
     if (sec && sec.matches('section.card')){
@@ -2047,7 +2057,7 @@ function initCollapsibleSections(){
 decorateSections();
 initCollapsibleSections();
 
-/* ---- info: ancoraggio del pannello senza uscire dallo schermo ---- */
+/* ---- info: panel anchoring without leaving the screen ---- */
 (function placeInfoPanels(){
   document.addEventListener('toggle', (ev)=>{
     const p = ev.target;
@@ -2064,7 +2074,7 @@ initCollapsibleSections();
     });
   }, true);
 
-  // un solo pannello aperto alla volta
+  // only one panel open at a time
   document.addEventListener('toggle', (ev)=>{
     const p = ev.target;
     if (!p || !p.classList || !p.classList.contains('sectinfo') || !p.open) return;
@@ -2072,7 +2082,7 @@ initCollapsibleSections();
   }, true);
 })();
 
-/* ---- info: chiusura al tocco fuori dal pannello o con Esc ---- */
+/* ---- info: close on tap outside the panel or with Esc ---- */
 (function closeInfoPanels(){
   const closeAll = ()=>{ document.querySelectorAll('details.sectinfo[open]').forEach(d=>{ d.open = false; }); };
   document.addEventListener('pointerdown', (ev)=>{
@@ -2083,12 +2093,12 @@ initCollapsibleSections();
   document.addEventListener('keydown', (ev)=>{ if (ev.key === 'Escape') closeAll(); });
 })();
 
-/* ---- tastiera: i pulsanti flottanti non devono galleggiare sopra i tasti ---- */
+/* ---- keyboard: floating buttons must not float above the keys ---- */
 (function watchKeyboard(){
   const vv = window.visualViewport;
   if (!vv) return;
   const apply = ()=>{
-    // su iOS il layout viewport non cambia: il calo di visualViewport.height e' il segnale
+    // on iOS the layout viewport does not change: the drop in visualViewport.height is the signal
     const shrunk = (window.innerHeight - vv.height) > 120;
     document.body.classList.toggle('kbd', shrunk);
   };
@@ -2102,14 +2112,14 @@ initCollapsibleSections();
 $('#fabSave').addEventListener('click', saveConfig);
 $('#fabReload').addEventListener('click', loadConfig);
 
-/* torna in alto: sempre flottante su mobile, scroll fluido salvo preferenza utente */
+/* back to top: always floating on mobile, smooth scroll unless user preference */
 $('#toTop').addEventListener('click', ()=>{
   const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   try { window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' }); }
   catch (_) { window.scrollTo(0, 0); }
 });
 
-// badge Xtream: click per rileggere i dati (niente handler inline nel markup)
+// Xtream badge: click to re-read the data (no inline handler in the markup)
 document.addEventListener('click', (ev) => {
   const badge = ev.target.closest('[data-xtream]');
   if (badge) refreshXtreamBadge(badge.dataset.xtream);

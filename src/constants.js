@@ -1,30 +1,30 @@
 'use strict';
 
 /**
- * Costanti condivise dell'addon: un solo posto per versione, user-agent,
- * limiti e timeout usati da piu' moduli (niente hardcoding sparso).
+ * Shared addon constants: a single place for version, user-agent, limits and
+ * timeouts used by multiple modules (no scattered hardcoding).
  *
- * User-Agent personalizzato: alcuni pannelli/CDN bloccano la stringa di
- * WiseM3U (403). Dalle impostazioni l'utente puo' incollare una UA qualsiasi
- * (di un browser, di VLC, dell'app che usa di solito): vale per TUTTE le
- * richieste in uscita (liste, rami, JSON Xtream, loghi). Vuota = default.
+ * Custom User-Agent: some panels/CDNs block the WiseM3U string (403). From
+ * settings the user can paste any UA (browser, VLC, the app they usually use):
+ * it applies to ALL outgoing requests (lists, branches, Xtream JSON, logos).
+ * Empty = default.
  */
 
 const pkg = require('../package.json');
 
-/** UA predefinita delle richieste "di dati" (liste, JSON, Xtream). */
+/** Default UA for "data" requests (lists, JSON, Xtream). */
 const DEFAULT_USER_AGENT =
   `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) ` +
   `Chrome/126.0 Safari/537.36 WiseM3U/${pkg.version}`;
 
-/** UA predefinita dei loghi: niente suffisso WiseM3U perche' i CDN dietro
- *  Cloudflare worker (vavoo, Rakuten, Pluto...) lo trattano come bot. */
+/** Default UA for logos: no WiseM3U suffix because CDNs behind Cloudflare
+ *  workers (vavoo, Rakuten, Pluto...) treat it as a bot. */
 const DEFAULT_IMG_USER_AGENT =
   `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) ` +
   `Chrome/126.0.0.0 Safari/537.36`;
 
-/** Normalizza una UA scritta dall'utente: una sola riga, niente CR/LF
- *  (header injection), lunghezza ragionevole. */
+/** Normalizes a user-written UA: a single line, no CR/LF (header
+ *  injection), reasonable length. */
 function sanitizeUserAgent(ua) {
   const s = String(ua == null ? '' : ua)
     .replace(/[\r\n\t]+/g, ' ')
@@ -35,28 +35,28 @@ function sanitizeUserAgent(ua) {
 
 let customUserAgent = '';
 
-/** Imposta l'override globale (stringa vuota = torna ai default). */
+/** Sets the global override (empty string = back to defaults). */
 function setCustomUserAgent(ua) {
   customUserAgent = sanitizeUserAgent(ua);
   return customUserAgent;
 }
 
-/** UA per liste/JSON/Xtream: personalizzata se impostata. */
+/** UA for lists/JSON/Xtream: custom when set. */
 function getUserAgent() {
   return customUserAgent || DEFAULT_USER_AGENT;
 }
 
-/** UA per i loghi: personalizzata se impostata, altrimenti quella "pulita". */
+/** UA for logos: custom when set, otherwise the "clean" one. */
 function getImgUserAgent() {
   return customUserAgent || DEFAULT_IMG_USER_AGENT;
 }
 
 module.exports = {
-  /** Versione semver del rilascio (fonte di verita': package.json). */
+  /** Release semver version (source of truth: package.json). */
   VERSION: pkg.version,
 
-  /** Default esportati come costanti (chi vuole il valore "di fabbrica").
-   *  Per le richieste vere usare getUserAgent()/getImgUserAgent(). */
+  /** Defaults exported as constants (for the "factory" value).
+   *  For real requests use getUserAgent()/getImgUserAgent(). */
   USER_AGENT: DEFAULT_USER_AGENT,
   IMG_USER_AGENT: DEFAULT_IMG_USER_AGENT,
 
@@ -65,19 +65,19 @@ module.exports = {
   getUserAgent,
   getImgUserAgent,
 
-  /** Limite del body JSON accettato dalle API (la config puo' essere grande). */
+  /** JSON body limit accepted by the APIs (the config can be large). */
   JSON_BODY_LIMIT: '4mb',
 
-  /** Timeout del check /api/info di EasyProxy (pulsante Test). */
+  /** Timeout for the EasyProxy /api/info check (Test button). */
   EP_INFO_TIMEOUT_MS: 6000,
 
-  /** Timeout del proxy di prova di EasyProxy (download di uno stream vero). */
+  /** Timeout for the EasyProxy test proxy (download of a real stream). */
   EP_PROXY_TIMEOUT_MS: 15000,
 
-  /** Cache-Control per manifest e cataloghi: i client rifetchano meno, le
-   *  modifiche alla configurazione diventano visibili entro un minuto. */
+  /** Cache-Control for manifest and catalogs: clients refetch less, and
+   *  configuration changes become visible within a minute. */
   PUBLIC_CACHE_CONTROL: 'public, max-age=60',
 
-  /** Sotto questa dimensione le risposte non vengono compresse. */
+  /** Responses below this size are not compressed. */
   COMPRESSION_THRESHOLD: 1024,
 };

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * Cronologia configurazione: snapshot automatici, dedupe, filtro per lista,
- * ripristino selettivo per categorie e protezione del token admin.
+ * Configuration history: automatic snapshots, dedupe, per-list filter,
+ * selective restore by category and admin token protection.
  */
 const { spawn, execFileSync } = require('child_process');
 const path = require('path');
@@ -45,177 +45,177 @@ const mkList = (id, name, opts={}) => ({
     try { up = (await fetch(`${BASE}/healthz`)).ok; } catch { }
     if (!up) await sleep(150);
   }
-  ok(up, 'server avviato');
+  ok(up, 'server started');
   if (!up){ app.kill(); process.exit(1); }
 
-  // ---- pagina configurazione: HTML leggero + asset CSS/JS esterni ----
+  // ---- configuration page: lightweight HTML + external CSS/JS assets ----
   const pageRes = await fetch(`${BASE}/configure`);
   const pageHtml = await pageRes.text();
-  ok(pageRes.status === 200, 'pagina /configure servita');
-  ok(/name="wm-ui-version" content="\d+\.\d+\.\d+"/.test(pageHtml), 'versione iniettata nella meta');
-  ok(!pageHtml.includes('__WM_UI_VERSION__'), 'nessun placeholder versione residuo');
-  ok(pageHtml.includes('/configure.css') && pageHtml.includes('/configure.js'), 'pagina collegata a CSS e JS esterni');
-  ok(!pageHtml.includes('<style>') && !pageHtml.includes('<script>'), 'pagina senza CSS/JS inline');
+  ok(pageRes.status === 200, 'page /configure served');
+  ok(/name="wm-ui-version" content="\d+\.\d+\.\d+"/.test(pageHtml), 'version injected into meta');
+  ok(!pageHtml.includes('__WM_UI_VERSION__'), 'no residual version placeholder');
+  ok(pageHtml.includes('/configure.css') && pageHtml.includes('/configure.js'), 'page linked to external CSS and JS');
+  ok(!pageHtml.includes('<style>') && !pageHtml.includes('<script>'), 'page without inline CSS/JS');
   const cssRes = await fetch(`${BASE}/configure.css`);
-  ok(cssRes.status === 200 && /text\/css/.test(cssRes.headers.get('content-type') || ''), 'configure.css servito');
+  ok(cssRes.status === 200 && /text\/css/.test(cssRes.headers.get('content-type') || ''), 'configure.css served');
   const jsRes = await fetch(`${BASE}/configure.js`);
   const jsText = await jsRes.text();
-  ok(jsRes.status === 200 && /javascript/.test(jsRes.headers.get('content-type') || ''), 'configure.js servito');
-  ok(jsText.includes('wm-ui-version') && !jsText.includes('__WM_UI_VERSION__'), 'il JS legge la versione dalla meta');
+  ok(jsRes.status === 200 && /javascript/.test(jsRes.headers.get('content-type') || ''), 'configure.js served');
+  ok(jsText.includes('wm-ui-version') && !jsText.includes('__WM_UI_VERSION__'), 'JS reads the version from meta');
 
-  // v1: lista A con ordine [X,Y], lista B
-  const listA = mkList('l_a', 'Lista A', { order: ['X', 'Y'], renames: { X: 'Vecchio nome' } });
-  const listB = mkList('l_b', 'Lista B');
+  // v1: list A with order [X,Y], list B
+  const listA = mkList('l_a', 'List A', { order: ['X', 'Y'], renames: { X: 'Old name' } });
+  const listB = mkList('l_b', 'List B');
   let r = await api('/api/config', { method:'PUT', body: JSON.stringify({
-    settings: { addonName: 'WiseM3U-test', token: TOKEN }, lists: [listA, listB], reason: 'prima versione',
+    settings: { addonName: 'WiseM3U-test', token: TOKEN }, lists: [listA, listB], reason: 'first version',
   }) });
-  ok(r.status === 200, 'v1 salvata');
+  ok(r.status === 200, 'v1 saved');
 
   let hist = (await api('/api/history')).body.entries;
-  ok(hist.length === 1, `primo snapshot registrato (${hist.length})`);
-  ok(hist[0].reason === 'prima versione', 'motivo dello snapshot conservato');
+  ok(hist.length === 1, `first snapshot recorded (${hist.length})`);
+  ok(hist[0].reason === 'first version', 'snapshot reason preserved');
   const idV1 = hist[0].id;
 
   await sleep(15);
 
-  // v2: cambia ordine, nomi, nome lista B e impostazioni
-  const listA2 = mkList('l_a', 'Lista A', { order: ['Y', 'X'], renames: { X: 'Nuovo nome' } });
-  const listB2 = mkList('l_b', 'Lista B rinominata');
+  // v2: changes order, names, list B name and settings
+  const listA2 = mkList('l_a', 'List A', { order: ['Y', 'X'], renames: { X: 'New name' } });
+  const listB2 = mkList('l_b', 'List B renamed');
   r = await api('/api/config', { method:'PUT', body: JSON.stringify({
-    settings: { addonName: 'WiseM3U-due', token: TOKEN }, lists: [listA2, listB2], reason: 'seconda versione',
+    settings: { addonName: 'WiseM3U-due', token: TOKEN }, lists: [listA2, listB2], reason: 'second version',
   }) });
-  ok(r.status === 200, 'v2 salvata');
+  ok(r.status === 200, 'v2 saved');
   await sleep(15);
 
-  // salvataggio identico: nessun nuovo snapshot (dedupe). Si rimanda la config
-  // letta dal server (con createdAt), esattamente come fa la UI.
+  // identical save: no new snapshot (dedupe). The config read back from the
+  // server (with createdAt) is deferred, exactly as the UI does.
   const cfgNow = (await api('/api/config')).body;
   await api('/api/config', { method:'PUT', body: JSON.stringify({
     settings: cfgNow.settings, lists: cfgNow.lists, reason: 'identico',
   }) });
   hist = (await api('/api/history')).body.entries;
-  ok(hist.length === 2, `salvataggio identico non crea snapshot (${hist.length})`);
-  ok(hist[0].reason === 'seconda versione', 'ordine: il piu recente per primo');
+  ok(hist.length === 2, `identical save does not create a snapshot (${hist.length})`);
+  ok(hist[0].reason === 'second version', 'order: most recent first');
   const changes = hist[0].changes;
-  ok(changes.settings === true, 'diff rileva le impostazioni generali');
-  ok(changes.lists === true, 'diff rileva il nome di una lista');
-  ok((changes.options.l_a || []).includes('order'), 'diff rileva l ordine di l_a');
-  ok((changes.options.l_a || []).includes('names'), 'diff rileva i nomi di l_a');
+  ok(changes.settings === true, 'diff detects general settings');
+  ok(changes.lists === true, 'diff detects a list name');
+  ok((changes.options.l_a || []).includes('order'), 'diff detects the order of l_a');
+  ok((changes.options.l_a || []).includes('names'), 'diff detects the names of l_a');
 
-  // filtro per lista
+  // filter by list
   const filtered = (await api('/api/history?list=l_b')).body.entries;
   ok(filtered.length >= 1 && filtered.every(e=>!e.changes.options.l_a || Object.keys(e.changes.options).length === 0 || e.changes.lists),
-     'filtro per lista: niente differenze di l_a');
+     'filter by list: no differences for l_a');
   const onlyA = (await api('/api/history?list=l_a')).body.entries;
-  ok(onlyA.length === 2, `filtro l_a mostra gli stati che la cambiano (${onlyA.length})`);
+  ok(onlyA.length === 2, `l_a filter shows the states that change it (${onlyA.length})`);
 
-  // ripristino solo ordine di l_a dallo snapshot v1
+  // restore only the order of l_a from snapshot v1
   r = await api(`/api/history/${idV1}/restore`, { method:'POST', body: JSON.stringify({
     listId: 'l_a', options: ['order'],
   }) });
-  ok(r.status === 200 && r.body.ok, 'ripristino selettivo risponde ok');
-  ok(Array.isArray(r.body.restored.options.l_a), 'restore riporta le categorie applicate');
+  ok(r.status === 200 && r.body.ok, 'selective restore responds ok');
+  ok(Array.isArray(r.body.restored.options.l_a), 'restore returns the applied categories');
 
   let cfg = (await api('/api/config')).body;
   const a = cfg.lists.find(l=>l.id==='l_a');
-  ok(JSON.stringify(a.options.order) === JSON.stringify(['X', 'Y']), 'ordine ripristinato da v1');
-  ok(a.options.renames.X === 'Nuovo nome', 'i nomi (categoria non scelta) restano quelli nuovi');
-  ok(cfg.settings.addonName === 'WiseM3U-due', 'impostazioni generali non toccate');
+  ok(JSON.stringify(a.options.order) === JSON.stringify(['X', 'Y']), 'order restored from v1');
+  ok(a.options.renames.X === 'New name', 'names (unselected category) stay the new ones');
+  ok(cfg.settings.addonName === 'WiseM3U-due', 'general settings untouched');
   hist = (await api('/api/history')).body.entries;
-  ok(hist.length === 3 && hist[0].reason === 'ripristino cronologia', 'il ripristino crea un nuovo stato annullabile');
+  ok(hist.length === 3 && hist[0].reason === 'history restore', 'restore creates a new undoable state');
 
-  // ripristino impostazioni + elenco liste da v1
+  // restore settings + list set from v1
   const v1 = hist.find(e=>e.id === idV1);
-  ok(!!v1, 'snapshot v1 ancora presente');
+  ok(!!v1, 'snapshot v1 still present');
   r = await api(`/api/history/${idV1}/restore`, { method:'POST', body: JSON.stringify({
     settings: true, lists: true,
   }) });
-  ok(r.status === 200, 'ripristino impostazioni+liste ok');
+  ok(r.status === 200, 'settings+lists restore ok');
   cfg = (await api('/api/config')).body;
-  ok(cfg.settings.addonName === 'WiseM3U-test', 'impostazioni generali ripristinate');
-  ok(cfg.settings.token === TOKEN, 'il token admin NON viene ripristinato (resta quello attuale)');
-  ok(cfg.lists.find(l=>l.id==='l_b').name === 'Lista B', 'nome lista ripristinato');
+  ok(cfg.settings.addonName === 'WiseM3U-test', 'general settings restored');
+  ok(cfg.settings.token === TOKEN, 'admin token is NOT restored (the current one stays)');
+  ok(cfg.lists.find(l=>l.id==='l_b').name === 'List B', 'list name restored');
 
   // categorie vuote / id inesistente
   r = await api(`/api/history/${idV1}/restore`, { method:'POST', body: '{}' });
-  ok(r.status === 400, 'nessuna categoria -> 400');
+  ok(r.status === 400, 'no category -> 400');
   r = await api('/api/history/nonesiste/restore', { method:'POST', body: JSON.stringify({ options: ['order'] }) });
-  ok(r.status === 404, 'snapshot inesistente -> 404');
+  ok(r.status === 404, 'nonexistent snapshot -> 404');
   r = await api('/api/history/../config/restore', { method:'POST', body: JSON.stringify({ options: ['order'] }) });
-  ok(r.status === 404, 'id non valido -> 404');
+  ok(r.status === 404, 'invalid id -> 404');
 
-  // ---- revisione: salvataggi basati su uno stato vecchio -> 409 ----
+  // ---- revision: saves based on an old state -> 409 ----
   let cfgRev = (await api('/api/config')).body;
-  ok(typeof cfgRev.rev === 'number' && cfgRev.rev > 0, 'la config espone la revisione');
+  ok(typeof cfgRev.rev === 'number' && cfgRev.rev > 0, 'config exposes the revision');
   const rev0 = cfgRev.rev;
   r = await api('/api/config', { method:'PUT', body: JSON.stringify({
-    settings: cfgRev.settings, lists: cfgRev.lists, reason:'identico con rev', baseRev: rev0,
+    settings: cfgRev.settings, lists: cfgRev.lists, reason:'identical with rev', baseRev: rev0,
   }) });
-  ok(r.status === 200 && r.body.rev === rev0, 'rev corretta e nessuna modifica: revisione ferma');
+  ok(r.status === 200 && r.body.rev === rev0, 'correct rev and no change: revision unchanged');
   r = await api('/api/config', { method:'PUT', body: JSON.stringify({
-    settings: cfgRev.settings, lists: cfgRev.lists, reason:'stato vecchio', baseRev: rev0 - 1,
+    settings: cfgRev.settings, lists: cfgRev.lists, reason:'old state', baseRev: rev0 - 1,
   }) });
   ok(r.status === 409 && r.body.rev === rev0 && r.body.config && r.body.config.settings,
-    'rev vecchia -> 409 con lo stato del server');
+    'old rev -> 409 with server state');
   r = await api('/api/config', { method:'PUT', body: JSON.stringify({
-    settings: { ...cfgRev.settings, addonName:'WiseM3U-rev' }, lists: cfgRev.lists, reason:'modifica con rev', baseRev: rev0,
+    settings: { ...cfgRev.settings, addonName:'WiseM3U-rev' }, lists: cfgRev.lists, reason:'change with rev', baseRev: rev0,
   }) });
-  ok(r.status === 200 && r.body.rev > rev0, 'rev corretta + modifica -> nuova revisione');
+  ok(r.status === 200 && r.body.rev > rev0, 'correct rev + change -> new revision');
 
-  // ---- undo delle operazioni distruttive ----
+  // ---- undo of destructive operations ----
   let beforeU = (await api('/api/config')).body;
   const delBefore = beforeU.lists.find((l)=>l.id === 'l_b').options.deletedBranches || [];
   r = await api('/api/lists/l_b/delete', { method:'POST', body: JSON.stringify({ paths:['X'] }) });
-  ok(r.status === 200 && r.body.undo && r.body.undo.id, 'eliminazione fornisce il punto di undo');
+  ok(r.status === 200 && r.body.undo && r.body.undo.id, 'deletion provides the undo point');
   ok(((await api('/api/config')).body.lists.find((l)=>l.id === 'l_b').options.deletedBranches || []).includes('X'),
-    'la playlist eliminata finisce nel cestino');
+    'deleted playlist goes to trash');
   const undoDel = await api(`/api/history/${encodeURIComponent(r.body.undo.id)}/undo`, {
     method:'POST', body: JSON.stringify({ listIds: r.body.undo.listIds }),
   });
-  ok(undoDel.status === 200, 'undo dell eliminazione risponde ok');
+  ok(undoDel.status === 200, 'deletion undo responds ok');
   let afterU = (await api('/api/config')).body;
   ok(JSON.stringify(afterU.lists.find((l)=>l.id === 'l_b').options.deletedBranches || []) === JSON.stringify(delBefore),
-    'undo riporta il cestino allo stato precedente');
+    'undo restores the trash to the previous state');
 
   const nameB = afterU.lists.find((l)=>l.id === 'l_b').name;
   r = await api('/api/lists/l_b', { method:'DELETE' });
-  ok(((await api('/api/config')).body.lists.some((l)=>l.id === 'l_b') === false), 'lista eliminata davvero');
-  ok(r.body.undo && r.body.undo.id, 'eliminazione lista fornisce il punto di undo');
+  ok(((await api('/api/config')).body.lists.some((l)=>l.id === 'l_b') === false), 'list actually deleted');
+  ok(r.body.undo && r.body.undo.id, 'list deletion provides the undo point');
   const undoList = await api(`/api/history/${encodeURIComponent(r.body.undo.id)}/undo`, {
     method:'POST', body: JSON.stringify({ listIds: r.body.undo.listIds }),
   });
-  ok(undoList.status === 200, 'undo dell eliminazione lista risponde ok');
+  ok(undoList.status === 200, 'list deletion undo responds ok');
   afterU = (await api('/api/config')).body;
   const backB = afterU.lists.find((l)=>l.id === 'l_b');
-  ok(!!backB && backB.name === nameB, 'undo ricrea la lista eliminata con lo stesso nome');
+  ok(!!backB && backB.name === nameB, 'undo recreates the deleted list with the same name');
 
-  // svuota cestino annullabile (le voci tornano ripristinabili)
+  // undoable empty trash (items become restorable again)
   r = await api('/api/lists/l_b/delete', { method:'POST', body: JSON.stringify({ path:'Y' }) });
   const purgedBefore = JSON.stringify(((await api('/api/config')).body.lists.find((l)=>l.id === 'l_b').options.purgedBranches) || []);
   r = await api('/api/lists/l_b/emptytrash', { method:'POST', body:'{}' });
-  ok(r.status === 200 && r.body.undo && r.body.undo.id, 'svuota cestino fornisce il punto di undo');
+  ok(r.status === 200 && r.body.undo && r.body.undo.id, 'empty trash provides the undo point');
   ok(((await api('/api/config')).body.lists.find((l)=>l.id === 'l_b').options.purgedBranches || []).includes('Y'),
-    'la voce svuotata risulta eliminata definitivamente');
+    'emptied item is permanently deleted');
   const undoTrash = await api(`/api/history/${encodeURIComponent(r.body.undo.id)}/undo`, {
     method:'POST', body: JSON.stringify({ listIds: r.body.undo.listIds }),
   });
-  ok(undoTrash.status === 200, 'undo dello svuotamento risponde ok');
+  ok(undoTrash.status === 200, 'empty trash undo responds ok');
   afterU = (await api('/api/config')).body;
   ok(JSON.stringify(afterU.lists.find((l)=>l.id === 'l_b').options.purgedBranches || []) === purgedBefore,
-    'undo dello svuotamento riaccende le voci nel cestino');
+    'empty trash undo re-enables items in the trash');
 
   // ---- checkpoint nominati ----
   const cpBefore = (await api('/api/history')).body.entries.length;
-  r = await api('/api/history/checkpoints', { method:'POST', body: JSON.stringify({ name:'prima del merge' }) });
-  ok(r.status === 200 && r.body.entry && r.body.entry.id, 'checkpoint creato');
+  r = await api('/api/history/checkpoints', { method:'POST', body: JSON.stringify({ name:'before merge' }) });
+  ok(r.status === 200 && r.body.entry && r.body.entry.id, 'checkpoint created');
   hist = (await api('/api/history')).body.entries;
   const cp = hist.find((e)=>e.id === r.body.entry.id);
-  ok(!!cp && cp.name === 'prima del merge', 'il checkpoint conserva il nome');
-  ok(hist.length === cpBefore + 1, 'il checkpoint crea una voce anche a config invariata');
+  ok(!!cp && cp.name === 'before merge', 'checkpoint preserves the name');
+  ok(hist.length === cpBefore + 1, 'checkpoint creates an entry even with unchanged config');
   r = await api('/api/history/checkpoints', { method:'POST', body:'{}' });
-  ok(r.status === 400, 'checkpoint senza nome -> 400');
+  ok(r.status === 400, 'checkpoint without name -> 400');
 
-  // ---- retention: i checkpoint nominati non scadono come gli stati automatici ----
+  // ---- retention: named checkpoints do not expire like automatic states ----
   const hdir = fs.mkdtempSync(path.join(os.tmpdir(), 'wm-hist-ret-'));
   const script = `
     const h = require(${JSON.stringify(path.join(REPO, 'src', 'history.js'))});
@@ -223,7 +223,7 @@ const mkList = (id, name, opts={}) => ({
     const wait = (ms) => { const t = Date.now(); while (Date.now() - t < ms) { /* ms distinti */ } };
     h.record(cfg(1), { reason: 'v1' });
     wait(3);
-    h.checkpoint(cfg(1), 'vecchio');
+    h.checkpoint(cfg(1), 'old');
     for (let n = 2; n <= 8; n++) { wait(3); h.record(cfg(n), { reason: 'v' + n }); }
     console.log(JSON.stringify(h.listEntries({ limit: 50 }).map((e) => ({ name: e.name, reason: e.reason }))));
   `;
@@ -232,16 +232,16 @@ const mkList = (id, name, opts={}) => ({
     encoding: 'utf8',
   });
   const kept = JSON.parse(raw.trim().split('\n').pop());
-  ok(kept.length === 6, `retention: 5 stati automatici + il checkpoint (${kept.length})`);
-  ok(kept.some((e) => e.name === 'vecchio'), 'il checkpoint nominato sopravvive alla retention');
-  ok(kept.filter((e) => !e.name).map((e) => e.reason).join(',') === 'v8,v7,v6,v5,v4', 'restano gli stati automatici piu recenti');
+  ok(kept.length === 6, `retention: 5 automatic states + the checkpoint (${kept.length})`);
+  ok(kept.some((e) => e.name === 'old'), 'named checkpoint survives retention');
+  ok(kept.filter((e) => !e.name).map((e) => e.reason).join(',') === 'v8,v7,v6,v5,v4', 'the most recent automatic states remain');
 
-  // pulizia manuale non prevista: i file restano sul volume
+  // manual cleanup not provided: files stay on the volume
   const files = fs.readdirSync(path.join(dir, 'history')).filter(f=>f.endsWith('.json'));
-  ok(files.length >= 3, `snapshot su disco (${files.length})`);
+  ok(files.length >= 3, `snapshot on disk (${files.length})`);
 
   app.kill();
   console.log('');
-  console.log(fail === 0 ? `TUTTI I TEST CRONOLOGIA OK (${pass})` : `${fail} TEST CRONOLOGIA FALLITI`);
+  console.log(fail === 0 ? `ALL HISTORY TESTS PASSED (${pass})` : `${fail} HISTORY TESTS FAILED`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e=>{ console.error(e); process.exit(1); });

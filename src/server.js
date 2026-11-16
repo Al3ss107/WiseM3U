@@ -24,16 +24,16 @@ const history = require('./history');
 const xtream = require('./xtream');
 const C = require('./constants');
 
-// UA personalizzata dalle impostazioni: vale da subito anche per i download
-// in background avviati all'avvio
+// Custom UA from settings: applies immediately to downloads too
+// background downloads started at boot
 C.setCustomUserAgent(store.loadConfig().settings.userAgent);
 
-// dieta RAM: quando la cache evita l'albero parseato di una lista, libera anche
-// le righe flatten memoizzate (stringhe condivise col tree, altrimenti non free)
+// RAM diet: when the cache evicts a list's parsed tree, free the memoized
+// flatten rows too (strings shared with the tree, otherwise they are not freed)
 cache.setEvictHook((listId) => playlist.clearRows(listId));
 
-// rilascia volentieri al kernel l'heap inutilizzata (con NODE_OPTIONS=--expose-gc):
-// mantiene l'RSS vicino ai dati vivi invece che al picco storico
+// willingly releases unused heap to the kernel (with NODE_OPTIONS=--expose-gc):
+// keeps RSS close to live data instead of the historical peak
 if (typeof global.gc === 'function') {
   setInterval(() => {
     const m = process.memoryUsage();
@@ -50,8 +50,8 @@ app.disable('x-powered-by');
 app.use(express.json({ limit: C.JSON_BODY_LIMIT }));
 app.use(compression({
   threshold: C.COMPRESSION_THRESHOLD,
-  // i playlist-server usano MIME m3u che compression non comprime di default:
-  // sono testo puro, comprimerli riduce drasticamente la banda su reti domestiche
+  // playlist servers use m3u MIME types that compression does not compress by default:
+  // they are plain text; compressing them drastically reduces bandwidth on home networks
   filter: (req, res) => {
     const ct = String(res.getHeader('Content-Type') || '');
     if (/mpegurl/.test(ct)) return true;
@@ -59,17 +59,17 @@ app.use(compression({
   },
 }));
 app.use(express.static(path.join(__dirname, '..', 'public'), {
-  // mai servire HTML/JS "congelati" da cache del browser dopo gli aggiornamenti:
-  // devono essere SEMPRE la versione del container, altrimenti UI e logica divergono
+  // never serve HTML/JS "frozen" by the browser cache after updates:
+  // they must ALWAYS be the container version, otherwise UI and logic diverge
   setHeaders: (res, filePath) => {
     if (/\.(html|js|css)$/i.test(filePath)) {
       res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     }
   },
 }));
-// La pagina di configurazione viene servita con la versione dell'addon INIETTATA
-// dal server (placeholder __WM_UI_VERSION__): impossibile che il marcatore vuoto
-// resti indietro rispetto al backend (bug v1.4.4/v1.4.5) — niente avvisi eterni.
+// The configuration page is served with the addon version INJECTED
+// by the server (placeholder __WM_UI_VERSION__): the empty marker cannot
+// lag behind the backend (v1.4.4/v1.4.5 bug) — no endless warnings.
 let CONFIG_HTML = null;
 function configPageHtml() {
   if (!CONFIG_HTML) {
@@ -108,7 +108,7 @@ function tokenOf(req) {
   return (req.query.token || req.query.access_token || req.headers['x-access-token'] || '').toString();
 }
 
-/** Identificazione del client per i log live (ip + user-agent). */
+/** Client identification for live logs (ip + user-agent). */
 function clientInfo(req) {
   return {
     ip: (req.headers['x-forwarded-for'] || (req.socket && req.socket.remoteAddress) || '')
@@ -121,13 +121,13 @@ function requireToken(req, res, next) {
   const expected = store.loadConfig().settings.token;
   if (!expected) return next();
   if (tokenOf(req) === expected) return next();
-  return res.status(401).json({ error: 'token mancante o non valido' });
+  return res.status(401).json({ error: 'missing or invalid token' });
 }
 
 function requireAdmin(req, res, next) {
   if (!ADMIN_TOKEN) return next();
   if (tokenOf(req) === ADMIN_TOKEN) return next();
-  return res.status(401).json({ error: 'ADMIN_TOKEN non valido' });
+  return res.status(401).json({ error: 'invalid ADMIN_TOKEN' });
 }
 
 /* Rotte modulari (endpoint e comportamento invariati). */
@@ -146,15 +146,15 @@ function baseUrl(req) {
   return `${proto}://${host}`;
 }
 
-/** Base pubblica preferita (URL pubblico in settings), altrimenti da richiesta. */
+/** Preferred public base (public URL in settings), otherwise from the request. */
 function publicBase(req, cfg) {
   const p = (cfg && cfg.settings && cfg.settings.publicBaseUrl || '').trim();
   return (p || baseUrl(req)).replace(/\/+$/, '');
 }
 
 /**
- * Diagnostica stream attiva? Riscrive gli URL serviti (playlist/catalogo)
- * verso /proxy/play: OK -> redirect diretto, KO -> video di errore a schermo.
+ * Stream diagnostics enabled? Rewrites served URLs (playlist/catalog)
+ * to /proxy/play: OK -> direct redirect, KO -> on-screen error video.
  */
 function diagStreamUrl(cfg, req, url, name, listName) {
   if (!cfg.settings.streamDiag) return url;
@@ -162,9 +162,9 @@ function diagStreamUrl(cfg, req, url, name, listName) {
 }
 
 /**
- * URL di lista incollato da una pagina/messaggio HTML: gli `&` diventano spesso
- * `&amp;` (o `&#38;`) e il server Xtream riceve parametri sbagliati (risponde con
- * pagine d'errore -> "lista non valida"). Normalizziamo sempre all'ingresso.
+ * List URL pasted from an HTML page/message: `&` often becomes
+ * `&amp;` (or `&#38;`) and the Xtream server receives wrong parameters (it answers with
+ * error pages -> "invalid list"). We always normalize on input.
  */
 function sanitizeListUrl(url) {
   return String(url || '')
@@ -195,13 +195,13 @@ app.get('/manifest.json', async (req, res) => {
       id: s.addonId,
       version: C.VERSION,
       name: s.addonName,
-      description: 'Liste WisePlay e playlist M3U/M3U_PLUS (anche Xtream) convertite in canali e cataloghi. Configurabile su /configure',
+      description: 'WisePlay lists and M3U/M3U_PLUS (including Xtream) playlists converted into channels and catalogs. Configure at /configure',
       logo: `${baseUrl(req)}/logo.svg`,
       background: `${baseUrl(req)}/logo.svg`,
       resources: ['catalog', 'meta', 'stream'],
       types: [playlist.TYPE],
-      // i meta-id generati iniziano tutti con questo prefisso: e' quello che
-      // dice a Stremio/Nuvio di chiedere a NOI meta e stream di queste voci
+      // generated meta-ids all start with this prefix: it is what
+      // tells Stremio/Nuvio to ask US for meta and streams of these items
       idPrefixes: [playlist.ID_PREFIX],
       catalogs: await playlist.buildCatalogs(cfg),
       behaviorHints: { configurable: true, configurationRequired: false },
@@ -213,13 +213,13 @@ app.get('/manifest.json', async (req, res) => {
 });
 
 /* ------------------------------------------------------------------ */
-/* poster/loghi riproporzionati (i client che ritagliano "cover"       */
+/* rescaled posters/logos (clients that crop "cover"                   */
 /* altrimenti mostrano i loghi zoomati)                                */
 /* ------------------------------------------------------------------ */
 
 app.get('/imgfit', requireToken, (req, res) => { imgfit.handle(req, res); });
 
-/** Riscrive i poster remoti delle meta con l'endpoint /imgfit, se attivo. */
+/** Rewrites remote meta posters with the /imgfit endpoint, when enabled. */
 function fitPosters(result, req) {
   const cfg = store.loadConfig();
   if (!result || !cfg.settings.fitLogos) return result;
@@ -241,8 +241,8 @@ function fitPosters(result, req) {
 /* catalogo / meta / stream                                            */
 /* ------------------------------------------------------------------ */
 
-// gli extra arrivano come segmenti di path: /genre=X, /search=Y, /skip=N,
-// anche combinati (/genre=X/skip=100) o uniti con & (formato SDK)
+// extras arrive as path segments: /genre=X, /search=Y, /skip=N,
+// also combined (/genre=X/skip=100) or joined with & (SDK format)
 app.get(/^\/catalog\/([^/]+)\/(.+)\.json$/, requireToken, async (req, res) => {
   try {
     // params[0] = type (tv), params[1] = id catalogo + eventuali extra
@@ -255,13 +255,13 @@ app.get(/^\/catalog\/([^/]+)\/(.+)\.json$/, requireToken, async (req, res) => {
         if (i > 0) extras[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1));
       }
     }
-    // comodita': accetta gli extra anche come query string (?genre=…&skip=…)
+    // convenience: also accepts extras as a query string (?genre=…&skip=…)
     if (req.query.search && !extras.search) extras.search = String(req.query.search);
     if (req.query.genre && !extras.genre) extras.genre = String(req.query.genre);
     if (req.query.skip && !extras.skip) extras.skip = String(req.query.skip);
     const cfg = store.loadConfig();
     const result = await playlist.buildCatalog(cfg, catId, extras);
-    if (!result) return res.status(404).json({ error: 'catalogo non trovato' });
+    if (!result) return res.status(404).json({ error: 'catalog not found' });
     const list = cfg.lists.find((l) => playlist.catalogId(l.id) === catId);
     const listName = list ? list.name || list.url || list.id : catId;
     live.add(
@@ -273,7 +273,7 @@ app.get(/^\/catalog\/([^/]+)\/(.+)\.json$/, requireToken, async (req, res) => {
     res.set('Cache-Control', C.PUBLIC_CACHE_CONTROL);
     res.json(fitPosters(result, req));
   } catch (err) {
-    live.add('catalog', 'error', `errore nel catalogo: ${err.message}`, clientInfo(req));
+    live.add('catalog', 'error', `catalog error: ${err.message}`, clientInfo(req));
     console.error('[catalog]', err);
     res.status(500).json({ error: err.message });
   }
@@ -283,7 +283,7 @@ app.get('/meta/:type/:id.json', requireToken, async (req, res) => {
   try {
     const cfg = store.loadConfig();
     const result = await playlist.buildMeta(cfg, req.params.id);
-    if (!result) return res.status(404).json({ error: 'meta non trovato' });
+    if (!result) return res.status(404).json({ error: 'meta not found' });
     res.json(fitPosters(result, req));
   } catch (err) {
     console.error('[meta]', err);
@@ -297,16 +297,16 @@ app.get('/stream/:type/:id.json', requireToken, async (req, res) => {
     const cfg = store.loadConfig();
     const result = await playlist.buildStreams(cfg, req.params.id);
     if (!result) {
-      live.add('stream', 'warn', `stream richiesto per id sconosciuto: "${req.params.id}"`, clientInfo(req));
-      return res.status(404).json({ error: 'stream non trovato' });
+      live.add('stream', 'warn', `stream requested for unknown id: "${req.params.id}"`, clientInfo(req));
+      return res.status(404).json({ error: 'stream not found' });
     }
-    // da qui il client fa partire la riproduzione: logghiamo TUTTO il necessario
-    // per il debug (canale, playlist/gruppo, lista di origine, URL finale servito)
+    // the client starts playback here: log EVERYTHING needed
+    // for debugging (channel, playlist/group, source list, final served URL)
     const parsed = playlist.parseMetaId(req.params.id);
     const list = parsed ? cfg.lists.find((l) => l.id === parsed.listId) : null;
     const listName = list ? list.name || list.url || list.id : parsed ? parsed.listId : '?';
-    // diagnostica attiva: gli URL consegnati passano da /proxy/play (la riga ▶
-    // qua sotto logga sempre l'URL ORIGINALE, cosi' il debug resta dritto)
+    // diagnostics enabled: delivered URLs go through /proxy/play (the ▶ line
+    // below always logs the ORIGINAL URL, so debugging stays straightforward)
     const rawStreams = (result && result.streams) || [];
     const outStreams = rawStreams.map((s) => ({
       ...s,
@@ -317,17 +317,17 @@ app.get('/stream/:type/:id.json', requireToken, async (req, res) => {
       live.add(
         'stream',
         'info',
-        `▶ ${s.title} | lista: "${listName}" | gruppo: ${String(s.name || '').split('\n').pop()} | avvio: ${playedAt} | url: ${s.url}` +
+        `▶ ${s.title} | list: "${listName}" | group: ${String(s.name || '').split('\n').pop()} | started: ${playedAt} | url: ${s.url}` +
           (cfg.settings.streamDiag ? ' [diag]' : ''),
         { id: req.params.id, list: listName, ms: Date.now() - t0, ...clientInfo(req) }
       );
     }
     if (!outStreams.length) {
-      live.add('stream', 'warn', `0 stream restituiti per "${req.params.id}" (lista "${listName}"): tutti esclusi dai filtri o spariti`, { id: req.params.id, ms: Date.now() - t0, ...clientInfo(req) });
+      live.add('stream', 'warn', `0 streams returned for "${req.params.id}" (list "${listName}"): all excluded by filters or gone`, { id: req.params.id, ms: Date.now() - t0, ...clientInfo(req) });
     }
     res.json({ ...result, streams: outStreams });
   } catch (err) {
-    live.add('stream', 'error', `errore nello stream "${req.params.id}": ${err.message}`, clientInfo(req));
+    live.add('stream', 'error', `stream error "${req.params.id}": ${err.message}`, clientInfo(req));
     console.error('[stream]', err);
     res.status(500).json({ error: err.message });
   }
@@ -352,9 +352,9 @@ app.get('/playlist.m3u', requireToken, async (req, res) => {
     live.add(
       'playlist',
       'info',
-      `playlist.m3u generata: ${channels.length} canali da ${okLists}/${cfg.lists.length} liste` +
-        `${koLists ? ` (${koLists} in errore)` : ''} in ${Date.now() - t0} ms` +
-        `${req.query.refresh === '1' ? ' [refresh forzato]' : ''}` +
+      `playlist.m3u generated: ${channels.length} channels from ${okLists}/${cfg.lists.length} lists` +
+        `${koLists ? ` (${koLists} in error)` : ''} in ${Date.now() - t0} ms` +
+        `${req.query.refresh === '1' ? ' [forced refresh]' : ''}` +
         `${cfg.settings.streamDiag ? ' [diag]' : ''}`,
       clientInfo(req)
     );
@@ -365,17 +365,17 @@ app.get('/playlist.m3u', requireToken, async (req, res) => {
     );
     res.send(m3u);
   } catch (err) {
-    live.add('playlist', 'error', `generazione playlist.m3u fallita: ${err.message}`, clientInfo(req));
+    live.add('playlist', 'error', `playlist.m3u generation failed: ${err.message}`, clientInfo(req));
     console.error('[m3u]', err);
     res.status(500).json({ error: err.message });
   }
 });
 
-/** Diagnostica stream: OK -> 302 alla fonte; KO -> video/errore a schermo. */
+/** Stream diagnostics: OK -> 302 to the source; KO -> video/error on screen. */
 app.get('/proxy/play', requireToken, (req, res) => {
   const t0 = Date.now();
   streamdiag.handlePlay(req, res, { t0, client: clientInfo(req) }).catch((err) => {
-    live.add('stream', 'error', `errore proxy diagnostico: ${err.message}`, clientInfo(req));
+    live.add('stream', 'error', `diagnostic proxy error: ${err.message}`, clientInfo(req));
     if (!res.headersSent) res.status(500).json({ error: err.message });
   });
 });
@@ -385,7 +385,7 @@ app.get('/playlist.m3u8', (req, res) => {
   res.redirect(307, `/playlist.m3u${qs ? `?${qs}` : ''}`);
 });
 
-/** M3U di una singola lista (anteprima e liste personali). */
+/** M3U of a single list (preview and personal lists). */
 async function listM3U(cfg, list, onlyPath = '') {
   let selector;
   if (onlyPath) {
@@ -413,24 +413,24 @@ async function listM3U(cfg, list, onlyPath = '') {
     .map((c) => ({ ...c, url: playlist.proxyStreamUrl(normalizeStreamUrl(c.url, list.options), list) }))
     .filter((c) => c.url)
     .map((c) => ({ name: c.name, url: c.url, logo: c.logo, group: c.group || prefix }));
-  // anche l'anteprima/le liste dedicate dichiarano l'EPG (manuale + quello
-  // ereditato dalla sorgente m3u/m3u_plus, se lo aveva)
+  // the preview/dedicated lists also declare the EPG (manual + the one
+  // inherited from the m3u/m3u_plus source, if any)
   const listEpg = (entry.tree && entry.tree.meta && entry.tree.meta.epgUrls) || [];
   return buildM3U(channels, {
-    name: `${prefix} (${channels.length} canali)`,
+    name: `${prefix} (${channels.length} channels)`,
     header: playlist.epgHeader(cfg, listEpg),
   });
 }
 
 app.get('/api/lists/:id/preview.m3u', requireAdmin, async (req, res) => {
   const list = store.findList(req.params.id);
-  if (!list) return res.status(404).send('lista non trovata');
+  if (!list) return res.status(404).send('list not found');
   try {
     const m = await listM3U(store.loadConfig(), list, (req.query.path || '').toString());
     res.set('Content-Type', 'application/vnd.apple.mpegurl; charset=utf-8');
     res.send(m);
   } catch (err) {
-    res.status(502).send(`# errore: ${err.message}`);
+    res.status(502).send(`# error: ${err.message}`);
   }
 });
 
@@ -450,12 +450,12 @@ app.get('/channels.json', requireToken, async (req, res) => {  try {
 });
 
 /* ------------------------------------------------------------------ */
-/* API di configurazione                                               */
+/* Configuration API                                                  */
 /* ------------------------------------------------------------------ */
 
 app.get('/api/config', requireAdmin, (req, res) => {
   const cfg = store.loadConfig();
-  // riaggancia gli scaricamenti interrotti da un riavvio, cosi' la pagina si sblocca da sola
+  // resumes downloads interrupted by a restart, so the page unblocks itself
   for (const l of cfg.lists) reconcileListState(l.id);
   res.json(publicConfig(store.loadConfig()));
 });
@@ -464,13 +464,13 @@ app.put('/api/config', requireAdmin, (req, res) => {
   try {
     const current = store.loadConfig();
     const incoming = req.body || {};
-    // la UI dichiara la revisione da cui e' partita: se il server e' cambiato
-    // nel frattempo (altra scheda, merge, download...) rifiuta invece di
-    // sovrascrivere silenziosamente le modifiche piu' recenti
+    // the UI declares the revision it started from: if the server changed
+    // meanwhile (another tab, merge, download...) reject instead of
+    // silently overwrite the most recent changes
     const hasBase = incoming.baseRev !== undefined && incoming.baseRev !== null && incoming.baseRev !== '';
     if (hasBase && Number(incoming.baseRev) !== (current.rev || 0)) {
       return res.status(409).json({
-        error: 'configurazione modificata da un\'altra operazione',
+        error: 'configuration changed by another operation',
         rev: current.rev || 0,
         config: publicConfig(current),
       });
@@ -481,12 +481,12 @@ app.put('/api/config', requireAdmin, (req, res) => {
     const nextLists = Array.isArray(incoming.lists) ? incoming.lists : current.lists;
     const saved = store.saveConfig(
       { settings: nextSettings, lists: nextLists },
-      { reason: String(incoming.reason || 'salvataggio configurazione').slice(0, 160) }
+      { reason: String(incoming.reason || 'configuration saved').slice(0, 160) }
     );
-    // la UA personalizzata ha effetto immediato (download successivi)
+    // the custom UA takes effect immediately (subsequent downloads)
     C.setCustomUserAgent(saved.settings.userAgent);
 
-    // conserva lo stato runtime delle liste esistenti
+    // keeps the runtime state of existing lists
     for (const l of saved.lists) {
       const before = current.lists.find((x) => x.id === l.id);
       if (before) l.state = before.state;
@@ -500,9 +500,9 @@ app.put('/api/config', requireAdmin, (req, res) => {
 });
 
 /**
- * Scarica un albero in background e ne aggiorna lo stato: gli endpoint HTTP
- * rispondono subito e la UI interroga /api/lists/:id/state. Cosi' nessuna
- * richiesta resta appesa per decine di secondi su host lenti.
+ * Downloads a tree in the background and updates its state: HTTP endpoints
+ * respond immediately and the UI polls /api/lists/:id/state. Thus no
+ * request hangs for tens of seconds on slow hosts.
  */
 const refreshing = new Set();
 
@@ -517,7 +517,7 @@ function startRefresh(listId, force = true) {
   live.add(
     'download',
     'info',
-    `▼ scaricamento lista "${listName}" (${listId})${force ? ' [forzato]' : ''} — url: ${list.url || '(lista personale)'}`,
+    `▼ downloading list "${listName}" (${listId})${force ? ' [forced]' : ''} — url: ${list.url || '(personal list)'}`,
     { list: listName, id: listId }
   );
   const cfg0 = store.loadConfig();
@@ -544,11 +544,11 @@ function startRefresh(listId, force = true) {
       live.add(
         'download',
         'info',
-        `✔ lista "${listName}" pronta: ${st.stations || 0} stream, ${st.nodes || 0} rami, ` +
-          `${st.m3u || 0} m3u importate, ${st.failed || 0} errori — in ${((Date.now() - t0) / 1000).toFixed(1)}s`,
+        `✔ list "${listName}" ready: ${st.stations || 0} streams, ${st.nodes || 0} branches, ` +
+          `${st.m3u || 0} imported m3u, ${st.failed || 0} errors — in ${((Date.now() - t0) / 1000).toFixed(1)}s`,
         { list: listName, id: listId }
       );
-      // dai' il nome della lista se l'utente non l'ha scelto
+      // give the list a name if the user did not choose one
       const c = store.loadConfig();
       const l = c.lists.find((x) => x.id === listId);
       if (l && !l.name && entry.tree.meta.name) {
@@ -559,35 +559,35 @@ function startRefresh(listId, force = true) {
     })
     .catch((err) => {
       const msg = err.message || String(err);
-      // fatal: riprovare non puo' funzionare (URL che punta a un video, lista
-      // enorme, pagina HTML): la UI lo dice invece di suggerire "Aggiorna"
+      // fatal: retrying cannot work (URL pointing to a video, huge list,
+      // HTML page): the UI says so instead of suggesting "Refresh"
       store.updateListState(listId, { status: 'error', error: msg, fatal: !!(err && err.fatal) });
       live.add(
         'download',
         'error',
-        `✖ scaricamento lista "${listName}" fallito dopo ${((Date.now() - t0) / 1000).toFixed(1)}s — ${msg} — url: ${list.url}`,
+        `✖ downloading list "${listName}" failed after ${((Date.now() - t0) / 1000).toFixed(1)}s — ${msg} — url: ${list.url}`,
         { list: listName, id: listId }
       );
     })
     .finally(() => refreshing.delete(listId));
 }
 
-/** Aggiunge una lista; lo scaricamento parte in background (UI: /state). */
+/** Adds a list; the download starts in the background (UI: /state). */
 app.post('/api/lists', requireAdmin, (req, res) => {
   try {
     const url = sanitizeListUrl(req.body && req.body.url);
-    if (!/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'URL non valido (usa http/https)' });
+    if (!/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'invalid URL (use http/https)' });
     const name = (req.body && req.body.name ? String(req.body.name) : '').trim();
 
     const cfg = store.loadConfig();
     if (cfg.lists.some((l) => l.url === url)) {
-      return res.status(409).json({ error: 'Lista gia presente' });
+      return res.status(409).json({ error: 'list already present' });
     }
 
     const list = store.newList(url, name);
     const withList = store.saveConfig(
       { ...cfg, lists: [...cfg.lists, list] },
-      { reason: 'aggiunta lista', listId: list.id, listName: list.name || list.url }
+      { reason: 'list added', listId: list.id, listName: list.name || list.url }
     );
     const saved = withList.lists[withList.lists.length - 1];
 
@@ -599,30 +599,30 @@ app.post('/api/lists', requireAdmin, (req, res) => {
   }
 });
 
-/** Stato "fetching" residuo (es. container riavviato a meta' scaricamento):
- *  se nessun download e' realmente in corso, lo facciamo ripartire da solo. */
+/** Residual "fetching" state (e.g. container restarted mid-download):
+ *  if no download is actually running, restart it automatically. */
 function reconcileListState(id) {
   const list = store.findList(id);
   if (!list) return;
   if (list.state && list.state.status === 'fetching' && !refreshing.has(id)) {
-    console.log('[state] fetching residuo rilevato, riavvio lo scaricamento di', id);
+    console.log('[state] leftover fetching state detected, restarting download of', id);
     startRefresh(id, false);
   }
 }
 
-/** Stato corrente di una lista (polling della UI durante lo scaricamento). */
+/** Current state of a list (UI polling during download). */
 app.get('/api/lists/:id/state', requireAdmin, (req, res) => {
   const list = store.findList(req.params.id);
-  if (!list) return res.status(404).json({ error: 'lista non trovata' });
+  if (!list) return res.status(404).json({ error: 'list not found' });
   reconcileListState(list.id);
   res.json(store.findList(list.id).state || {});
 });
 
-/** Info account Xtream (scadenza/stato) dalla /player_api.php del pannello.
- *  Cache nella config per 30 minuti: la pagina resta istantanea all'apertura. */
+/** Xtream account info (expiry/status) from the panel's /player_api.php.
+ *  Cached in the config for 30 minutes: the page stays instant on open. */
 app.get('/api/lists/:id/xtream', requireAdmin, async (req, res) => {
   const list = store.findList(req.params.id);
-  if (!list) return res.status(404).json({ error: 'lista non trovata' });
+  if (!list) return res.status(404).json({ error: 'list not found' });
   const url = sanitizeListUrl(list.url || '');
   if (!xtream.xtreamInfo(url)) return res.json({ ok: false, xtream: false });
 
@@ -635,7 +635,7 @@ app.get('/api/lists/:id/xtream', requireAdmin, async (req, res) => {
 
   const r = await xtream.fetchPanelInfo(url);
   if (!r.ok) {
-    // senza dati freschi: conserva quelli vecchi (meglio vecchio che niente)
+    // no fresh data: keep the old ones (better old than nothing)
     if (cached) return res.json({ ok: true, ...cached, cached: true, stale: true, fetchError: r.reason });
     return res.json({ ok: false, xtream: true, error: r.reason });
   }
@@ -646,36 +646,36 @@ app.get('/api/lists/:id/xtream', requireAdmin, async (req, res) => {
 app.delete('/api/lists/:id', requireAdmin, (req, res) => {
   const cfg = store.loadConfig();
   const next = cfg.lists.filter((l) => l.id !== req.params.id);
-  if (next.length === cfg.lists.length) return res.status(404).json({ error: 'lista non trovata' });
+  if (next.length === cfg.lists.length) return res.status(404).json({ error: 'list not found' });
   cache.invalidate(req.params.id);
   const gone = cfg.lists.find((l) => l.id === req.params.id);
   const listName = gone ? gone.name || gone.url : '';
-  // il punto di ripristino per l'undo e' lo stato *prima* dell'eliminazione
+  // the restore point for undo is the state *before* deletion
   const cp = history.ensureCheckpoint(cfg, {
-    reason: 'prima di eliminare una lista',
+    reason: 'before deleting a list',
     listId: req.params.id,
     listName,
   });
   store.saveConfig(
     { ...cfg, lists: next },
-    { reason: 'eliminazione lista', listId: req.params.id, listName }
+    { reason: 'list deleted', listId: req.params.id, listName }
   );
   res.json({ ok: true, undo: cp ? { id: cp.id, listIds: [req.params.id] } : null });
 });
 
-/** Ricarica l'albero di una lista in background. */
+/** Reloads a list's tree in the background. */
 app.post('/api/lists/:id/refresh', requireAdmin, (req, res) => {
   const list = store.findList(req.params.id);
-  if (!list) return res.status(404).json({ error: 'lista non trovata' });
+  if (!list) return res.status(404).json({ error: 'list not found' });
   startRefresh(list.id, true);
   res.json({ ok: true, state: store.findList(list.id).state });
 });
 
-/** Suggerimenti nomi canale per il campo "aggiungi canale": rami della stessa
- *  lista (tranne quello corrente) + altre liste gia' in cache (mai rete). */
+/** Channel name suggestions for the "add channel" field: branches of the same
+ *  list (except the current one) + other lists already cached (never network). */
 app.get('/api/lists/:id/suggest', requireAdmin, async (req, res) => {
   const list = store.findList(req.params.id);
-  if (!list) return res.status(404).json({ error: 'lista non trovata' });
+  if (!list) return res.status(404).json({ error: 'list not found' });
   const cur = String(req.query.path || '');
   const cfg = store.loadConfig();
   const CAP = 3000;
@@ -713,17 +713,17 @@ app.get('/api/lists/:id/suggest', requireAdmin, async (req, res) => {
   res.json({ names: [...names] });
 });
 
-/** Aggiunge un canale a un ramo: spostamento dentro la stessa lista, oppure
- *  innesto da un'altra lista (che lo perde nella sua sezione di origine). */
+/** Adds a channel to a branch: a move within the same list, or
+ *  nesting from another list (which loses it in its source section). */
 app.post('/api/lists/:id/addchannel', requireAdmin, async (req, res) => {
   const cfg = store.loadConfig();
   const list = store.findList(req.params.id);
-  if (!list) return res.status(404).json({ error: 'lista non trovata' });
+  if (!list) return res.status(404).json({ error: 'list not found' });
   const path = String((req.body || {}).path || '');
   const val = String((req.body || {}).name || '').trim();
   const home = String((req.body || {}).home || '');
   const fromList = String((req.body || {}).fromList || '');
-  if (!path || !val) return res.status(400).json({ error: 'servono path e name' });
+  if (!path || !val) return res.status(400).json({ error: 'path and name are required' });
 
   const findIn = (tree, opts, skipPath) => {
     const ren = opts.channelRenames || {};
@@ -768,36 +768,36 @@ app.post('/api/lists/:id/addchannel', requireAdmin, async (req, res) => {
     return cp ? { id: cp.id, listIds: ids } : null;
   };
 
-  // 1) stessa lista: diventa uno spostamento (la sorgente lo perde)
+  // 1) same list: becomes a move (the source loses it)
   if (!fromList || fromList === list.id) {
     try {
       const e = await playlist.entryFor(cfg, list);
-      // canale eliminato in precedenza: riaggiungerlo lo ripristina
+      // previously deleted channel: re-adding it restores it
       const delKey = home ? `${home}::${val}` : '';
       if (delKey && (list.options.deletedChannels || []).includes(delKey)) {
-        const undo = undoFor([list.id], 'prima di aggiungere un canale');
+        const undo = undoFor([list.id], 'before adding a channel');
         list.options.deletedChannels = list.options.deletedChannels.filter((k) => k !== delKey);
         if (path !== home) {
           list.options.channelMoves = list.options.channelMoves || {};
           list.options.channelMoves[delKey] = path;
         }
-        store.saveConfig(cfg, { reason: 'canale aggiunto', listId: list.id, listName: list.name || list.url });
+        store.saveConfig(cfg, { reason: 'channel added', listId: list.id, listName: list.name || list.url });
         return res.json({ ok: true, from: list.name || list.id, revived: true, undo });
       }
       const hit = e && e.tree
         ? (home ? findAt(e.tree, list.options, home) : null) || findIn(e.tree, list.options, path)
         : null;
       if (hit) {
-        const undo = undoFor([list.id], 'prima di aggiungere un canale');
+        const undo = undoFor([list.id], 'before adding a channel');
         list.options.channelMoves = list.options.channelMoves || {};
         list.options.channelMoves[`${hit.home}::${hit.name}`] = path;
-        store.saveConfig(cfg, { reason: 'canale spostato', listId: list.id, listName: list.name || list.url });
+        store.saveConfig(cfg, { reason: 'channel moved', listId: list.id, listName: list.name || list.url });
         return res.json({ ok: true, from: list.name || list.id, undo });
       }
     } catch (_) { /* albero non disponibile: provo con le altre liste */ }
   }
 
-  // 2) altra lista: innesto nel ramo + disattivazione nella sorgente
+  // 2) another list: nest in the branch + disable in the source
   const ordered = cfg.lists.slice();
   if (fromList) {
     const i = ordered.findIndex((l) => l.id === fromList);
@@ -810,7 +810,7 @@ app.post('/api/lists/:id/addchannel', requireAdmin, async (req, res) => {
     if (!e || !e.tree) continue;
     const hit = findIn(e.tree, l.options, null);
     if (!hit) continue;
-    const undo = undoFor([list.id, l.id], 'prima di importare un canale');
+    const undo = undoFor([list.id, l.id], 'before importing a channel');
     list.options.personalEntries = list.options.personalEntries || [];
     list.options.personalEntries.push({
       id: 'e' + Math.random().toString(16).slice(2, 8),
@@ -821,51 +821,51 @@ app.post('/api/lists/:id/addchannel', requireAdmin, async (req, res) => {
     if (!l.options.disabledChannels.includes(`${hit.home}::${hit.name}`)) {
       l.options.disabledChannels.push(`${hit.home}::${hit.name}`);
     }
-    store.saveConfig(cfg, { reason: 'canale importato', listId: list.id, listName: list.name || list.url });
+    store.saveConfig(cfg, { reason: 'channel imported', listId: list.id, listName: list.name || list.url });
     return res.json({ ok: true, from: l.name || l.id, undo });
   }
-  res.status(404).json({ error: 'canale non trovato in nessuna lista' });
+  res.status(404).json({ error: 'channel not found in any list' });
 });
 
-/** Sposta TUTTI i canali di una playlist dentro un'altra (trascinamento di una
- *  playlist su un'altra). Stessa lista = spostamento; liste diverse = innesto
- *  nella destinazione e spegnimento nella sorgente. */
+/** Moves ALL channels of a playlist into another (dragging one playlist
+ *  onto another). Same list = move; different lists = nest in the
+ *  destination and disable in the source. */
 app.post('/api/lists/:id/mergebranch', requireAdmin, async (req, res) => {
   const cfg = store.loadConfig();
   const target = store.findList(req.params.id);
-  if (!target) return res.status(404).json({ error: 'lista non trovata' });
+  if (!target) return res.status(404).json({ error: 'list not found' });
   const fromList = String((req.body || {}).fromList || target.id);
   const from = String((req.body || {}).from || '');
   const to = String((req.body || {}).to || '');
-  if (!from || !to) return res.status(400).json({ error: 'servono from e to' });
-  if (from === to && fromList === target.id) return res.status(400).json({ error: 'stessa playlist' });
+  if (!from || !to) return res.status(400).json({ error: 'from and to are required' });
+  if (from === to && fromList === target.id) return res.status(400).json({ error: 'same playlist' });
   const src = cfg.lists.find((l) => l.id === fromList);
-  if (!src) return res.status(404).json({ error: 'lista di origine non trovata' });
+  if (!src) return res.status(404).json({ error: 'source list not found' });
   const oT = target.options;
   const undoIds = fromList === target.id ? [target.id] : [target.id, src.id];
   const cp = history.ensureCheckpoint(cfg, {
-    reason: 'prima di unire playlist',
+    reason: 'before merging playlists',
     listId: target.id,
     listName: target.name || target.url,
   });
   const undo = cp ? { id: cp.id, listIds: undoIds } : null;
 
-  // gruppo personale come origine: solo dentro la stessa lista (ridireziona le mosse)
+  // custom group as source: only within the same list (redirects moves)
   if (from.startsWith('@')) {
-    if (fromList !== target.id) return res.status(400).json({ error: 'gruppo personale: spostalo solo dentro la stessa lista' });
+    if (fromList !== target.id) return res.status(400).json({ error: 'custom group: it can only be moved within the same list' });
     let n = 0;
     for (const [k, v] of Object.entries(oT.channelMoves || {})) {
       if (v === from) { oT.channelMoves[k] = to; n++; }
     }
-    store.saveConfig(cfg, { reason: 'unione playlist', listId: target.id, listName: target.name || target.url });
+    store.saveConfig(cfg, { reason: 'playlist merge', listId: target.id, listName: target.name || target.url });
     return res.json({ ok: true, moved: n, from: from.slice(1), undo });
   }
 
   let e = null;
   try { e = await playlist.entryFor(cfg, src); } catch (_) { /* non scaricata */ }
-  if (!e || !e.tree) return res.status(409).json({ error: 'lista di origine non ancora scaricata' });
+  if (!e || !e.tree) return res.status(409).json({ error: 'source list not downloaded yet' });
   const node = findByPath(e.tree, from);
-  if (!node) return res.status(404).json({ error: 'playlist di origine non trovata' });
+  if (!node) return res.status(404).json({ error: 'source playlist not found' });
   const oS = src.options;
   const del = new Set(oS.deletedChannels || []);
   const stations = (node.stations || []).filter((st) => !del.has(`${from}::${st.name}`));
@@ -874,11 +874,11 @@ app.post('/api/lists/:id/mergebranch', requireAdmin, async (req, res) => {
   if (fromList === target.id) {
     oT.channelMoves = oT.channelMoves || {};
     for (const st of stations) oT.channelMoves[`${from}::${st.name}`] = to;
-    store.saveConfig(cfg, { reason: 'unione playlist', listId: target.id, listName: target.name || target.url });
+    store.saveConfig(cfg, { reason: 'playlist merge', listId: target.id, listName: target.name || target.url });
     return res.json({ ok: true, moved: stations.length, from: src.name || src.id, undo });
   }
 
-  if (to.startsWith('@')) return res.status(400).json({ error: 'tra liste diverse la destinazione deve essere una playlist esistente' });
+  if (to.startsWith('@')) return res.status(400).json({ error: 'across different lists the destination must be an existing playlist' });
   oT.personalEntries = oT.personalEntries || [];
   let n = 0;
   for (const st of stations) {
@@ -892,14 +892,14 @@ app.post('/api/lists/:id/mergebranch', requireAdmin, async (req, res) => {
     const k = `${from}::${st.name}`;
     if (!oS.disabledChannels.includes(k)) oS.disabledChannels.push(k);
   }
-  store.saveConfig(cfg, { reason: 'unione playlist', listId: target.id, listName: target.name || target.url });
+  store.saveConfig(cfg, { reason: 'playlist merge', listId: target.id, listName: target.name || target.url });
   res.json({ ok: true, moved: n, from: src.name || src.id, undo });
 });
 
-/** Toglie dalla lista le voci importate da altre liste (merge di playlist
- *  esterne, quelle con `dst`) e riaccende i canali che erano stati spenti
- *  nella lista di origine. Le playlist native non vengono toccate.
- *  Ritorna il numero di voci rimosse. */
+/** Removes from the list the items imported from other lists (merges of
+ *  external playlists, those with `dst`) and re-enables the channels that had
+ *  been disabled in the source list. Native playlists are not touched.
+ *  Returns the number of removed items. */
 function dropExternalImports(cfg, list) {
   const o = list.options;
   const entries = Array.isArray(o.personalEntries) ? o.personalEntries : [];
@@ -907,7 +907,7 @@ function dropExternalImports(cfg, list) {
   if (!imports.length) return { removed: 0, srcIds: [] };
   o.personalEntries = entries.filter((e) => !(e && e.dst && e.src));
 
-  // cosa resta importato dopo la pulizia (per non riaccendere canali ancora usati)
+  // what remains imported after cleanup (to avoid re-enabling channels still in use)
   const stillImported = new Set();
   for (const l of cfg.lists) {
     for (const e of l.options.personalEntries || []) {
@@ -930,25 +930,25 @@ function dropExternalImports(cfg, list) {
   return { removed: imports.length, srcIds: [...bySrc.keys()] };
 }
 
-/** Riporta la lista allo stato di quando viene aggiunta: azzera tutte le
- *  personalizzazioni locali (rinomine, esclusioni, ordine, unioni, spostamenti,
- *  cestino) e riscarica la lista dalla sua URL. */
+/** Returns the list to its state when added: resets all
+ *  customizations (renames, exclusions, order, merges, moves,
+ *  trash) and re-downloads the list from its URL. */
 app.post('/api/lists/:id/restoreorigin', requireAdmin, (req, res) => {
   const cfg = store.loadConfig();
   const list = store.findList(req.params.id);
-  if (!list) return res.status(404).json({ error: 'lista non trovata' });
+  if (!list) return res.status(404).json({ error: 'list not found' });
   const cp = history.ensureCheckpoint(cfg, {
-    reason: 'prima del ripristino della lista',
+    reason: 'before restoring the list',
     listId: list.id,
     listName: list.name || list.url,
   });
-  // riaccende i canali importati da altre liste prima di azzerare le opzioni
+  // re-enables channels imported from other lists before resetting options
   const imp = dropExternalImports(cfg, list);
   const personal = list.kind === 'personal';
   list.options = store.defaultListOptions();
   if (personal) list.options.inCatalog = false; // come una lista personale appena creata
   list.state = { status: 'idle', error: '', fatal: false, fetchedAt: '', stats: null, kind: '' };
-  store.saveConfig(cfg, { reason: 'ripristino lista', listId: list.id, listName: list.name || list.url });
+  store.saveConfig(cfg, { reason: 'list restored', listId: list.id, listName: list.name || list.url });
   cache.invalidate(list.id);            // niente vecchio albero/snapshot
   playlist.clearRows(list.id);
   startRefresh(list.id, true);          // riscarica da zero
@@ -960,13 +960,13 @@ app.post('/api/lists/:id/restoreorigin', requireAdmin, (req, res) => {
   });
 });
 
-/** Canali di un singolo ramo, per la gestione dalla pagina di configurazione. */
+/** Channels of a single branch, for management from the configuration page. */
 app.get('/api/lists/:id/channels', requireAdmin, async (req, res) => {
   const list = store.findList(req.params.id);
-  if (!list) return res.status(404).json({ error: 'lista non trovata' });
+  if (!list) return res.status(404).json({ error: 'list not found' });
   let entry = null;
   try { entry = await playlist.entryFor(store.loadConfig(), list); } catch (_) { entry = cache.getEntry(list.id); }
-  if (!entry || !entry.tree) return res.status(409).json({ error: 'lista non ancora scaricata' });
+  if (!entry || !entry.tree) return res.status(409).json({ error: 'list not downloaded yet' });
   const path = String(req.query.path || '');
 
   const renames = list.options.channelRenames || {};
@@ -976,7 +976,7 @@ app.get('/api/lists/:id/channels', requireAdmin, async (req, res) => {
   const delB = new Set(list.options.deletedBranches || []);
   const moves = list.options.channelMoves || {};
 
-  // canali in arrivo da altri rami (o gruppi personali "@Nome")
+  // channels coming from other branches (or "@Name" custom groups)
   const incoming = new Map();
   const movedOut = new Set();
   (function scan(node) {
@@ -996,9 +996,9 @@ app.get('/api/lists/:id/channels', requireAdmin, async (req, res) => {
   })(entry.tree);
 
   const isCustom = path.startsWith('@');
-  if (!isCustom && delB.has(path)) return res.status(404).json({ error: 'ramo eliminato' });
+  if (!isCustom && delB.has(path)) return res.status(404).json({ error: 'branch deleted' });
   const node = isCustom ? null : findByPath(entry.tree, path);
-  if (!isCustom && !node) return res.status(404).json({ error: 'ramo non trovato' });
+  if (!isCustom && !node) return res.status(404).json({ error: 'branch not found' });
 
   const chans = [];
   if (!isCustom) {
@@ -1038,15 +1038,15 @@ app.get('/api/lists/:id/channels', requireAdmin, async (req, res) => {
   res.json({ path, count: chans.length, channels: chans });
 });
 
-/** Rami della lista (le singole playlist) per la UI di configurazione. */
+/** List branches (the individual playlists) for the configuration UI. */
 app.get('/api/lists/:id/tree', requireAdmin, async (req, res) => {
   const list = store.findList(req.params.id);
-  if (!list) return res.status(404).json({ error: 'lista non trovata' });
+  if (!list) return res.status(404).json({ error: 'list not found' });
   reconcileListState(list.id);
   let entry = null;
   try { entry = await playlist.entryFor(store.loadConfig(), list); } catch (_) { entry = cache.getEntry(list.id); }
   if (!entry || !entry.tree) {
-    // mai scaricata (o cache vuota): parte uno scaricamento in background
+    // never downloaded (or empty cache): starts a background download
     startRefresh(list.id, false);
     return res.status(202).json({ fetching: true, state: store.findList(list.id).state });
   }
@@ -1058,10 +1058,10 @@ app.get('/api/lists/:id/tree', requireAdmin, async (req, res) => {
   });
 });
 
-/** Test rapido di un URL senza salvarlo. */
+/** Quick test of a URL without saving it. */
 app.post('/api/probe', requireAdmin, async (req, res) => {
   const url = sanitizeListUrl(req.body && req.body.url);
-  if (!/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'URL non valido' });
+  if (!/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'invalid URL' });
   try {
     const tree = await buildTree(url, { maxDepth: store.loadConfig().settings.maxDepth });
     res.json({ ok: true, tree: treeForUi(tree) });
@@ -1071,8 +1071,8 @@ app.post('/api/probe', requireAdmin, async (req, res) => {
 });
 
 /**
- * Risolve un hostname con DNS pubblici (1.1.1.1 / 8.8.8.8): serve quando il
- * container non vede il DNS personale dell'utente ma il dominio e' pubblico.
+ * Resolves a hostname with public DNS (1.1.1.1 / 8.8.8.8): needed when the
+ * container cannot see the user's private DNS but the domain is public.
  */
 function resolveViaPublicDns(hostname) {
   const r = new (require('dns').promises.Resolver)();
@@ -1087,18 +1087,18 @@ function resolveViaPublicDns(hostname) {
 }
 
 /**
- * Richiesta lato server verso EasyProxy. Nel campo URL si mette IP *o* dominio
- * e funziona cosi' come scritto:
+ * Server-side request to EasyProxy. The URL field accepts an IP *or* domain
+ * and works exactly as written:
  *  - IP: connessione diretta;
- *  - dominio: si prova col DNS del container; se non lo conosce (DNS personale
- *    non visibile da Docker) si riprova con i DNS pubblici, presentando comunque
- *    il dominio in SNI/Host cosi' il vhost nginx risponde correttamente.
- * La riscrittura degli stream e' solo testuale: a connettersi
- * e' il client; il fetch lato server avviene soltanto per il pulsante Test.
+ *  - domain: tried with the container DNS; if unknown (private DNS
+ *    not visible from Docker) it retries with public DNS, still presenting
+ *    the domain in SNI/Host so the nginx vhost answers correctly.
+ * Stream rewriting is textual only: the client connects;
+ * the server-side fetch happens only for the Test button.
  */
 function easyProxyFetch(base, urlPath, { password = '', timeout = 8000 } = {}) {
   let u;
-  try { u = new URL(base + urlPath); } catch (e) { return Promise.reject(new Error('URL non valido')); }
+  try { u = new URL(base + urlPath); } catch (e) { return Promise.reject(new Error('invalid URL')); }
   if (password) u.searchParams.set('api_password', password);
   const isHttps = u.protocol === 'https:';
   const port = Number(u.port) || (isHttps ? 443 : 80);
@@ -1114,7 +1114,7 @@ function easyProxyFetch(base, urlPath, { password = '', timeout = 8000 } = {}) {
       timeout,
       headers: {
         'user-agent': 'WiseM3U',
-        // connesso per IP: nginx deve vedere il dominio del vhost in Host
+        // connected by IP: nginx must see the vhost domain in Host
         ...(byIp ? { host: u.host } : {}),
       },
     };
@@ -1126,7 +1126,7 @@ function easyProxyFetch(base, urlPath, { password = '', timeout = 8000 } = {}) {
       r.on('data', (c) => chunks.push(c));
       r.on('end', () => resolve({ status: r.statusCode, headers: r.headers, body: Buffer.concat(chunks).toString('utf8') }));
     });
-    req.on('timeout', () => req.destroy(new Error(`timeout dopo ${timeout} ms`)));
+    req.on('timeout', () => req.destroy(new Error(`timeout after ${timeout} ms`)));
     req.on('error', reject);
     req.end();
   });
@@ -1134,27 +1134,27 @@ function easyProxyFetch(base, urlPath, { password = '', timeout = 8000 } = {}) {
   if (net.isIP(hostname)) return doRequest(hostname);
   return doRequest(null).catch(async (err) => {
     if (err.code !== 'ENOTFOUND' && err.code !== 'EAI_AGAIN') throw err;
-    // il DNS del container non conosce il dominio: prova i DNS pubblici
+    // the container DNS does not know the domain: try public DNS
     let ip;
     try {
       ip = await resolveViaPublicDns(hostname);
     } catch (e2) {
       throw new Error(
-        `il dominio "${hostname}" non e' stato risolto ne' dal DNS del container ne' dai DNS pubblici ` +
-        `(1.1.1.1/8.8.8.8): se e' un dominio solo di casa tua (AdGuard/DNS locale), scrivi direttamente ` +
-        `l'IP nel campo URL, es. http://192.168.10.10:7860`
+        `the domain "${hostname}" could not be resolved by the container DNS or by public DNS ` +
+        `(1.1.1.1/8.8.8.8): if it is a home-only domain (AdGuard/local DNS), enter the ` +
+        `IP directly in the URL field, e.g. http://192.168.10.10:7860`
       );
     }
     return doRequest(ip);
   });
 }
 
-/** Verifica la connessione a un'istanza EasyProxy (e, se richiesto, un proxy di prova). */
+/** Checks the connection to an EasyProxy instance (and, if requested, a test proxy). */
 app.post('/api/easyproxy/test', requireAdmin, async (req, res) => {
   const base = String((req.body && req.body.base) || '').trim().replace(/\/+$/, '');
   const password = String((req.body && req.body.password) || '').trim();
   const testUrl = String((req.body && req.body.testUrl) || '').trim();
-  if (!/^https?:\/\//i.test(base)) return res.status(400).json({ ok: false, error: 'URL base non valido' });
+  if (!/^https?:\/\//i.test(base)) return res.status(400).json({ ok: false, error: 'invalid base URL' });
   try {
     const r = await easyProxyFetch(base, '/api/info', { password, timeout: C.EP_INFO_TIMEOUT_MS });
     if (r.status !== 200) {
@@ -1174,14 +1174,14 @@ app.post('/api/easyproxy/test', requireAdmin, async (req, res) => {
     }
     res.json(out);
   } catch (err) {
-    res.json({ ok: false, error: `EasyProxy non raggiungibile: ${err.message || err}` });
+    res.json({ ok: false, error: `EasyProxy unreachable: ${err.message || err}` });
   }
 });
 
 app.post('/api/cache/clear', requireAdmin, (req, res) => {
   cache.invalidateAll();
   imgfit.purge();
-  live.add('system', 'info', 'cache svuotata dalla pagina di configurazione', clientInfo(req));
+  live.add('system', 'info', 'cache cleared from the configuration page', clientInfo(req));
   res.json({ ok: true });
 });
 
@@ -1204,10 +1204,10 @@ app.post('/api/logs/clear', requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
-/* Playlist M3U dedicata di una lista personale. */
+/* Dedicated M3U playlist of a personal list. */
 app.get(/^\/personal\/([^/]+)\.m3u$/, requireToken, async (req, res) => {
   const list = store.findList(req.params[0]);
-  if (!list || list.kind !== 'personal') return res.status(404).json({ error: 'lista personale non trovata' });
+  if (!list || list.kind !== 'personal') return res.status(404).json({ error: 'personal list not found' });
   try {
     const m = await listM3U(store.loadConfig(), list);
     res.set('Content-Type', 'application/vnd.apple.mpegurl; charset=utf-8');
@@ -1229,7 +1229,7 @@ app.get('/healthz', (req, res) => {
     lists: cfg.lists.length,
     enabled: cfg.lists.filter((l) => l.options.enabled).length,
     uptime: Math.round(process.uptime()),
-    // visibilita' della dieta RAM senza entrare nel container
+    // RAM diet visibility without entering the container
     rssMB: Math.round(m.rss / 1048576),
     heapMB: Math.round(m.heapUsed / 1048576),
     cache: { entries: cs.entries, parsed: cs.parsedEntries, gzMB: Math.round(cs.gzBytes / 1048576), hotLists: cs.maxParsed },
@@ -1239,62 +1239,62 @@ app.get('/healthz', (req, res) => {
 /* ------------------------------------------------------------------ */
 
 app.use((req, res) => {
-  if (req.path.startsWith('/api')) return res.status(404).json({ error: 'non trovato' });
-  res.status(404).send('Non trovato');
+  if (req.path.startsWith('/api')) return res.status(404).json({ error: 'not found' });
+  res.status(404).send('Not found');
 });
 
 /* ------------------------------------------------------------------ */
-/* backstop: nessun errore deve mai uscire come stack trace            */
+/* backstop: no error must ever leak as a stack trace                   */
 /* ------------------------------------------------------------------ */
 
 app.use((err, req, res, next) => {
   if (res.headersSent) return next(err);
   let status = 500;
-  let msg = 'errore interno del server';
-  if (err && err.type === 'entity.parse.failed') { status = 400; msg = 'body JSON non valido'; }
-  else if (err && err.type === 'entity.too.large') { status = 413; msg = 'body troppo grande'; }
+  let msg = 'internal server error';
+  if (err && err.type === 'entity.parse.failed') { status = 400; msg = 'invalid JSON body'; }
+  else if (err && err.type === 'entity.too.large') { status = 413; msg = 'request body too large'; }
   else if (err && err.status && Number.isInteger(err.status)) { status = err.status; msg = err.message || msg; }
   console.error(`[http] ${req.method} ${req.originalUrl} -> ${status}: ${msg}`);
   if (req.path.startsWith('/api')) return res.status(status).json({ error: msg });
-  res.status(status).send('Errore interno del server');
+  res.status(status).send('Internal server error');
 });
 
-/* Stabilita': una promessa rifiutata non deve abbattere il servizio; un
- * uncaughtException invece esce pulito (Docker/compose riavvia il container). */
+/* Stability: an unhandled rejection must not bring the service down; an
+ * uncaughtException instead exits cleanly (Docker/compose restarts the container). */
 process.on('unhandledRejection', (reason) => {
-  console.error('[stability] promessa rifiutata non gestita:', (reason && reason.message) || reason);
+  console.error('[stability] unhandled promise rejection:', (reason && reason.message) || reason);
 });
 process.on('uncaughtException', (err) => {
-  console.error('[stability] errore non catturato, arresto controllato:', (err && err.message) || err);
+  console.error('[stability] uncaught error, controlled shutdown:', (err && err.message) || err);
   process.exit(1);
 });
 
 if (require.main === module) {
   app.listen(PORT, HOST, () => {
     const cfg = store.loadConfig();
-    // PUBLIC_PORT: la porta pubblicata sull'host quando il container gira dietro
-    // un port mapping (es. 7300:7000). Serve solo a stampare gli URL corretti.
+    // PUBLIC_PORT: the port published on the host when the container runs behind
+    // a port mapping (e.g. 7300:7000). Used only to print correct URLs.
     const shownPort = Number(process.env.PUBLIC_PORT || PORT);
     const base = `http://<tuo-ip>:${shownPort}`;
     console.log('='.repeat(64));
-    console.log(`  WiseM3U in ascolto su http://${HOST}:${PORT}`);
-    if (shownPort !== PORT) console.log(`  Porta pubblicata sull'host: ${shownPort}`);
-    console.log(`  Pagina di configurazione : ${base}/configure`);
+    console.log(`  WiseM3U listening on http://${HOST}:${PORT}`);
+    if (shownPort !== PORT) console.log(`  Port published on the host: ${shownPort}`);
+    console.log(`  Configuration page : ${base}/configure`);
     console.log(`  Playlist M3U             : ${base}/playlist.m3u`);
     console.log(`  Manifest (Stremio/Nuvio) : ${base}/manifest.json`);
-    console.log(`  Liste configurate        : ${cfg.lists.length}`);
-    console.log(`  File config              : ${store.CONFIG_FILE}`);
+    console.log(`  Configured lists        : ${cfg.lists.length}`);
+    console.log(`  Config file              : ${store.CONFIG_FILE}`);
     console.log('='.repeat(64));
-    live.add('system', 'info', `WiseM3U ${C.VERSION} avviato su http://${HOST}:${PORT} — ${cfg.lists.length} liste configurate`);
+    live.add('system', 'info', `WiseM3U ${C.VERSION} started on http://${HOST}:${PORT} — ${cfg.lists.length} configured lists`);
     const caps = streamdiag.capabilities();
-    live.add('system', 'debug', `diagnostica stream: ffmpeg=${caps.ffmpeg} ffprobe=${caps.ffprobe} font=${caps.font}`);
+    live.add('system', 'debug', `stream diagnostics: ffmpeg=${caps.ffmpeg} ffprobe=${caps.ffprobe} font=${caps.font}`);
 
-    // stati "fetching" residui da un riavvio precedente: riprendi gli scaricamenti
+    // leftover "fetching" states from a previous restart: resume downloads
     for (const l of cfg.lists) reconcileListState(l.id);
 
     const minutes = Number(cfg.settings.autoRefreshMinutes || 0);
     if (minutes > 0) {
-      console.log(`  Auto-refresh ogni ${minutes} minuti (aggiorno solo le liste scadute)`);
+      console.log(`  Auto-refresh every ${minutes} minutes (only expired lists are refreshed)`);
       const tick = () => {
         const c = store.loadConfig();
         for (const l of c.lists) {
@@ -1302,7 +1302,7 @@ if (require.main === module) {
           const age = cache.ageMinutes(l.id);
           const ttl = l.options.refreshMinutes || c.settings.cacheTtlMinutes || 1440;
           if (age !== null && age <= ttl) continue;
-          console.log(`[auto-refresh] aggiorno "${l.name || l.id}"`);
+          console.log(`[auto-refresh] refreshing "${l.name || l.id}"`);
           startRefresh(l.id, true);
         }
       };

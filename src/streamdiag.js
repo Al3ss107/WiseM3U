@@ -1,18 +1,18 @@
 'use strict';
 
 /**
- * Diagnostica degli stream "a schermo" (impostazione streamDiag).
+ * On-screen stream diagnostics (streamDiag setting).
  *
- * Il problema: quando un pannello IPTV rifiuta uno stream (403, limite
- * connessioni, server spento...), i player (Nuvio/Stremio) restano in
- * buffering infinito SENZA spiegare nulla. Con la diagnostica attiva gli URL
- * nella playlist/catalogo puntano a /proxy/play, che:
- *  - stream OK  -> semplice redirect 302 alla fonte: la banda resta diretta
- *                  (niente traffico video attraverso il container);
- *  - stream KO  -> genera con FFmpeg un VIDEO DI ERRORE che appare a schermo
- *                  con canale, lista e motivo, e lo registrar nei log live.
+ * The problem: when an IPTV panel rejects a stream (403, connection limit,
+ * server down...), players (Nuvio/Stremio) stay in endless buffering WITHOUT
+ * explaining anything. With diagnostics enabled, playlist/catalog URLs point
+ * to /proxy/play, which:
+ *  - stream OK  -> simple 302 redirect to the source: bandwidth stays direct
+ *                  (no video traffic through the container);
+ *  - stream KO  -> generates with FFmpeg an ERROR VIDEO shown on screen
+ *                  with channel, list and reason, and records it in the live logs.
  *
- * Se FFmpeg non e' installato, ricade in una risposta 502 testuale.
+ * If FFmpeg is not installed, it falls back to a textual 502 response.
  */
 
 const fs = require('fs');
@@ -62,11 +62,11 @@ function capabilities() {
   return { ffmpeg: !!FFMPEG, ffprobe: !!FFPROBE, font: !!FONT };
 }
 
-/* ---------------------------- probe della fonte ---------------------------- */
+/* ---------------------------- source probe ---------------------------- */
 
 /**
- * Simula il player: GET con Range + chiusura appenaarrivati gli header.
- * Ritorna sempre (mai eccezioni): { ok, finalUrl, status, reason }.
+ * Simulates the player: GET with Range + close as soon as headers arrive.
+ * Always returns (never throws): { ok, finalUrl, status, reason }.
  */
 function probe(urlText, redirectsLeft = 3, chain) {
   return new Promise((resolve) => {
@@ -75,10 +75,10 @@ function probe(urlText, redirectsLeft = 3, chain) {
     try {
       u = new URL(urlText);
     } catch (_) {
-      return resolve({ ok: false, reason: 'URL non valido', chain });
+      return resolve({ ok: false, reason: 'invalid URL', chain });
     }
     if (u.protocol !== 'http:' && u.protocol !== 'https:') {
-      return resolve({ ok: false, reason: `protocollo non supportato: ${u.protocol}`, chain });
+      return resolve({ ok: false, reason: `unsupported protocol: ${u.protocol}`, chain });
     }
     const lib = u.protocol === 'https:' ? https : http;
     let req;
@@ -92,7 +92,7 @@ function probe(urlText, redirectsLeft = 3, chain) {
           headers: { 'User-Agent': DIAG_UA, Accept: '*/*', Range: 'bytes=0-0', Connection: 'close' },
           timeout: PROBE_TIMEOUT_MS,
           // molti pannelli hanno certificati self-signed e i player li accettano:
-          // qui segnaliamo solo se lo stream e' davvero irraggiungibile
+          // here we only report if the stream is truly unreachable
           rejectUnauthorized: false,
           ...(require('net').isIP(u.hostname) ? {} : { servername: u.hostname }),
         },
@@ -109,23 +109,23 @@ function probe(urlText, redirectsLeft = 3, chain) {
           }
           const reason =
             code === 401 || code === 403
-              ? `accesso negato dal pannello (HTTP ${code}): credenziali errate, account scaduto, limite connessioni raggiunto o paese/user-agent bloccati`
+              ? `access denied by the panel (HTTP ${code}): wrong credentials, expired account, connection limit reached or country/user-agent blocked`
               : code === 404
-                ? 'canale non trovato sul pannello (HTTP 404): la lista e\' cambiata — prova "Aggiorna" dalla configurazione'
+                ? 'channel not found on the panel (HTTP 404): the list changed — try "Refresh" from the configuration page'
                 : code >= 500
-                  ? `il server di origine e' in errore (HTTP ${code}): riprova tra poco`
-                  : `risposta inattesa del pannello (HTTP ${code})`;
+                  ? `the origin server returned an error (HTTP ${code}): try again shortly`
+                  : `unexpected response from the panel (HTTP ${code})`;
           resolve({ ok: false, status: code, reason, chain });
         }
       );
     } catch (e) {
-      return resolve({ ok: false, reason: `richiesta non partita: ${e.message}`, chain });
+      return resolve({ ok: false, reason: `request not sent: ${e.message}`, chain });
     }
     req.on('timeout', () => {
       req.destroy();
       resolve({
         ok: false,
-        reason: `nessuna risposta in ${Math.round(PROBE_TIMEOUT_MS / 1000)}s: server lento o offline (e' lo stesso problema del buffering infinito)`,
+        reason: `no response within ${Math.round(PROBE_TIMEOUT_MS / 1000)}s: slow or offline server (the same problem as endless buffering)`,
         chain,
       });
     });
@@ -133,21 +133,21 @@ function probe(urlText, redirectsLeft = 3, chain) {
       const c = String((e && e.code) || '');
       const m = String((e && e.message) || '');
       const reason = /ENOTFOUND|EAI_AGAIN/i.test(c)
-        ? `dominio non risolto (${u.hostname}): DNS casalingo/box o pannello scaduto`
+        ? `unresolved domain (${u.hostname}): home/box DNS or expired panel`
         : /ECONNREFUSED/i.test(c)
-          ? `connessione rifiutata da ${u.host}: server spento o porta errata`
+          ? `connection refused by ${u.host}: server down or wrong port`
           : /ECONNRESET|EPIPE|UND_ERR_SOCKET|closed/i.test(`${c} ${m}`)
-            ? 'il pannello ha chiuso la connessione mentre rispondeva'
+            ? 'the panel closed the connection while responding'
             : /CERT|SSL|TLS|HANDSHAKE|WRONG_VERSION/i.test(`${c} ${m}`)
-              ? `problema TLS verso ${u.hostname} (${c || m})`
-              : `errore di rete: ${c || m}`;
+              ? `TLS problem with ${u.hostname} (${c || m})`
+              : `network error: ${c || m}`;
       resolve({ ok: false, reason, chain });
     });
     req.end();
   });
 }
 
-/** ffprobe best-effort: risoluzione/codec per i log live (mai bloccante). */
+/** Best-effort ffprobe: resolution/codec for live logs (never blocking). */
 function probeMedia(url) {
   if (!FFPROBE) return Promise.resolve(null);
   return new Promise((resolve) => {
@@ -193,9 +193,9 @@ function probeMedia(url) {
   });
 }
 
-/* --------------------------- video di errore a schermo --------------------------- */
+/* --------------------------- video di error a schermo --------------------------- */
 
-/** Spezza il testo in righe da max `max` caratteri per la drawtext. */
+/** Splits text into lines of at most `max` characters for drawtext. */
 function wrapLines(texts, max = 58) {
   const lines = [];
   for (const t of texts) {
@@ -261,7 +261,7 @@ function actuallyRender(key, title, bodyLines) {
     p.stderr.on('data', (c) => { lastErr = String(c).slice(-400); });
     p.on('close', (code) => {
       if (code === 0 && fs.existsSync(out)) return resolve(out);
-      console.error(`[streamdiag] ffmpeg uscito con codice ${code}:`, lastErr);
+      console.error(`[streamdiag] ffmpeg exited with code ${code}:`, lastErr);
       resolve(null);
     });
     p.on('error', () => resolve(null));
@@ -271,12 +271,12 @@ function actuallyRender(key, title, bodyLines) {
 /* --------------------------------- handler --------------------------------- */
 
 /**
- * Route /proxy/play — registrata solo quando l'impostazione e' attiva.
- * Parametri: u (url originale), n (nome canale), l (nome lista), token.
+ * /proxy/play route — registered only when the setting is enabled.
+ * Parameters: u (original url), n (channel name), l (list name), token.
  */
 async function handlePlay(req, res, ctx = {}) {
   const u = String(req.query.u || '');
-  const name = String(req.query.n || 'canale');
+  const name = String(req.query.n || 'channel');
   const listName = String(req.query.l || '');
 
   const r = await probe(u);
@@ -285,7 +285,7 @@ async function handlePlay(req, res, ctx = {}) {
     live.add(
       'stream',
       c.ffprobe ? 'info' : 'debug',
-      `⏯ "${name}"${listName ? ` (${listName})` : ''} raggiungibile (HTTP ${r.status}) → redirect diretto`,
+      `⏯ "${name}"${listName ? ` (${listName})` : ''} reachable (HTTP ${r.status}) → direct redirect`,
       { url: r.finalUrl, ms: ctx.t0 ? Date.now() - ctx.t0 : undefined, ...(ctx.client || {}) }
     );
     if (c.ffprobe) {
@@ -304,24 +304,24 @@ async function handlePlay(req, res, ctx = {}) {
   live.add(
     'stream',
     'error',
-    `⛔ "${name}"${listName ? ` (${listName})` : ''} non riproducibile — ${r.reason} — url: ${u}`,
+    `⛔ "${name}"${listName ? ` (${listName})` : ''} not playable — ${r.reason} — url: ${u}`,
     { ms: ctx.t0 ? Date.now() - ctx.t0 : undefined, ...(ctx.client || {}) }
   );
 
-  const body = wrapLines([`Canale: ${name}`, listName && `Lista: ${listName}`, r.reason]);
-  const file = await renderErrorVideo('STREAM NON DISPONIBILE', body);
+  const body = wrapLines([`Channel: ${name}`, listName && `List: ${listName}`, r.reason]);
+  const file = await renderErrorVideo('STREAM UNAVAILABLE', body);
   res.set('Cache-Control', 'no-store');
   if (!file) {
-    // senza ffmpeg ricadiamo su testo: i player meno "pazienti" lo mostrano,
-    // e la causa resta nei log live
+    // without ffmpeg we fall back to text: less "patient" players show it,
+    // and the cause remains in the live logs
     res.status(502).type('text/plain; charset=utf-8');
-    return res.send(`STREAM NON DISPONIBILE\n${body.join('\n')}\n`);
+    return res.send(`STREAM UNAVAILABLE\n${body.join('\n')}\n`);
   }
   res.set('Content-Type', 'video/mp2t');
   fs.createReadStream(file).pipe(res);
 }
 
-/** Costruisce lo URL di diagnostica per uno stream della lista. */
+/** Builds the diagnostic URL for a list stream. */
 function diagUrl(base, token, origUrl, name, listName) {
   const qs = new URLSearchParams({ u: origUrl, n: name, l: listName });
   if (token) qs.set('token', token);

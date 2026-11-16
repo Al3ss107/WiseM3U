@@ -1,16 +1,16 @@
 'use strict';
 
 /**
- * Info account Xtream: da un URL get.php con username/password ricava le
- * informazioni del pannello via /player_api.php (scadenza, stato, connessioni).
- * Serve per mostrare la scadenza della lista nella pagina di configurazione.
+ * Xtream account info: from a get.php URL with username/password it reads the
+ * panel information via /player_api.php (expiry, status, connections).
+ * Used to show list expiry on the configuration page.
  */
 
 const { nodeFetchText, resolveViaPublicDns } = require('./wiseplay');
 
 const PANEL_TIMEOUT_MS = 8000;
 
-/** Vero se l'URL punta a un pannello Xtream con credenziali in chiaro. */
+/** True if the URL points to an Xtream panel with credentials in clear text. */
 function xtreamInfo(url) {
   let u;
   try { u = new URL(String(url || '')); } catch (_) { return null; }
@@ -27,15 +27,15 @@ function xtreamInfo(url) {
 }
 
 /**
- * Scarica /player_api.php riusando le stesse recovery del download liste
- * (http su porta https, TLS self-signed, DNS pubblici). Mai eccezioni:
- * ritorna {ok:false, reason} in caso di problema.
+ * Downloads /player_api.php reusing the same list-download recovery
+ * (http on an https port, self-signed TLS, public DNS). Never throws:
+ * returns {ok:false, reason} on problems.
  */
 async function fetchPanelInfo(url) {
   const info = xtreamInfo(url);
-  if (!info) return { ok: false, reason: 'non un URL Xtream (mancano username/password in get.php)' };
+  if (!info) return { ok: false, reason: 'not an Xtream URL (username/password missing in get.php)' };
 
-  // claims delle retry mirati (come fetchRoot in wiseplay)
+  // targeted retry claims (like fetchRoot in wiseplay)
   async function tryFetch(target) {
     try {
       return await fetchText(target);
@@ -64,7 +64,7 @@ async function fetchPanelInfo(url) {
   }
   let j;
   try { j = JSON.parse(raw); } catch (_) {
-    return { ok: false, reason: 'risposta non JSON da player_api.php' };
+    return { ok: false, reason: 'non-JSON response from player_api.php' };
   }
   const ui = j.user_info || {};
   const exp = Number(ui.exp_date) || 0; // unix seconds
@@ -87,7 +87,7 @@ async function fetchPanelInfo(url) {
   };
 }
 
-// micro-fetch testuale con undici (come wiseplay.fetchText ma senza limiti di contenuto)
+// textual micro-fetch with undici (like wiseplay.fetchText but with no content limits)
 async function fetchText(url) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), PANEL_TIMEOUT_MS);
@@ -97,14 +97,14 @@ async function fetchText(url) {
       headers: { 'User-Agent': require('./constants').getUserAgent(), Accept: 'application/json' },
     });
     if (!res.ok) {
-      const e = new Error(`HTTP ${res.status} dal pannello Xtream`);
+      const e = new Error(`HTTP ${res.status} from the Xtream panel`);
       e.status = res.status;
       throw e;
     }
     return (await res.text()).slice(0, 500000);
   } catch (err) {
     const cause = err && err.cause;
-    const e = new Error(`pannello irraggiungibile: ${cause ? `${cause.code}: ${cause.message}` : err.message}`);
+    const e = new Error(`panel unreachable: ${cause ? `${cause.code}: ${cause.message}` : err.message}`);
     e.certError = !!cause && /CERT|SSL|TLS/i.test(`${cause.code} ${cause.message}`);
     e.causeRef = { code: (cause && cause.code) || '', message: (cause && cause.message) || (err && err.message) || '' };
     throw e;

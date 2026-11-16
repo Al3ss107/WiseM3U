@@ -1,9 +1,9 @@
 'use strict';
 
 /**
- * Selezione dei rami: un ramo (gruppo che contiene canali) e' attivo
- * finche' il suo path non compare in disabledPaths. Niente alberi,
- * niente whitelist: una sola lista di path disattivati.
+ * Branch selection: a branch (group containing channels) is active as long
+ * as its path does not appear in disabledPaths. No trees, no whitelist:
+ * a single list of disabled paths.
  */
 
 function makeBranchSelector(disabledPaths) {

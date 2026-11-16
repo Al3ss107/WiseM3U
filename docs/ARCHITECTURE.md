@@ -1,74 +1,76 @@
-# Architettura
+# Architecture
 
-WiseM3U è un'applicazione Node.js/Express a processo singolo. Non usa un
-database: la configurazione è un file JSON sul volume dati e le cache sono file
-su disco (con alberi "caldi" in RAM).
+WiseM3U is a single-process Node.js/Express application. It does not use a
+database: the configuration is a JSON file on the data volume and caches are
+files on disk (with "hot" trees kept in RAM).
 
-## Struttura
+## Layout
 
 ```
 src/
-  server.js            composizione dell'app Express e rotte non modulari
+  server.js            Express app composition and non-modular routes
   routes/
-    history.js         cronologia: elenco, restore, checkpoint, undo
-    trash.js           cestino: delete, elenco, restore, svuota
-  config.js            lettura/scrittura atomica della config, normalizzazione, revisione
-  history.js           snapshot su disco, diff per categorie, retention, checkpoint
-  cache.js             snapshot gzip degli alberi + LRU in RAM
-  wiseplay.js          download/parsing WisePlay, M3U e M3U_PLUS
-  playlist.js          flatten, cataloghi Stremio/Nuvio, M3U finale, liste personali
-  m3u.js               parser e builder M3U
-  selection.js         selezione dei rami (esclusioni, keyword)
-  protocols.js         riconoscimento protocolli e URL
-  imgfit.js            riproporzionamento dei loghi
-  streamdiag.js        diagnostica degli stream (opt-in)
-  xtream.js            info account Xtream
-  liveLog.js           buffer circolare dei log live
-  constants.js         versione (da package.json), UA, timeout, limiti
+    history.js         configuration history: list, restore, checkpoint, undo
+    trash.js           trash: delete, list, restore, empty
+  config.js            atomic config read/write, normalization, revisioning
+  history.js           on-disk snapshots, per-category diff, retention, checkpoints
+  cache.js             gzip tree snapshots + in-RAM LRU
+  wiseplay.js          WisePlay, M3U and M3U_PLUS download/parsing
+  playlist.js          flattening, Stremio/Nuvio catalogs, final M3U, personal lists
+  m3u.js               M3U parser and builder
+  selection.js         branch selection (exclusions, keywords)
+  protocols.js         protocol and URL detection
+  imgfit.js            logo resizing
+  streamdiag.js        stream diagnostics (opt-in)
+  xtream.js            Xtream account info
+  liveLog.js           live log ring buffer
+  constants.js         version (from package.json), UA, timeouts, limits
 public/
-  configure.html       markup della pagina di configurazione
-  configure.css        stili (Material 3, tema scuro)
-  configure.js         logica della pagina (vanilla JS, nessun build step)
+  configure.html       configuration page markup
+  configure.css        styles (Material 3, dark theme)
+  configure.js         page logic (vanilla JS, no build step)
+  i18n.js              translations engine
+  i18n/*.json          dictionaries (en is the source language)
   manifest.json, logo.svg, ...
-tests/                 suite di regressione eseguite con `npm test`
+tests/                 regression suites run by `npm test`
 ```
 
-## Flusso di una richiesta
+## Request flow
 
-1. `src/server.js` monta `express.json` (limite 4 MB), la compressione e i file
-   statici di `public/`.
-2. Le rotte pubbliche (`/manifest.json`, `/catalog`, `/playlist.m3u`, stream,
-   immagini) usano `requireToken`; le rotte `/api/*` usano `requireAdmin`.
-3. Le rotte della cronologia e del cestino sono `express.Router()` in
-   `src/routes/`, montati rispettivamente su `/api/history` e `/api/lists`.
-   Ricevono solo il middleware `admin`: le dipendenze (config, cache, history,
-   playlist) sono importate direttamente, così i moduli restano testabili.
-4. La pagina `/configure` viene servita da `configPageHtml()`: il server
-   sostituisce l'unico placeholder `__WM_UI_VERSION__` nella meta tag
-   `wm-ui-version`. CSS e JS sono file separati serviti staticamente e
-   `configure.js` legge la versione dalla meta (niente versioni hardcoded).
-5. Ogni modifica "stabile" della configurazione passa da `config.saveConfig`,
-   che incrementa `rev` e registra uno snapshot in `history` (lo stato runtime
-   delle liste è escluso dal confronto). Un `PUT /api/config` con `baseRev`
-   vecchia riceve **409** e lo stato corrente.
+1. `src/server.js` mounts `express.json` (4 MB limit), compression and the
+   static files in `public/`.
+2. Public routes (`/manifest.json`, `/catalog`, `/playlist.m3u`, streams,
+   images) use `requireToken`; `/api/*` routes use `requireAdmin`.
+3. History and trash routes are `express.Router()` modules in `src/routes/`,
+   mounted on `/api/history` and `/api/lists`. They receive only the `admin`
+   middleware; dependencies (config, cache, history, playlist) are imported
+   directly, so the modules stay testable.
+4. `/configure` is served by `configPageHtml()`: the server replaces the only
+   `__WM_UI_VERSION__` placeholder in the `wm-ui-version` meta tag. CSS and JS
+   are separate static files and `configure.js` reads the version from the meta
+   tag (no hardcoded versions).
+5. Every stable configuration change goes through `config.saveConfig`, which
+   bumps `rev` and records a snapshot in `history` (runtime list state is
+   excluded from the comparison). A `PUT /api/config` with an old `baseRev`
+   receives **409** and the current state.
 
-## Convenzioni
+## Conventions
 
-- **Errori API**: `{ error: "messaggio in italiano" }`, status coerente
-  (400 input non valido, 401 token, 404 non trovato, 409 conflitto/stato non
-  pronto, 500 errore interno).
-- **Config**: mai scrivere direttamente il file; usare `store.saveConfig`. I
-  campi derivati o obsoleti vengono normalizzati in `normalizeConfig`.
-- **Cronologia**: ciò che è "stabile" va in `stableConfig`; i cambi di stato
-  (`status`, `stats`, `fetchedAt`) non devono creare snapshot.
-- **UI**: tutto il testo utente passa da `esc()` prima di finire in `innerHTML`;
-  nessun framework, nessun build step.
-- **Segreti**: URL con credenziali e token restano sul volume dati; la UI mostra
-  gli URL redatti e le API sono protette da `ADMIN_TOKEN`.
+- **API errors**: `{ error: "english message" }`, with coherent status codes
+  (400 invalid input, 401 token, 404 not found, 409 conflict/not-ready state,
+  500 internal error).
+- **Config**: never write the file directly; use `store.saveConfig`. Derived or
+  obsolete fields are normalized in `normalizeConfig`.
+- **History**: stable data goes into `stableConfig`; state changes (`status`,
+  `stats`, `fetchedAt`) must not create snapshots.
+- **UI**: all user text passes through `esc()` before reaching `innerHTML`; no
+  framework, no build step.
+- **Secrets**: URLs with credentials and tokens stay on the data volume; the UI
+  shows redacted URLs and the APIs are protected by `ADMIN_TOKEN`.
 
 ## Test
 
-`npm test` esegue in sequenza le suite Node (log, diagnostica, Xtream,
-WisePlay, imgfit, cronologia/API). Le suite avviano un server reale su una
-porta locale e un volume dati temporaneo, quindi verificano anche le rotte e
-gli asset della pagina di configurazione.
+`npm test` runs the Node suites in sequence (logs, diagnostics, Xtream,
+WisePlay, imgfit, history/API). The suites start a real server on a local port
+and a temporary data volume, so they also verify routes and configuration page
+assets.

@@ -1,8 +1,8 @@
 'use strict';
 
 /**
- * Costruzione della playlist finale (M3U) e dei cataloghi Stremio/Nuvio
- * a partire dalle liste WisePlay configurate.
+ * Builds the final playlist (M3U) and the Stremio/Nuvio catalogs
+ * from the configured WisePlay lists.
  */
 
 const { flattenStations, findByPath, pathNames } = require('./wiseplay');
@@ -12,11 +12,11 @@ const { buildM3U } = require('./m3u');
 const cache = require('./cache');
 
 /**
- * Se la lista ha EasyProxy configurato, riscrive l'URL dello stream come
- * `BASE/proxy/manifest.m3u8?url=...`: sara' EasyProxy a scaricare il flusso
- * (con il suo DNS/WARP/estrattori) e a servirlo al client. Utile per le liste
- * "(dns)" che dal client non risolvono. I link acestream:// restano intatti:
- * EasyProxy non puo' gestirli.
+ * If the list has EasyProxy configured, rewrites the stream URL as
+ * `BASE/proxy/manifest.m3u8?url=...`: EasyProxy will download the stream
+ * (with its DNS/WARP/extractors) and serve it to the client. Useful for
+ * "(dns)" lists that the client cannot resolve. acestream:// links stay intact:
+ * EasyProxy cannot handle them.
  */
 function proxyStreamUrl(url, list) {
   const base = ((list.options && list.options.easyProxy) || '').replace(/\/+$/, '');
@@ -40,7 +40,7 @@ function prefixJoiner(prefix) {
 }
 
 /**
- * Raccoglie i canali di tutte le liste abilitate.
+ * Collects the channels of all enabled lists.
  * @param {object} config config normalizzata
  * @param {object} [opts] { force }
  * @returns {Promise<{channels:Array, lists:Array, errors:Array, epgUrls:string[]}>}
@@ -59,8 +59,8 @@ async function collectChannels(config, opts = {}) {
       continue;
     }
 
-    // le righe sono memoizzate in listRows: playlist, cataloghi e canali
-    // condividono lo stesso flatten invece di rifarlo ogni volta
+    // rows are memoized in listRows: playlist, catalogs and channels
+    // share the same flatten instead of rebuilding it every time
     let value;
     try {
       value = await listRows(config, list, opts);
@@ -76,8 +76,8 @@ async function collectChannels(config, opts = {}) {
     for (const ch of value.rows) {
       const key = ch.url.toLowerCase();
       if (isPersonal) {
-        // le personali pescano dalle stesse sorgenti: il dedup globale le
-        // cancellerebbe; deduplichiamo solo dentro le liste personali
+        // personal lists pull from the same sources: global dedupe would
+        // erase them; deduplicate only inside personal lists
         if (seenPersonal.has(key)) { droppedDup++; continue; }
         seenPersonal.add(key);
       } else if (config.settings.dedupeGlobal && list.options.dedupe !== false && seen.has(key)) {
@@ -118,9 +118,9 @@ async function collectChannels(config, opts = {}) {
   return { channels, lists: listResults, errors, epgUrls };
 }
 
-/* ----------------------- liste composite (personali) ----------------------- */
+/* ----------------------- composite (personal) lists ----------------------- */
 
-/** Legge "listId::path::nome" ('*' = playlist intera). */
+/** Reads "listId::path::name" ('*' = whole playlist). */
 function parsePersonalSrc(src) {
   const i1 = String(src).indexOf('::');
   const i2 = String(src).indexOf('::', i1 + 2);
@@ -128,17 +128,17 @@ function parsePersonalSrc(src) {
   return { listId: src.slice(0, i1), path: src.slice(i1 + 2, i2), name: src.slice(i2 + 2) };
 }
 
-/** Rami sintetici dalle voci personalEntries (usati dalle liste personali e, in
- *  coda, anche dalle liste normali). Le sorgenti possono essere a loro volta
- *  liste personali; 'chain' evita i cicli. */
+/** Synthetic branches from personalEntries (used by personal lists and, at
+ *  the end, by normal lists too). Sources can themselves be personal
+ *  lists; 'chain' prevents cycles. */
 async function synthChildren(config, list, entries, basePath, chain = []) {
   const selfId = list.id;
   const del = new Set(list.options.deletedChannels || []);
   const delB = new Set(list.options.deletedBranches || []);
   const children = [];
-  const into = new Map(); // dst (path di un ramo esistente) -> stazioni da innestare
+  const into = new Map(); // dst (path of an existing branch) -> stations to nest
   let nStations = 0;
-  let slots = 0; // contatore posizionale: gli slot eliminati restano riservati
+  let slots = 0; // positional counter: deleted slots stay reserved
   for (const e of entries || []) {
     if (!e || typeof e.src !== 'string') continue;
     const p = parsePersonalSrc(e.src);
@@ -153,9 +153,9 @@ async function synthChildren(config, list, entries, basePath, chain = []) {
     const node = findByPath(stree, p.path);
     if (!node) continue;
     if (typeof e.dst === 'string' && e.dst !== '') {
-      // canale innestato DENTRO un ramo esistente della lista destinazione
+      // channel nested INSIDE an existing branch of the destination list
       if (p.name === '*') continue;
-      if (delB.has(e.dst)) continue; // ramo di destinazione eliminato
+      if (delB.has(e.dst)) continue; // deleted destination branch
       const st = (node.stations || []).find((x) => x.name === p.name);
       if (!st) continue;
       if (del.has(`${e.dst}::${st.name}`)) continue;
@@ -164,14 +164,14 @@ async function synthChildren(config, list, entries, basePath, chain = []) {
       nStations += 1;
       continue;
     }
-    // path posizionale (come nelle liste vere): findByPath naviga per indice.
-    // Lo slot viene consumato anche se il ramo/canale e' stato eliminato, cosi'
-    // le chiavi posizionali (rinomine, disattivazioni) restano stabili.
+    // positional path (as in real lists): findByPath navigates by index.
+    // The slot is consumed even if the branch/channel was deleted, so
+    // positional keys (renames, disables) stay stable.
     const bpath = String(basePath + slots);
-    // Lo slot viene sempre consumato (e il figlio sempre inserito) cosi' gli
-    // indici dei figli coincidono coi path posizionali: findByPath naviga per
-    // indice. Rami/canali eliminati restano nell'albero ma sono filtrati
-    // ovunque tramite deletedBranches/deletedChannels; il cestino li legge da li'.
+    // The slot is always consumed (and the child always inserted) so child
+    // indexes match positional paths: findByPath navigates by index.
+    // Deleted branches/channels stay in the tree but are filtered everywhere
+    // through deletedBranches/deletedChannels; the trash reads them from there.
     if (p.name === '*') {
       const stations = (node.stations || []).map((st) => ({ ...st }));
       slots++;
@@ -193,8 +193,8 @@ async function synthChildren(config, list, entries, basePath, chain = []) {
   return { children, nStations, into };
 }
 
-/** Innesta le stazioni "into" nei rami esistenti (clone per non toccare la cache).
- *  I path possono puntare a rami annidati (es. "0.1.0"): la ricerca è ricorsiva. */
+/** Nests the "into" stations in existing branches (clone so the cache is untouched).
+ *  Paths can point to nested branches (e.g. "0.1.0"): the search is recursive. */
 function applyInto(children, into) {
   if (!into || !into.size) return children;
   const seen = new Set();
@@ -214,13 +214,13 @@ function applyInto(children, into) {
   return walk(children);
 }
 
-/** Albero sintetico di una lista personale. */
+/** Synthetic tree of a personal list. */
 async function buildPersonalTree(config, list) {
   const s = await synthChildren(config, list, list.options.personalEntries, 0);
   const children = applyInto(s.children, s.into);
   const delB = new Set(list.options.deletedBranches || []);
   const nStations = children.reduce((n, c) => (delB.has(c.path) ? n : n + (c.stations || []).length), 0);
-  const name = list.name || 'Lista personale';
+  const name = list.name || 'Personal list';
   return {
     id: 'root',
     name,
@@ -234,8 +234,8 @@ async function buildPersonalTree(config, list) {
   };
 }
 
-/** Entry albero di una lista: sintetico per le personali; per le normali aggiunge
- *  in coda i rami sintetici (contenuto importato da altre liste). */
+/** Tree entry for a list: synthetic for personal lists; for normal lists it
+ *  appends the synthetic branches (content imported from other lists). */
 async function entryFor(config, list, force = false, chain = []) {
   if (list.kind === 'personal') {
     return cache.getTree({ id: list.id, url: '', builder: () => buildPersonalTree(config, list) });
@@ -261,9 +261,9 @@ async function entryFor(config, list, force = false, chain = []) {
   return { ...entry, tree };
 }
 
-/** Header EPG per la playlist generata: impostazione manuale + EPG
- *  ereditati dalle sorgenti m3u/m3u_plus. Scrive entrambe le forme comuni
- *  (x-tvg-url per Kodi/Xtream, url-tvg per TiviMate e app IPTV). */
+/** EPG header for the generated playlist: manual setting + EPG inherited
+ *  from m3u/m3u_plus sources. Writes both common forms
+ *  (x-tvg-url for Kodi/Xtream, url-tvg for TiviMate and IPTV apps). */
 function epgHeader(config, inherited = []) {
   const all = [];
   const manual = String(config.settings.epgUrl || '').trim();
@@ -278,10 +278,10 @@ function epgHeader(config, inherited = []) {
 
 async function buildPlaylist(config, opts = {}) {
   const { channels, lists, errors, epgUrls } = await collectChannels(config, opts);
-  // opts.rewrite (diagnostica stream): riscrittura finale degli URL canale prima dell'M3U
+  // opts.rewrite (stream diagnostics): final channel URL rewrite before the M3U
   const out = typeof opts.rewrite === 'function' ? channels.map((c) => opts.rewrite(c) || c) : channels;
   const m3u = buildM3U(out, {
-    name: `${config.settings.addonName} (${out.length} canali)`,
+    name: `${config.settings.addonName} (${out.length} channels)`,
     header: epgHeader(config, epgUrls),
   });
   return { m3u, channels, lists, errors, epgUrls };
@@ -291,8 +291,8 @@ async function buildPlaylist(config, opts = {}) {
 
 const TYPE = 'tv';
 
-// Prefisso stabile di tutti i meta-id: il manifest lo dichiara in idPrefixes,
-// cosi' Stremio/Nuvio instradano qui le richieste /meta e /stream.
+// Stable prefix for all meta-ids: the manifest declares it in idPrefixes,
+// so Stremio/Nuvio route /meta and /stream requests here.
 const ID_PREFIX = 'wise:';
 
 function encodePath(p) {
@@ -323,7 +323,7 @@ function parseMetaId(id) {
   if (idx < 0) return null;
   const listId = s.slice(0, idx);
   let rest = s.slice(idx + 1);
-  // gli id-canale hanno un suffisso ":<indice stazione>" (retrocompat: senza = gruppo)
+  // channel ids have a ":<station index>" suffix (backward compatible: without = group)
   let stationIdx = null;
   const lastColon = rest.lastIndexOf(':');
   if (lastColon >= 0 && /^\d+$/.test(rest.slice(lastColon + 1))) {
@@ -341,16 +341,15 @@ function catalogDisplayName(list) {
   return list.options.catalogName || list.name || 'WisePlay';
 }
 
-/* I cataloghi mostrano i CANALI; i gruppi diventano generi (dropdown).
- * Le righe sono memorizzate per lista e ricalcolate solo se cambiano
- * selezione/albero, cosi' paginazione e filtri restano veloci. */
+/* Catalogs show CHANNELS; groups become genres (dropdown).
+ * Rows are memoized per list and recomputed only when the selection/tree
+ * changes, so pagination and filters stay fast. */
 
 const PAGE_SIZE = 100;
 const rowsMemo = new Map();
 
-/** RAM farm: l'albero parseato di questa lista viene evitto dalla cache — le righe
- *  memoizzate condividono le stringhe col tree: libera anche loro (sono ricostruite
- *  al prossimo uso). */
+/** RAM farm: this list's parsed tree is evicted from the cache — memoized rows
+ *  share strings with the tree, so free them too (they are rebuilt on next use). */
 function clearRows(listId) { rowsMemo.delete(listId); }
 
 function rowFingerprint(list, fetchedAt) {
@@ -367,7 +366,7 @@ function rowFingerprint(list, fetchedAt) {
   );
 }
 
-/** Posizione di ogni ramo secondo l'ordine scelto dalla configurazione. */
+/** Position of each branch according to the configured order. */
 function branchPositions(list) {
   const order = list.options.order || [];
   const pos = new Map();
@@ -409,11 +408,11 @@ async function listRows(config, list, opts = {}) {
     rows.push({ ...r, url: proxyStreamUrl(url, list) });
   }
 
-  // rispetta l'ordine dei rami e, dentro ogni ramo, quello dei canali
-  // scelti nella pagina di configurazione (chiavi stabili: path e nome,
-  // quindi le personalizzazioni sopravvivono ai cambi di URL)
-  // l'ordine segue la destinazione effettiva (gpath): i canali spostati
-  // vivono nel ramo/gruppo personale scelto dalla pagina di configurazione
+  // respect branch order and, within each branch, the channel order chosen
+  // on the configuration page (stable keys: path and name, so customizations
+  // survive URL changes)
+  // the order follows the actual destination (gpath): moved channels live in
+  // the branch/custom group chosen on the configuration page
   const pos = branchPositions(list);
   const chanOrder = list.options.channelOrder || {};
   if (pos.size || Object.keys(chanOrder).length) {
@@ -449,7 +448,7 @@ async function listRows(config, list, opts = {}) {
     stats,
     fetchedAt: entry.fetchedAt,
     error: entry.error || '',
-    // EPG dichiarati dalla sorgente m3u/m3u_plus (snapshot vecchi: assenti)
+    // EPGs declared by the m3u/m3u_plus source (old snapshots: missing)
     epgUrls: (entry.tree && entry.tree.meta && entry.tree.meta.epgUrls) || [],
   };
   rowsMemo.set(list.id, { fp, value });
@@ -457,16 +456,16 @@ async function listRows(config, list, opts = {}) {
 }
 
 /**
- * I rami della lista: i gruppi che contengono direttamente i canali
- * (le "singole playlist"), rinominati e ordinati come da configurazione.
- * Passeggiata leggera sull'albero, senza flatten e senza rete: il manifest
- * deve restare istantaneo anche con 100k+ canali.
+ * List branches: groups that directly contain channels (the "individual
+ * playlists"), renamed and ordered as configured.
+ * A light tree walk, no flatten and no network: the manifest must stay
+ * instant even with 100k+ channels.
  */
 function buildBranches(entry, list) {
   if (!entry || !entry.tree) return [];
   const selector = makeBranchSelector(list.options.disabledPaths);
   const renames = list.options.renames || {};
-  // quanti canali di ogni ramo sono stati esclusi dalla pagina di configurazione
+  // how many channels of each branch were excluded from the configuration page
   const disByBranch = new Map();
   for (const key of list.options.disabledChannels || []) {
     const i = key.lastIndexOf('::');
@@ -474,7 +473,7 @@ function buildBranches(entry, list) {
     const p = key.slice(0, i);
     disByBranch.set(p, (disByBranch.get(p) || 0) + 1);
   }
-  // canali/rami eliminati dalla pagina: spariscono del tutto
+  // channels/branches deleted from the page: they disappear completely
   const delByBranch = new Map();
   for (const key of list.options.deletedChannels || []) {
     const i = key.lastIndexOf('::');
@@ -483,7 +482,7 @@ function buildBranches(entry, list) {
     delByBranch.set(p, (delByBranch.get(p) || 0) + 1);
   }
   const delBranches = new Set(list.options.deletedBranches || []);
-  // canali spostati dalla pagina di configurazione: conteggi per destinazione
+  // channels moved from the configuration page: counts per destination
   const moves = list.options.channelMoves || {};
   const disChannels = new Set(list.options.disabledChannels || []);
   const delChannels = new Set(list.options.deletedChannels || []);
@@ -525,7 +524,7 @@ function buildBranches(entry, list) {
     }
   })(entry.tree);
 
-  // gruppi personali ("@Nome") nati spostando i canali dalla pagina
+  // personal groups ("@Name") created by moving channels from the page
   for (const [t, n] of inC) {
     if (!t.startsWith('@') || !n) continue;
     if (delBranches.has(t)) continue; // gruppo personale eliminato
@@ -540,7 +539,7 @@ function buildBranches(entry, list) {
       custom: true,
     });
   }
-  // playlist/rami personalizzati creati vuoti dalla pagina ("+ nuova playlist")
+  // custom playlists/branches created empty from the page ("+ new playlist")
   for (const g of list.options.customGroups || []) {
     const t = '@' + g;
     if (delBranches.has(t)) continue; // gruppo personale eliminato
@@ -567,16 +566,16 @@ function buildBranches(entry, list) {
   return found;
 }
 
-/** Cataloghi da esporre nel manifest: solo dati gia' in cache, mai rete. */
+/** Catalogs to expose in the manifest: cached data only, never network. */
 async function buildCatalogs(config) {
   const out = [];
   for (const l of config.lists.filter((x) => x.options.enabled && x.options.inCatalog)) {
     let entry = cache.getEntry(l.id);
     if (!entry && l.kind === 'personal') {
-      // albero sintetico: costruirlo non tocca la rete verso l'esterno
+      // synthetic tree: building it does not touch the external network
       try { entry = await entryFor(config, l); } catch (_) { entry = null; }
     } else if (entry && (l.options.personalEntries || []).length) {
-      try { entry = await entryFor(config, l); } catch (_) { /* resta l'albero semplice */ }
+      try { entry = await entryFor(config, l); } catch (_) { /* keep the simple tree */ }
     }
     const options = entry
       ? buildBranches(entry, l).filter((b) => b.enabled).map((b) => b.displayName).slice(0, 300)
@@ -596,8 +595,8 @@ async function buildCatalogs(config) {
 }
 
 /**
- * Contenuto di un catalogo: i CANALI della lista, paginati e filtrabili
- * per genere (= gruppo) e per ricerca, come da protocollo Stremio.
+ * Catalog content: the list's CHANNELS, paginated and filterable by
+ * genre (= group) and search, as per the Stremio protocol.
  */
 async function buildCatalog(config, catId, extras = {}) {
   const list = config.lists.find((l) => catalogId(l.id) === catId);
@@ -619,11 +618,11 @@ async function buildCatalog(config, catId, extras = {}) {
       id: metaId(list.id, r.path, r.idx),
       type: TYPE,
       name: r.name,
-      // logo proprio del canale, altrimenti l'icona del gruppo come poster
+      // the channel's own logo, otherwise the group icon as poster
       poster: r.logo || r.groupLogo || undefined,
-      // loghi dei canali TV sono orizzontali: card 16:9 ("landscape"),
-      // niente piu' tagli laterali nei client (Nuvio/Stremio) che ricavano
-      // la geometria della card dal posterShape
+      // TV channel logos are horizontal: 16:9 card ("landscape"),
+      // no more side cropping in clients (Nuvio/Stremio) that derive
+      // the card geometry from posterShape
       posterShape: 'landscape',
       genre: [r.genre],
       description: r.group,
@@ -641,16 +640,16 @@ async function buildMeta(config, id) {
   const node = findByPath(entry.tree, parsed.path);
   if (!node) return null;
 
-  // id-canale: meta del singolo canale con logo e genere (= nome del gruppo)
+  // channel id: single-channel meta with logo and genre (= group name)
   if (parsed.stationIdx != null) {
     const st = (node.stations || [])[parsed.stationIdx];
     if (!st) return null;
     const ckey = `${parsed.path}::${st.name}`;
-    if ((list.options.disabledChannels || []).includes(ckey)) return null; // canale escluso
-    if ((list.options.deletedChannels || []).includes(ckey)) return null; // canale eliminato
-    if ((list.options.deletedBranches || []).includes(parsed.path)) return null; // ramo eliminato dalla configurazione
-    if ((list.options.deletedChannels || []).includes(ckey)) return null; // canale eliminato
-    if ((list.options.deletedBranches || []).includes(parsed.path)) return null; // ramo eliminato
+    if ((list.options.disabledChannels || []).includes(ckey)) return null; // excluded channel
+    if ((list.options.deletedChannels || []).includes(ckey)) return null; // channel deleted
+    if ((list.options.deletedBranches || []).includes(parsed.path)) return null; // branch deleted from the configuration
+    if ((list.options.deletedChannels || []).includes(ckey)) return null; // channel deleted
+    if ((list.options.deletedBranches || []).includes(parsed.path)) return null; // branch deleted
     const names = pathNames(entry.tree, parsed.path);
     const genre = (list.options.renames || {})[parsed.path] || node.name;
     const url = normalizeStreamUrl(st.url, list.options);
@@ -661,19 +660,19 @@ async function buildMeta(config, id) {
         name: (list.options.channelRenames || {})[ckey] || st.name,
         poster: st.image || node.image || undefined,
         background: st.image || node.image || undefined,
-        // anche il dettaglio canale: landscape, coerente col catalogo
+        // channel detail too: landscape, consistent with the catalog
         posterShape: 'landscape',
         genre: [genre],
         description: [
           names.join(' › '),
-          url ? `Protocollo: ${protocolBadge(url)}` : 'Stream escluso dai filtri protocolli',
-          `Lista: ${listPrefix(list)}`,
+          url ? `Protocol: ${protocolBadge(url)}` : 'Stream excluded by protocol filters',
+          `List: ${listPrefix(list)}`,
         ].filter(Boolean).join('\n'),
       },
     };
   }
 
-  // retrocompat: id-gruppo delle build precedenti
+  // backward compatibility: group id from previous builds
   return {
     meta: {
       id,
@@ -684,9 +683,9 @@ async function buildMeta(config, id) {
       posterShape: 'landscape',
       description: [
         node.info,
-        `${node.counts.stations} stream totali`,
-        `Lista: ${listPrefix(list)}`,
-        node.sourceUrl ? `Sorgente: ${node.sourceUrl}` : '',
+        `${node.counts.stations} total streams`,
+        `List: ${listPrefix(list)}`,
+        node.sourceUrl ? `Source: ${node.sourceUrl}` : '',
       ]
         .filter(Boolean)
         .join('\n'),
@@ -708,9 +707,9 @@ async function buildStreams(config, id) {
   const branchName = (list.options.renames || {})[parsed.path] || node.name;
   const toStream = (st) => {
     const ckey = `${parsed.path}::${st.name}`;
-    if ((list.options.disabledChannels || []).includes(ckey)) return null; // canale escluso
-    if ((list.options.deletedChannels || []).includes(ckey)) return null; // canale eliminato
-    if ((list.options.deletedBranches || []).includes(parsed.path)) return null; // ramo eliminato
+    if ((list.options.disabledChannels || []).includes(ckey)) return null; // excluded channel
+    if ((list.options.deletedChannels || []).includes(ckey)) return null; // channel deleted
+    if ((list.options.deletedBranches || []).includes(parsed.path)) return null; // branch deleted
     const raw = normalizeStreamUrl(st.url, list.options);
     if (!raw) return null;
     const badge = protocolBadge(raw);
@@ -723,7 +722,7 @@ async function buildStreams(config, id) {
     };
   };
 
-  // id-canale: un solo stream
+  // channel id: a single stream
   if (parsed.stationIdx != null) {
     const st = (node.stations || [])[parsed.stationIdx];
     if (!st) return null;
@@ -731,7 +730,7 @@ async function buildStreams(config, id) {
     return { streams: one ? [one] : [] };
   }
 
-  // retrocompat: tutti gli stream del gruppo
+  // backward compatibility: all streams of the group
   const seen = new Set();
   const streams = [];
   for (const s of node.stations || []) {

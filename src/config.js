@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Persistenza della configurazione (JSON su file, montabile come volume Docker).
+ * Configuration persistence (JSON file, mountable as a Docker volume).
  */
 
 const fs = require('fs');
@@ -18,26 +18,26 @@ function defaultListOptions() {
     name: '',
     groupPrefix: 'list', // 'list' | 'none' | 'custom'
     customPrefix: '',
-    groupDepth: 1, // quante parti del percorso usare come group-title
-    emitLogo: false, // true = usa l'icona del gruppo come tvg-logo quando il canale non ne ha una
+    groupDepth: 1, // how many path parts to use as group-title
+    emitLogo: false, // true = use the group icon as tvg-logo when the channel has none
     protocols: { ...DEFAULT_ENABLED },
     aceMode: 'keep', // 'keep' | 'engine' | 'off'
     aceEngineHost: 'http://127.0.0.1:6878',
     dedupe: true,
     excludeKeywords: [],
-    disabledPaths: [], // rami (gruppi con canali) disattivati dalla pagina di configurazione
-    renames: {}, // path -> nome personalizzato del ramo
-    order: [], // ordine dei rami; gli assenti vanno in coda
-    disabledChannels: [], // canali esclusi, chiave "path::nomeOriginale"
-    channelRenames: {}, // "path::nomeOriginale" -> nuovo nome del canale
-    channelOrder: {}, // path del ramo -> [nomi originali dei canali, nell'ordine scelto]
-    channelMoves: {}, // "path::nomeOriginale" -> destinazione: path di un altro ramo o "@Nome" per gruppi personali
+    disabledPaths: [], // branches (groups with channels) disabled from the configuration page
+    renames: {}, // path -> custom branch name
+    order: [], // branch order; missing ones go to the end
+    disabledChannels: [], // excluded channels, key "path::originalName"
+    channelRenames: {}, // "path::originalName" -> new channel name
+    channelOrder: {}, // branch path -> [original channel names, in the chosen order]
+    channelMoves: {}, // "path::originalName" -> destination: another branch path or "@Name" for custom groups
     inCatalog: true,
     catalogName: '',
-    refreshMinutes: 1440, // aggiornamento della lista: default giornaliero
-    easyProxy: '', // URL di EasyProxy: IP o dominio (es. http://192.168.10.10:7860 o https://proxy.miodominio.it); vuoto = disattivato
-    easyProxyPassword: '', // API_PASSWORD di EasyProxy (se impostata)
-    easyProxyParams: '', // parametri extra da accodare alla richiesta proxy (es. "warp=off")
+    refreshMinutes: 1440, // list refresh: daily by default
+    easyProxy: '', // EasyProxy URL: IP or domain (e.g. http://192.168.10.10:7860 or https://proxy.mydomain.com); empty = disabled
+    easyProxyPassword: '', // EasyProxy API_PASSWORD (if set)
+    easyProxyParams: '', // extra parameters appended to the proxy request (e.g. "warp=off")
   };
 }
 
@@ -49,16 +49,16 @@ function defaultConfig() {
       addonName: 'WiseM3U',
       addonId: 'community.wisem3u',
       cacheTtlMinutes: 1440,
-      autoRefreshMinutes: 1440, // default: aggiornamento giornaliero
+      autoRefreshMinutes: 1440, // default: daily refresh
       maxDepth: 8,
       dedupeGlobal: true,
-      fitLogos: true, // riproporziona i loghi dei canali in poster "contain" (endpoint /imgfit)
-      userAgent: '', // UA personalizzata per le richieste in uscita (vuota = default)
-      streamDiag: false, // diagnostica stream: errore a schermo (video) invece di buffering silente
-      personalLists: [], // liste personali: canali pescati da tutte le liste [{id,name,includeInMain,channels:["listId::path::nome"]}]
+      fitLogos: true, // rescale channel logos into "contain" posters (endpoint /imgfit)
+      userAgent: '', // custom UA for outgoing requests (empty = default)
+      streamDiag: false, // stream diagnostics: on-screen error (video) instead of silent buffering
+      personalLists: [], // personal lists: channels pulled from all lists [{id,name,includeInMain,channels:["listId::path::name"]}]
       token: '',
-      publicBaseUrl: '', // URL pubblico (es. https://mio.dominio con nginx+cert): base per i link mostrati
-      epgUrl: '', // URL XMLTV manuale da dichiarare nella playlist generata (si aggiunge agli EPG ereditati dalle sorgenti m3u_plus)
+      publicBaseUrl: '', // public URL (e.g. https://my.domain with nginx+cert): base for displayed links
+      epgUrl: '', // manual XMLTV URL declared in the generated playlist (added to EPGs inherited from m3u_plus sources)
     },
     lists: [],
   };
@@ -84,7 +84,7 @@ function normalizeList(list) {
   const def = defaultListOptions();
   const options = { ...def, ...(list.options || {}) };
   options.protocols = { ...def.protocols, ...(list.options && list.options.protocols) };
-  // migrazione: le build precedenti usavano excludePaths per la selezione ad albero
+  // migration: previous builds used excludePaths for tree selection
   const legacyExcluded = Array.isArray(options.excludePaths) ? options.excludePaths.map(String) : [];
   delete options.excludePaths;
   delete options.includeOnlyPaths;
@@ -97,7 +97,7 @@ function normalizeList(list) {
       ? Object.fromEntries(Object.entries(options.renames).map(([k, v]) => [k, String(v)]))
       : {};
   options.order = Array.isArray(options.order) ? options.order.map(String) : [];
-  // personalizzazioni dei singoli canali: chiavi "path::nomeOriginale"
+  // per-channel customizations: keys "path::originalName"
   options.disabledChannels = Array.isArray(options.disabledChannels)
     ? options.disabledChannels.map(String)
     : [];
@@ -105,15 +105,15 @@ function normalizeList(list) {
     options.channelRenames && typeof options.channelRenames === 'object' && !Array.isArray(options.channelRenames)
       ? Object.fromEntries(Object.entries(options.channelRenames).map(([k, v]) => [k, String(v)]))
       : {};
-  // eliminazioni definitive dalla pagina: chiavi "path::nomeOriginale" / path di ramo
+  // permanent deletions from the page: keys "path::originalName" / branch path
   options.deletedChannels = Array.isArray(options.deletedChannels)
     ? options.deletedChannels.map(String)
     : [];
   options.deletedBranches = Array.isArray(options.deletedBranches)
     ? options.deletedBranches.map(String)
     : [];
-  // voci il cui cestino e' stato svuotato: restano eliminate ma non compaiono
-  // piu' nel cestino (non sono piu' ripristinabili)
+  // items whose trash was emptied: they stay deleted but no longer appear
+  // in the trash (they can no longer be restored)
   options.purgedChannels = Array.isArray(options.purgedChannels)
     ? options.purgedChannels.map(String)
     : [];
@@ -126,7 +126,7 @@ function normalizeList(list) {
           Object.entries(options.channelOrder).map(([k, v]) => [k, Array.isArray(v) ? v.map(String) : []])
         )
       : {};
-  // spostamenti dei canali: chiavi "path::nome", valore = path destinazione o "@Gruppo"
+  // channel moves: keys "path::name", value = destination path or "@Group"
   options.channelMoves =
     options.channelMoves && typeof options.channelMoves === 'object' && !Array.isArray(options.channelMoves)
       ? Object.fromEntries(
@@ -141,14 +141,14 @@ function normalizeList(list) {
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean);
-  // voci delle liste personali (composite): { id, src: "listId::path::nome|*" , dst? }
-  // dst (opzionale) = path di un ramo esistente in cui innestare il canale
+  // personal list items (composite): { id, src: "listId::path::name|*" , dst? }
+  // dst (optional) = path of an existing branch where the channel is nested
   options.personalEntries = Array.isArray(options.personalEntries)
     ? options.personalEntries
         .filter((e) => e && typeof e === 'object' && typeof e.id === 'string' && e.id && typeof e.src === 'string' && e.src.includes('::'))
         .map((e) => ({ id: e.id, src: e.src, ...(typeof e.dst === 'string' && e.dst !== '' ? { dst: e.dst } : {}) }))
     : [];
-  // playlist/rami personalizzati (vuoti) creati dalla pagina: nomi senza '@'
+  // custom (empty) playlists/branches created from the page: names without '@'
   options.customGroups = Array.isArray(options.customGroups)
     ? [...new Set(options.customGroups.map((g) => String(g || '').trim()).filter(Boolean))]
     : [];
@@ -157,8 +157,8 @@ function normalizeList(list) {
   if (options.easyProxy && !/^https?:\/\//i.test(options.easyProxy)) options.easyProxy = '';
   options.easyProxyPassword = String(options.easyProxyPassword || '').trim();
   options.easyProxyParams = String(options.easyProxyParams || '').trim().replace(/^[?&]+/, '');
-  delete options.easyProxyDns; // opzione delle build precedenti: ora l'URL accetta IP o dominio
-  delete options.easyProxyInsecure; // opzione delle build precedenti: nessuna spunta CA, il certificato lo gestisce il client
+  delete options.easyProxyDns; // previous-build option: the URL now accepts IP or domain
+  delete options.easyProxyInsecure; // previous-build option: no CA check, the client handles the certificate
 
   return {
     id: list.id || `l_${crypto.randomBytes(5).toString('hex')}`,
@@ -170,13 +170,13 @@ function normalizeList(list) {
     state: {
       status: (list.state && list.state.status) || 'idle',
       error: (list.state && list.state.error) || '',
-      // true = l'errore non si risolve con un retry (URL sbagliato di natura):
-      // la UI mostra "controlla il link" invece di "riprova con Aggiorna"
+      // true = the error cannot be fixed by retrying (inherently wrong URL):
+      // the UI shows "check the link" instead of "retry with Refresh"
       fatal: !!(list.state && list.state.fatal),
       fetchedAt: (list.state && list.state.fetchedAt) || '',
       stats: (list.state && list.state.stats) || null,
       kind: (list.state && list.state.kind) || '',
-      // info account Xtream (scadenza): cache 30 min del badge in configurazione
+      // Xtream account info (expiry): 30 min cache for the configuration badge
       ...(list.state && list.state.xtream ? { xtream: list.state.xtream } : {}),
     },
   };
@@ -186,10 +186,10 @@ function normalizeConfig(raw) {
   const base = defaultConfig();
   const cfg = raw && typeof raw === 'object' ? raw : {};
   const settings = { ...base.settings, ...(cfg.settings || {}) };
-  // campo rimosso (mai verificato da nessuna rotta): non deve restare nei
-  // config vecchi dopo il salvataggio
+  // removed field (never checked by any route): it must not remain in
+  // old configs after saving
   delete settings.configPassword;
-  // UA personalizzata: una sola riga, niente CR/LF (header injection)
+  // custom UA: a single line, no CR/LF (header injection)
   settings.userAgent = String(settings.userAgent || '')
     .replace(/[\r\n\t]+/g, ' ')
     .replace(/\s{2,}/g, ' ')
@@ -197,7 +197,7 @@ function normalizeConfig(raw) {
     .slice(0, 300);
   settings.publicBaseUrl = String(settings.publicBaseUrl || '').trim().replace(/\/+$/, '');
   if (settings.publicBaseUrl && !/^https?:\/\//i.test(settings.publicBaseUrl)) settings.publicBaseUrl = '';
-  // EPG manuale: come l'URL pubblico, accetta solo http(s) altrimenti si azzera
+  // manual EPG: like the public URL, accepts only http(s), otherwise it is cleared
   settings.epgUrl = String(settings.epgUrl || '').trim();
   if (settings.epgUrl && !/^https?:\/\//i.test(settings.epgUrl)) settings.epgUrl = '';
   settings.personalLists = Array.isArray(settings.personalLists)
@@ -205,7 +205,7 @@ function normalizeConfig(raw) {
         .filter((p) => p && typeof p === 'object')
         .map((p) => ({
           id: typeof p.id === 'string' && p.id ? p.id : `p_${crypto.randomBytes(4).toString('hex')}`,
-          name: String(p.name || '').trim() || 'La mia lista',
+          name: String(p.name || '').trim() || 'My list',
           includeInMain: p.includeInMain !== false,
           channels: Array.isArray(p.channels)
             ? p.channels.filter((k) => typeof k === 'string' && k.includes('::'))
@@ -225,7 +225,7 @@ function normalizeConfig(raw) {
 
   const lists = Array.isArray(cfg.lists) ? cfg.lists.map(normalizeList) : [];
 
-  /* migrazione: le vecchie "liste personali" (settings.personalLists) diventano
+  /* migration: old "personal lists" (settings.personalLists) become
      liste composite a tutti gli effetti (kind:'personal'). */
   for (const pl of settings.personalLists || []) {
     const entries = (pl.channels || []).map((src, i) => ({
@@ -245,8 +245,8 @@ function normalizeConfig(raw) {
         personalEntries: entries,
       },
     });
-    // rinomine/override del vecchio modello -> personalizzazioni dei rami sintetici
-    // (path posizionale: l'i-esima voce diventa il ramo "i")
+    // renames/overrides from the old model -> customizations of synthetic branches
+    // (positional path: the i-th entry becomes branch "i")
     (pl.channels || []).forEach((k, i) => {
       const name = k.slice(k.lastIndexOf('::') + 2);
       if (name === '*') {
@@ -268,8 +268,8 @@ function normalizeConfig(raw) {
 
   return {
     version: base.version,
-    // revisione della configurazione "stabile": serve a rifiutare i salvataggi
-    // della UI basati su uno stato ormai vecchio (409) invece di sovrascrivere
+    // "stable" configuration revision: used to reject UI saves
+    // based on stale state (409) instead of overwriting
     rev: Math.max(0, Number(cfg.rev) || 0),
     settings,
     lists,
@@ -289,17 +289,17 @@ function loadConfig() {
     if (fs.existsSync(CONFIG_FILE)) {
       if (fs.statSync(CONFIG_FILE).isDirectory()) {
         throw new Error(
-          `${CONFIG_FILE} e' una DIRECTORY: Docker l'ha creata automaticamente al primo ` +
-            'avvio perche\' il path non esisteva sull\'host. L\'entrypoint del container ' +
-            'la sistema da solo; se vedi questo messaggio elimina a mano la cartella ' +
-            `("${CONFIG_FILE}") sul volume e riavvia.`
+          `${CONFIG_FILE} is a DIRECTORY: Docker created it automatically on first ` +
+            'startup because the path did not exist on the host. The container entrypoint ' +
+            'fixes it automatically; if you see this message, remove the directory ' +
+            `("${CONFIG_FILE}") from the volume and restart.`
         );
       }
       cache = normalizeConfig(JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')));
       return cache;
     }
   } catch (err) {
-    console.error('[config] lettura fallita, uso i default:', err.message);
+    console.error('[config] read failed, using defaults:', err.message);
   }
   cache = defaultConfig();
   return cache;
@@ -308,14 +308,14 @@ function loadConfig() {
 function saveConfig(cfg, meta = {}) {
   const next = normalizeConfig(cfg);
   const prev = cache;
-  // la revisione cambia solo quando cambia la configurazione "stabile":
-  // gli aggiornamenti di stato (fetching/ready/statistiche) non contano
+  // the revision changes only when the "stable" configuration changes:
+  // state updates (fetching/ready/statistics) do not count
   const changed = !prev ||
     JSON.stringify(history.stableConfig(prev)) !== JSON.stringify(history.stableConfig(next));
   next.rev = changed ? ((prev && prev.rev) || 0) + 1 : ((prev && prev.rev) || next.rev || 0);
   if (fs.existsSync(CONFIG_FILE) && fs.statSync(CONFIG_FILE).isDirectory()) {
     throw new Error(
-      `${CONFIG_FILE} e' una directory, non un file: rimuovila dal volume e riavvia il container.`
+      `${CONFIG_FILE} is a directory, not a file: remove it from the volume and restart the container.`
     );
   }
   ensureDir();
@@ -326,21 +326,21 @@ function saveConfig(cfg, meta = {}) {
   } catch (err) {
     if (err && (err.code === 'EACCES' || err.code === 'EPERM' || err.code === 'EROFS')) {
       throw new Error(
-        `Permesso negato su ${CONFIG_FILE}: il volume montato appartiene a un altro utente ` +
-          '(di solito root). Le immagini recenti sistemano i permessi da sole all\'avvio: ' +
-          'ricrea il container con l\'ultima build. In alternativa: sul volume host fai ' +
-          '"chown -R <uid>:<gid>" sulla cartella dati oppure avvia il container come root.'
+        `Permission denied on ${CONFIG_FILE}: the mounted volume belongs to another user ` +
+          '(usually root). Recent images fix permissions automatically at startup: ' +
+          'recreate the container with the latest build. Alternatively, on the host volume run ' +
+          '"chown -R <uid>:<gid>" on the data folder or start the container as root.'
       );
     }
     throw err;
   }
   cache = next;
-  // snapshot della cronologia (escluso quando si aggiorna solo lo stato runtime)
+  // history snapshot (skipped when only runtime state is updated)
   if (meta.history !== false) history.record(next, meta);
   return cache;
 }
 
-/** Aggiorna lo stato di una lista senza toccare il resto (scrittura atomica). */
+/** Updates a list's state without touching the rest (atomic write). */
 function updateListState(id, patch) {
   const cfg = loadConfig();
   const list = cfg.lists.find((l) => l.id === id);

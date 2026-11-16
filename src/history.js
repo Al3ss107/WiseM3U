@@ -1,16 +1,16 @@
 'use strict';
 
 /**
- * Cronologia della configurazione: snapshot automatici su disco.
+ * Configuration history: automatic disk snapshots.
  *
- * Ogni volta che la configurazione "stabile" cambia (impostazioni, liste,
- * opzioni) viene salvato un file JSON in <data>/history. Lo stato runtime
- * delle liste (status, fetchedAt, statistiche) viene escluso dal confronto:
- * altrimenti ogni aggiornamento creerebbe uno snapshot inutile.
+ * Every time the "stable" configuration changes (settings, lists,
+ * options) a JSON file is written to <data>/history. List runtime state
+ * (status, fetchedAt, statistics) is excluded from the comparison:
+ * otherwise every update would create a useless snapshot.
  *
- * La cronologia serve per ripristinare tutto o solo alcune categorie di
- * opzioni (ordine, nomi, esclusioni, unioni, cestino, ...). I file restano
- * sul volume dell'utente e non vengono mai esposti senza token admin.
+ * History is used to restore everything or only selected option
+ * categories (order, names, exclusions, merges, trash, ...). Files stay on
+ * the user's volume and are never exposed without an admin token.
  */
 
 const fs = require('fs');
@@ -22,7 +22,7 @@ const HISTORY_DIR = process.env.HISTORY_DIR || path.join(path.dirname(CONFIG_FIL
 const MAX_ENTRIES = Math.max(5, Number(process.env.HISTORY_MAX) || 60);
 const MAX_DAYS = Math.max(1, Number(process.env.HISTORY_DAYS) || 30);
 
-/** Categorie di opzioni ripristinabili separatamente. */
+/** Option categories that can be restored separately. */
 const CATEGORIES = {
   order: ['order', 'channelOrder'],
   names: ['renames', 'channelRenames'],
@@ -30,7 +30,7 @@ const CATEGORIES = {
   moves: ['channelMoves', 'personalEntries'],
   trash: ['deletedChannels', 'deletedBranches', 'purgedChannels', 'purgedBranches'],
   groups: ['customGroups'],
-  listSettings: [], // tutte le altre chiavi di options
+  listSettings: [], // all other options keys
 };
 
 const COVERED = new Set(Object.values(CATEGORIES).flat());
@@ -39,11 +39,11 @@ function ensureDir() {
   if (!fs.existsSync(HISTORY_DIR)) fs.mkdirSync(HISTORY_DIR, { recursive: true });
 }
 
-/** Configurazione senza lo stato runtime delle liste (quello non va storicizzato). */
+/** Configuration without list runtime state (which is not recorded). */
 function stableConfig(cfg) {
   const lists = (cfg && Array.isArray(cfg.lists) ? cfg.lists : []).map((l) => {
     const copy = { ...l };
-    delete copy.state; // lo stato runtime non fa parte della cronologia
+    delete copy.state; // runtime state is not part of history
     return copy;
   });
   return { settings: (cfg && cfg.settings) || {}, lists };
@@ -82,8 +82,8 @@ function listFiles() {
   }
 }
 
-/** Tutti gli snapshot dal piu' vecchio al piu' recente (ordine per ts, non
- *  per nome file: piu' snapshot possono cadere nello stesso secondo). */
+/** All snapshots from oldest to newest (sorted by ts, not by file
+ *  name: several snapshots can fall within the same second). */
 function sortedEntries() {
   const entries = [];
   for (const f of listFiles()) {
@@ -103,10 +103,10 @@ function prune() {
   const entries = sortedEntries();
   const cutoff = Date.now() - MAX_DAYS * 24 * 60 * 60 * 1000;
   const keep = new Set(entries.slice(Math.max(0, entries.length - MAX_ENTRIES)).map((e) => e._file));
-  // i checkpoint nominati non scadono; se sono troppi restano i 50 piu' recenti
+  // named checkpoints do not expire; if there are too many, the 50 most recent stay
   const namedKeep = new Set(entries.filter((e) => e.name).slice(-50).map((e) => e._file));
   for (const e of entries) {
-    // i nominati si contano solo tra loro: non scadono con MAX_ENTRIES/MAX_DAYS
+    // named entries are counted only among themselves: they do not expire with MAX_ENTRIES/MAX_DAYS
     const old = e.name
       ? !namedKeep.has(e._file)
       : (!keep.has(e._file) || (Date.parse(e.ts) || 0) < cutoff);
@@ -127,12 +127,12 @@ function latestHash() {
   return null;
 }
 
-/** Registra la configurazione se e' cambiata rispetto all'ultimo snapshot. */
+/** Records the configuration if it changed since the last snapshot. */
 function record(cfg, meta = {}, opts = {}) {
   try {
     const data = stableConfig(cfg);
     const h = hashConfig(data);
-    if (!opts.force && latestHash() === h) return null; // niente modifiche "stabili"
+    if (!opts.force && latestHash() === h) return null; // no "stable" changes
     ensureDir();
     const now = new Date();
     const stamp = now.toISOString().replace(/[-:.]/g, '').replace(/Z$/, '');
@@ -140,7 +140,7 @@ function record(cfg, meta = {}, opts = {}) {
     const entry = {
       id,
       ts: now.toISOString(),
-      reason: String(meta.reason || 'modifica configurazione').slice(0, 160),
+      reason: String(meta.reason || 'configuration change').slice(0, 160),
       name: String(meta.name || '').slice(0, 80),
       listId: String(meta.listId || ''),
       listName: String(meta.listName || ''),
@@ -154,13 +154,13 @@ function record(cfg, meta = {}, opts = {}) {
     prune();
     return entry;
   } catch (err) {
-    // la cronologia non deve mai bloccare il salvataggio della configurazione
-    console.error('[history] snapshot non salvato:', err.message);
+    // history must never block saving the configuration
+    console.error('[history] snapshot not saved:', err.message);
     return null;
   }
 }
 
-/** Differenze tra due opzioni di lista (a = piu' vecchia, b = piu' recente). */
+/** Differences between two list options (a = older, b = newer). */
 function diffOptions(a = {}, b = {}) {
   const out = [];
   for (const [cat, keys] of Object.entries(CATEGORIES)) {
@@ -211,10 +211,10 @@ function diffConfigs(older, newer, listId) {
   return changes;
 }
 
-/** Elenco degli snapshot (piu' recente in testa) con le differenze dal precedente. */
+/** Snapshot list (newest first) with differences from the previous one. */
 function listEntries({ listId = '', limit = MAX_ENTRIES } = {}) {
   const entries = sortedEntries();
-  // entries: dal piu' vecchio al piu' recente
+  // entries: from oldest to newest
   const out = [];
   for (let i = 1; i < entries.length; i++) {
     const e = entries[i];
@@ -230,7 +230,7 @@ function listEntries({ listId = '', limit = MAX_ENTRIES } = {}) {
       changes,
     });
   }
-  // il primo snapshot non ha un precedente: mostralo comunque, senza differenze
+  // the first snapshot has no predecessor: show it anyway, without differences
   if (entries.length && out.length < entries.length) {
     const e = entries[0];
     out.unshift({
@@ -245,24 +245,24 @@ function listEntries({ listId = '', limit = MAX_ENTRIES } = {}) {
       changes: { settings: false, lists: false, options: {} },
     });
   }
-  // filtro per lista: tieni solo gli snapshot in cui la lista esiste e cambia
+  // filter by list: keep only snapshots where the list exists and changes
   let res = out.reverse();
   if (listId) {
-    // il primo snapshot non ha un precedente: resta come punto di partenza;
-    // gli stati in cui la lista non esiste non servono al filtro
+    // the first snapshot has no predecessor: it stays as a starting point;
+    // states where the list does not exist are not useful for the filter
     res = res.filter((e) => e.hasList !== false &&
       (e.first || e.changes.settings || e.changes.lists || Object.keys(e.changes.options).length));
   }
   return res.slice(0, Math.max(1, Number(limit) || MAX_ENTRIES));
 }
 
-/** Crea un checkpoint nominato (sempre, anche se la config non e' cambiata). */
+/** Creates a named checkpoint (always, even when the config is unchanged). */
 function checkpoint(cfg, name, meta = {}) {
-  return record(cfg, { ...meta, name, reason: meta.reason || 'checkpoint manuale' }, { force: true });
+  return record(cfg, { ...meta, name, reason: meta.reason || 'manual checkpoint' }, { force: true });
 }
 
-/** Restituisce (creandolo se serve) lo snapshot che rappresenta lo stato
- *  attuale: e' il punto di ripristino per l'undo di un'operazione. */
+/** Returns (creating it if needed) the snapshot representing the current
+ *  state: it is the restore point for undoing an operation. */
 function ensureCheckpoint(cfg, meta = {}) {
   const h = hashConfig(stableConfig(cfg));
   const entries = sortedEntries();
@@ -280,7 +280,7 @@ function getEntry(id) {
 
 const clone = (v) => (v === undefined ? v : JSON.parse(JSON.stringify(v)));
 
-/** Applica le categorie scelte da uno snapshot alle opzioni correnti di una lista. */
+/** Applies the categories chosen from a snapshot to a list's current options. */
 function mergeOptions(current = {}, snapshot = {}, categories = []) {
   const cats = new Set(categories);
   const out = clone(current) || {};

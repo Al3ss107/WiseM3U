@@ -1,16 +1,16 @@
 'use strict';
 
 /**
- * Cache degli alberi WisePlay scaricati: memoria + snapshot su disco,
- * con refresh in background (stale-while-revalidate).
+ * Cache of downloaded WisePlay trees: memory + disk snapshots,
+ * with background refresh (stale-while-revalidate).
  *
- * Dieta RAM (v1.4.5): gli alberi con centinaia di migliaia di stazioni erano
- * tenuti SEMPRE parseati in memoria (JSON.parse di interi snapshot = oggetti
- * JS da kB a stazione): con 3-4 liste il container superava 800 MB fissi.
- * In memoria teniamo invece il SOLO buffer gzip dello snapshot (~1/6 della
- * dimensione) e parseiamo l'albero solo quando serve davvero (playlist,
- * catalogo, canali, anteprima). Restano parseate al massimo WM_HOT_TREES liste
- * alla volta (LRU): le altre si riconvertono al volo al prossimo uso.
+ * RAM diet (v1.4.5): trees with hundreds of thousands of stations were
+ * ALWAYS kept parsed in memory (JSON.parse of whole snapshots = JS objects
+ * of a few kB per station): with 3-4 lists the container exceeded 800 MB.
+ * Instead, we keep in memory ONLY the gzip buffer of the snapshot (~1/6 of
+ * the size) and parse the tree only when actually needed (playlist,
+ * catalog, channels, preview). At most WM_HOT_TREES lists stay parsed at a
+ * time (LRU): the others are rebuilt on demand at the next use.
  */
 
 const fs = require('fs');
@@ -19,18 +19,18 @@ const zlib = require('zlib');
 const { buildTree, treeForUi } = require('./wiseplay');
 
 const CACHE_DIR = process.env.CACHE_DIR || path.join(__dirname, '..', 'data', 'cache');
-const MAX_SNAPSHOT_BYTES = 40 * 1024 * 1024; // oltre questa soglia lo snapshot non viene scritto
-// quante liste restano PARSEATE in RAM insieme (ognuna pesa ~3 kB/stazione);
-// le altre esistono solo come gzip in RAM (+ snapshot su disco)
+const MAX_SNAPSHOT_BYTES = 40 * 1024 * 1024; // above this threshold the snapshot is not written
+// how many lists stay PARSED in RAM together (each costs ~3 kB/station);
+// the others exist only as gzip in RAM (+ disk snapshot)
 const MAX_PARSED = Math.max(1, Number(process.env.WM_HOT_TREES || 1));
 
 // id -> { gz:Buffer|null, parsed:{tree}|null, ui:object|null,
 //         fetchedAt:string, refreshing:boolean, promise:Promise|null,
 //         error:string, lastUsed:number }
 const memory = new Map();
-let onEvictRowCb = null; // hook: righe flatten delle liste per la submission (playlist.rowsMemo)
+let onEvictRowCb = null; // hook: list flatten rows for submission (playlist.rowsMemo)
 
-/** Chiama `cb` ogni volta che l'albero parseato di una lista viene evitto (RAM diet). */
+/** Calls `cb` every time a list's parsed tree is evicted (RAM diet). */
 function setEvictHook(cb) { onEvictRowCb = typeof cb === 'function' ? cb : null; }
 
 function touch(id) {
@@ -39,7 +39,7 @@ function touch(id) {
   return e;
 }
 
-/** Evita di tenere piu' alberi parseati del massimo consentito (LRU). */
+/** Avoids keeping more parsed trees than the allowed maximum (LRU). */
 function evictParsedIfNeeded(skipId) {
   const listed = [];
   for (const [id, e] of memory) if (e.parsed && id !== skipId) listed.push([id, e.lastUsed || 0]);
@@ -48,7 +48,7 @@ function evictParsedIfNeeded(skipId) {
     const [oldestId] = listed.shift();
     const e = memory.get(oldestId);
     if (!e) continue;
-    e.parsed = null; // la GC ci restituisce l'albero: in RAM resta solo gz
+    e.parsed = null; // the GC reclaims the tree: only the gzip stays in RAM
     e.ui = null;
     if (onEvictRowCb) { try { onEvictRowCb(oldestId); } catch (_) { /* hook best-effort */ } }
   }
@@ -65,23 +65,23 @@ function snapshotPath(id) {
 function saveSnapshot(id, entry) {
   try {
     ensureDir();
-    const gz = entry.gz; // gia' comprimuto una volta sola: zero rifare il lavoro
+    const gz = entry.gz; // compressed once already: no need to redo the work
     if (!gz) return;
     if (gz.length > MAX_SNAPSHOT_BYTES) {
       console.warn(
-        `[cache] snapshot di ${id} troppo grande (${(gz.length / 1048576).toFixed(1)} MB compressi): ` +
-          'resta solo in memoria, al riavvio la lista verra riscaricata'
+        `[cache] snapshot of ${id} too large (${(gz.length / 1048576).toFixed(1)} MB compressed): ` +
+          'kept in memory only; the list will be downloaded again on restart'
       );
       return;
     }
     fs.writeFileSync(snapshotPath(id), gz);
-    console.log(`[cache] snapshot di ${id} salvato (${(gz.length / 1048576).toFixed(1)} MB)`);
+    console.log(`[cache] snapshot of ${id} saved (${(gz.length / 1048576).toFixed(1)} MB)`);
   } catch (err) {
-    console.error('[cache] snapshot non salvato:', err.message);
+    console.error('[cache] snapshot not saved:', err.message);
   }
 }
 
-/** Persistenza in background: non deve mai rallentare chi ha chiesto l'albero. */
+/** Background persistence: it must never slow down the caller waiting for the tree. */
 function persistAsync(id, entry) {
   setImmediate(() => saveSnapshot(id, entry));
 }
@@ -90,7 +90,7 @@ function loadSnapshot(id) {
   try {
     const p = snapshotPath(id);
     if (!fs.existsSync(p)) {
-      // compatibilita' con gli snapshot non compressi delle versioni precedenti
+      // compatibility with uncompressed snapshots from previous versions
       const legacy = p.replace(/\.gz$/, '');
       if (!fs.existsSync(legacy)) return null;
       const raw = JSON.parse(fs.readFileSync(legacy, 'utf8'));
@@ -104,7 +104,7 @@ function loadSnapshot(id) {
   }
 }
 
-/** Carica una entry in RAM (al avvio: leggi snapshot, comprimi, rilascia subito il parse). */
+/** Loads an entry into RAM (at startup: read snapshot, compress, release the parse immediately). */
 function ensureEntry(id) {
   let e = memory.get(id);
   if (e) return e;
@@ -114,21 +114,21 @@ function ensureEntry(id) {
   });
   const snap = loadSnapshot(id);
   if (snap) {
-    // compressione una volta sola: il gz resta in RAM (tiny), il parse NO
+    // compress once: the gzip stays in RAM (tiny), the parse does NOT
     const raw = JSON.stringify({ fetchedAt: snap.fetchedAt, tree: snap.tree });
     e = memory.get(id);
     e.gz = zlib.gzipSync(Buffer.from(raw, 'utf8'), { level: 1 });
     e.parsed = { tree: snap.tree };
     e.fetchedAt = snap.fetchedAt || '';
-    evictParsedIfNeeded(id); // al boot: al massimo l'ultima lista resta parseata
+    evictParsedIfNeeded(id); // at boot: at most the last list stays parsed
   }
   return memory.get(id);
 }
 
 /**
- * Entry con tree PARSEATO pronto. Costruisce/ui in modo pigro.
- * Ritorna null se la lista non e' mai stata scaricata.
- * La firma resta quella di sempre ({ tree, ui, fetchedAt, refreshing, promise, error }).
+ * Entry with a PARSED tree ready. Builds the UI lazily.
+ * Returns null if the list has never been downloaded.
+ * The signature stays the same ({ tree, ui, fetchedAt, refreshing, promise, error }).
  */
 function getEntry(id) {
   const e = ensureEntry(id);
@@ -155,14 +155,14 @@ function ageMinutes(entry) {
 }
 
 /**
- * Restituisce l'albero di una lista, scaricandolo se serve.
+ * Returns a list's tree, downloading it when needed.
  * @param {{id:string,url:string,ttlMinutes?:number,maxDepth?:number,force?:boolean}} req
  */
 async function getTree(req) {
   const { id, url } = req;
   const ttl = req.ttlMinutes == null ? 360 : req.ttlMinutes;
 
-  // liste personali: albero sintetico costruito dalle liste sorgente (niente rete diretta)
+  // personal lists: synthetic tree built from the source lists (no direct network)
   if (typeof req.builder === 'function') {
     const tree = await req.builder();
     const gz = zlib.gzipSync(Buffer.from(JSON.stringify({ fetchedAt: new Date().toISOString(), tree }), 'utf8'), { level: 1 });
@@ -181,7 +181,7 @@ async function getTree(req) {
 
   const pub = getEntry(id);
 
-  // eta' dal fetchedAt conservato: non serve il parse per valutare la scadenza
+  // age from the stored fetchedAt: no parse needed to evaluate expiry
   const meta = ensureEntry(id);
   if (pub && !req.force && ageMinutes({ fetchedAt: meta.fetchedAt }) < ttl) {
     return pub;
@@ -198,7 +198,7 @@ async function getTree(req) {
   const promise = (async () => {
     const tree = await buildTree(url, { maxDepth: req.maxDepth || 8 });
     const fetchedAt = new Date().toISOString();
-    // compressione una volta sola: stesso gz in RAM e su disco
+    // compress once: same gzip in RAM and on disk
     const gz = zlib.gzipSync(Buffer.from(JSON.stringify({ fetchedAt, tree }), 'utf8'), { level: 1 });
     const e = ensureEntry(id);
     e.gz = gz;
@@ -254,7 +254,7 @@ function invalidateAll() {
   }
 }
 
-/** Avvia i refresh in background di tutte le liste attive scadute. */
+/** Starts background refreshes for all enabled expired lists. */
 async function refreshAll(lists, defaults) {
   const jobs = lists
     .filter((l) => l.options.enabled && l.url)

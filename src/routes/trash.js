@@ -1,11 +1,11 @@
 'use strict';
 
 /**
- * Rotte del cestino delle liste.
+ * List trash routes.
  *
- * Eliminazione (singola o in blocco), elenco delle voci eliminabili, ripristino
- * e svuotamento. Ogni eliminazione crea il punto di ripristino usato dal toast
- * "Annulla" della pagina di configurazione.
+ * Deletion (single or bulk), list of deleted items, restore and emptying.
+ * Every deletion creates the restore point used by the "Undo" toast on the
+ * configuration page.
  */
 
 const express = require('express');
@@ -15,7 +15,7 @@ const history = require('../history');
 const playlist = require('../playlist');
 const { findByPath } = require('../wiseplay');
 
-/** Metadati di lista usati dalla cronologia (nome vuoto -> URL). */
+/** List metadata used by history (empty name -> URL). */
 function listMeta(list) {
   return { listId: list.id, listName: list.name || list.url };
 }
@@ -23,26 +23,26 @@ function listMeta(list) {
 module.exports = function createTrashRouter({ admin }) {
   const router = express.Router();
 
-  /** Elimina un canale (name presente) o un'intera playlist (solo path). */
+  /** Deletes a channel (name present) or a whole playlist (path only). */
   router.post('/:id/delete', admin, (req, res) => {
     const cfg = store.loadConfig();
     const list = store.findList(req.params.id);
-    if (!list) return res.status(404).json({ error: 'lista non trovata' });
+    if (!list) return res.status(404).json({ error: 'list not found' });
 
     const body = req.body || {};
     const path = String(body.path || '');
     const name = body.name;
     const options = list.options;
     const cp = history.ensureCheckpoint(cfg, {
-      reason: 'prima di eliminare contenuti',
+      reason: 'before deleting content',
       listId: list.id,
       listName: list.name || list.url,
     });
     const undo = cp ? { id: cp.id, listIds: [list.id] } : null;
 
-    // cancellazione IN BLOCCO: { paths: [pathRamo, ...] } — un solo salvataggio.
-    // Usata dal tasto "Cancella selezionate": stessi effetti del delete singolo
-    // (rami nel cestino, ripristinabili da /api/lists/:id/deleted).
+    // BULK deletion: { paths: [branchPath, ...] } — a single save.
+    // Used by the "Delete selected" button: same effects as a single delete
+    // (branches in the trash, restorable from /api/lists/:id/deleted).
     const bulk = Array.isArray(body.paths) ? body.paths : null;
     if (bulk && bulk.length) {
       options.deletedBranches = options.deletedBranches || [];
@@ -54,32 +54,32 @@ module.exports = function createTrashRouter({ admin }) {
           added++;
         }
       }
-      if (added) store.saveConfig(cfg, { reason: `${added} playlist eliminate`, ...listMeta(list) });
+      if (added) store.saveConfig(cfg, { reason: `${added} playlists deleted`, ...listMeta(list) });
       return res.json({ ok: true, deleted: added, undo });
     }
 
-    if (!path) return res.status(400).json({ error: 'serve il path' });
+    if (!path) return res.status(400).json({ error: 'path required' });
 
     if (typeof name === 'string' && name.trim()) {
       const key = `${path}::${name}`;
       options.deletedChannels = options.deletedChannels || [];
       if (!options.deletedChannels.includes(key)) options.deletedChannels.push(key);
-      // mosse e disattivazioni restano intatte: il cestino ripristina tutto com'era
-      store.saveConfig(cfg, { reason: 'canale eliminato', ...listMeta(list) });
+      // moves and disables stay intact: the trash restores everything as it was
+      store.saveConfig(cfg, { reason: 'channel deleted', ...listMeta(list) });
       return res.json({ ok: true, deleted: key, undo });
     }
 
-    // playlist (ramo reale o gruppo personale "@Nome"): finisce nel cestino
+    // playlist (real branch or "@Name" custom group): goes to the trash
     options.deletedBranches = options.deletedBranches || [];
     if (!options.deletedBranches.includes(path)) options.deletedBranches.push(path);
-    store.saveConfig(cfg, { reason: 'playlist eliminata', ...listMeta(list) });
+    store.saveConfig(cfg, { reason: 'playlist deleted', ...listMeta(list) });
     res.json({ ok: true, deleted: path, undo });
   });
 
-  /** Cestino: canali e playlist eliminati, pronti da ripristinare. */
+  /** Trash: deleted channels and playlists, ready to restore. */
   router.get('/:id/deleted', admin, async (req, res) => {
     const list = store.findList(req.params.id);
-    if (!list) return res.status(404).json({ error: 'lista non trovata' });
+    if (!list) return res.status(404).json({ error: 'list not found' });
 
     const options = list.options;
     let entry = null;
@@ -150,40 +150,40 @@ module.exports = function createTrashRouter({ admin }) {
     res.json({ branches, channels });
   });
 
-  /** Ripristina un canale o una playlist dal cestino. */
+  /** Restores a channel or playlist from the trash. */
   router.post('/:id/restore', admin, (req, res) => {
     const cfg = store.loadConfig();
     const list = store.findList(req.params.id);
-    if (!list) return res.status(404).json({ error: 'lista non trovata' });
+    if (!list) return res.status(404).json({ error: 'list not found' });
 
     const body = req.body || {};
     const path = String(body.path || '');
     const name = body.name;
-    if (!path) return res.status(400).json({ error: 'serve il path' });
+    if (!path) return res.status(400).json({ error: 'path required' });
 
     const options = list.options;
     if (typeof name === 'string' && name.trim()) {
       const key = `${path}::${name}`;
       options.deletedChannels = (options.deletedChannels || []).filter((k) => k !== key);
-      store.saveConfig(cfg, { reason: 'ripristino dal cestino', ...listMeta(list) });
+      store.saveConfig(cfg, { reason: 'trash restore', ...listMeta(list) });
       return res.json({ ok: true, restored: key });
     }
 
     options.deletedBranches = (options.deletedBranches || []).filter((p) => p !== path);
-    store.saveConfig(cfg, { reason: 'ripristino dal cestino', ...listMeta(list) });
+    store.saveConfig(cfg, { reason: 'trash restore', ...listMeta(list) });
     res.json({ ok: true, restored: path });
   });
 
-  /** Svuota il cestino: le voci restano fuori dall'output ma non sono piu'
-   *  ripristinabili e spariscono dal cestino. */
+  /** Empties the trash: items stay out of the output but can no longer be
+   *  restored and disappear from the trash. */
   router.post('/:id/emptytrash', admin, (req, res) => {
     const cfg = store.loadConfig();
     const list = store.findList(req.params.id);
-    if (!list) return res.status(404).json({ error: 'lista non trovata' });
+    if (!list) return res.status(404).json({ error: 'list not found' });
 
     const options = list.options;
     const cp = history.ensureCheckpoint(cfg, {
-      reason: 'prima di svuotare il cestino',
+      reason: 'before emptying the trash',
       listId: list.id,
       listName: list.name || list.url,
     });
@@ -194,7 +194,7 @@ module.exports = function createTrashRouter({ admin }) {
 
     options.purgedChannels = [...new Set([...purgedChannels, ...freshChannels])];
     options.purgedBranches = [...new Set([...purgedBranches, ...freshBranches])];
-    store.saveConfig(cfg, { reason: 'svuota cestino', ...listMeta(list) });
+    store.saveConfig(cfg, { reason: 'empty trash', ...listMeta(list) });
 
     res.json({
       ok: true,

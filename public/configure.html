@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>WiseM3U — configurazione</title>
+<title>WiseM3U — configuration</title>
 <meta name="wm-ui-version" content="__WM_UI_VERSION__">
 <link rel="stylesheet" href="/configure.css">
 </head>
@@ -12,11 +12,12 @@
 <header>
   <img src="/logo.svg" alt="logo">
   <div>
-    <h1>WiseM3U <span class="sub">addon Stremio &amp; Nuvio</span></h1>
-    <div class="sub">Liste WisePlay, M3U e M3U_PLUS → playlist M3U + cataloghi</div>
+    <h1>WiseM3U <span class="sub">Stremio &amp; Nuvio addon</span></h1>
+    <div class="sub">WisePlay, M3U and M3U_PLUS lists → M3U playlist + catalogs</div>
   </div>
   <div class="spacer"></div>
   <div class="links">
+    <select id="langSelect" class="langselect" aria-label="Language" title="Language"></select>
     <a class="lnk" href="/manifest.json" target="_blank">manifest.json</a>
     <a class="lnk" id="m3uLink" href="/playlist.m3u" target="_blank">playlist.m3u</a>
     <a class="lnk" href="/channels.json" target="_blank">channels.json</a>
@@ -26,219 +27,220 @@
 
 <main>
 
-  <!-- ============ AGGIUNGI LISTA ============ -->
+  <!-- ============ ADD LIST ============ -->
   <section class="card">
-    <h2><span class="n">1</span> Aggiungi una lista (WisePlay o M3U/M3U_PLUS)</h2>
+    <h2><span class="n">1</span> Add a list (WisePlay or M3U/M3U_PLUS)</h2>
     <div class="row">
       <div style="flex:3 1 320px">
-        <label>URL della lista (WisePlay JSON, playlist M3U o M3U_PLUS/Xtream)</label>
-        <input id="newUrl" type="url" placeholder="https://esempio.it/lista.m3u oppure http://iptv.it:8080/get.php?username=...&password=...&type=m3u_plus&output=ts">
+        <label>List URL (WisePlay JSON, M3U or M3U_PLUS/Xtream playlist)</label>
+        <input id="newUrl" type="url" placeholder="https://example.com/list.m3u or http://iptv.example:8080/get.php?username=...&password=...&type=m3u_plus&output=ts">
       </div>
       <div style="flex:2 1 200px">
-        <label>Nome (opzionale)</label>
-        <input id="newName" type="text" placeholder="es. La mia lista">
+        <label>Name (optional)</label>
+        <input id="newName" type="text" placeholder="e.g. My list">
       </div>
       <div class="btns">
         <button class="ghost" id="btnProbe">Test</button>
-        <button id="btnAdd">Aggiungi</button>
-        <button class="ghost" id="btnNewPList" title="Crea una lista vuota da comporre con canali e playlist delle tue liste">⭐ Crea lista personalizzata</button>
+        <button id="btnAdd">Add</button>
+        <button class="ghost" id="btnNewPList" title="Create an empty list and fill it with channels and playlists from your lists">⭐ Create custom list</button>
       </div>
     </div>
     <details class="help">
-      <summary>ℹ️ Quali link funzionano e come</summary>
-      <div class="hint">Accetta sia le catene JSON WisePlay (link accorciati, gist, php…) sia un normale
-        <b>link M3U/M3U8</b>: i <code>group-title</code> della playlist diventano i rami/generi.
-        Funziona anche con le playlist <b>M3U_PLUS di Xtream Codes</b>
-        (<code>get.php?username=…&amp;password=…&amp;type=m3u_plus&amp;output=ts</code>) e con
-        quelle <code>type=m3u</code> semplici (direttiva <code>#EXTGRP</code>): nomi e gruppi
-        vengono letti dagli attributi <code>tvg-*</code> anche quando contengono virgole, e un
-        eventuale <b>EPG</b> dichiarato dalla sorgente (<code>x-tvg-url</code>/<code>url-tvg</code>)
-        viene riportato nella playlist generata.
-        L'addon segue i redirect, scarica i JSON annidati e importa anche i rami
-        <code>isHost</code> che puntano a file <code>.m3u</code>. Lo scaricamento avviene in
-        background: puoi continuare a usare la pagina mentre lavora.
-        <br>⚠️ <b>Copia/incolla:</b> se l'URL viene da una pagina web o da un messaggio HTML,
-        i <code>&amp;</code> possono arrivare scritti come <code>&amp;amp;</code>: WiseM3U li
-        corregge da solo sia qui sia nel server.
-        <br>⚠️ <b>Pannelli lenti:</b> le playlist Xtream con migliaia di voci possono impiegare
-        fino a 60 s a generarsi; in caso di errore di rete il download viene ritentato una volta.
-        <br>⚠️ Se una lista va in errore, il messaggio mostra l'<b>inizio della risposta</b> del
-        server: così distingui subito credenziali errate da URL non valido.
-        Nota: se l'URL sorgente e' servito da un altro addon/container sullo stesso server
-        (es. un altro addon), quel servizio lavorera' a ogni scaricamento/aggiornamento: e' il
-        comportamento atteso, perche' WiseM3U deve scaricare la sorgente.</div>
+      <summary>ℹ️ Which links work and how</summary>
+      <div class="hint" data-i18n-html="hint.addList">WiseM3U accepts both WisePlay JSON chains (short links, gists, php…) and a normal
+        <b>M3U/M3U8 link</b>: the playlist's <code>group-title</code> values become branches/genres.
+        It also works with <b>Xtream Codes M3U_PLUS</b> playlists
+        (<code>get.php?username=…&amp;password=…&type=m3u_plus&amp;output=ts</code>) and with
+        plain <code>type=m3u</code> ones (<code>#EXTGRP</code> directive): names and groups
+        are read from the <code>tvg-*</code> attributes even when they contain commas, and any
+        <b>EPG</b> declared by the source (<code>x-tvg-url</code>/<code>url-tvg</code>)
+        is carried over to the generated playlist.
+        The addon follows redirects, downloads nested JSON files and also imports
+        <code>isHost</code> branches pointing to <code>.m3u</code> files. Downloads run in the
+        background: you can keep using the page while it works.
+        <br>⚠️ <b>Copy/paste:</b> if the URL comes from a web page or an HTML message,
+        <code>&amp;</code> may arrive as <code>&amp;amp;</code>: WiseM3U fixes this on its own,
+        both here and on the server.
+        <br>⚠️ <b>Slow panels:</b> Xtream playlists with thousands of entries can take up to
+        60 s to generate; on network errors the download is retried once.
+        <br>⚠️ If a list fails, the message shows the <b>beginning of the server response</b>:
+        so you can tell wrong credentials from an invalid URL immediately.
+        Note: if the source URL is served by another addon/container on the same server
+        (e.g. another addon), that service will work on every download/refresh: this is
+        expected, because WiseM3U has to download the source.</div>
     </details>
     <div id="probeBox"></div>
   </section>
 
-  <!-- ============ IMPOSTAZIONI GLOBALI ============ -->
+  <!-- ============ GLOBAL SETTINGS ============ -->
   <section class="card" data-collapsed="1">
-    <h2><span class="n">2</span> Impostazioni generali</h2>
+    <h2><span class="n">2</span> General settings</h2>
     <div class="grid2">
       <div>
-        <label>Nome dell'addon</label>
+        <label>Addon name</label>
         <input id="s_addonName" type="text">
       </div>
       <div>
-        <label>ID addon</label>
+        <label>Addon ID</label>
         <input id="s_addonId" type="text">
       </div>
       <div>
-        <label>Auto-aggiornamento liste (minuti)</label>
+        <label>List auto-refresh (minutes)</label>
         <input id="s_autoRefreshMinutes" type="number" min="0">
-        <div class="hint" data-info>1440 = ogni giorno (default). 0 = disattivato.</div>
+        <div class="hint" data-info>1440 = once a day (default). 0 = disabled.</div>
       </div>
       <div>
-        <label>Validità cache (minuti)</label>
+        <label>Cache lifetime (minutes)</label>
         <input id="s_cacheTtlMinutes" type="number" min="1">
       </div>
       <div>
-        <label>Profondità massima analisi</label>
+        <label>Maximum parse depth</label>
         <input id="s_maxDepth" type="number" min="1" max="12">
       </div>
       <div>
-        <label>User-Agent personalizzato (opzionale)</label>
+        <label>Custom User-Agent (optional)</label>
         <input id="s_userAgent" type="text" maxlength="300" spellcheck="false"
-          placeholder="vuoto = predefinito (Chrome 126 + WiseM3U)">
-        <div class="hint" data-info>Usata per <b>tutte le richieste in uscita</b> (liste, rami, pannello
-          Xtream, loghi). Serve se un pannello o un CDN risponde <code>403</code> perché
-          riconosce WiseM3U: incolla l'UA di un browser, di VLC o dell'app che usi di solito.
-          Una sola riga; vuoto = comportamento predefinito.</div>
+          placeholder="empty = default (Chrome 126 + WiseM3U)">
+        <div class="hint" data-i18n-html="hint.userAgent">Used for <b>all outgoing requests</b> (lists, branches, Xtream panel,
+          logos). Useful when a panel or CDN returns <code>403</code> because it
+          recognizes WiseM3U: paste the UA of a browser, VLC or the app you normally use.
+          One line only; empty = default behavior.</div>
       </div>
       <div>
-        <label>Token di accesso (vuoto = pubblico)</label>
-        <input id="s_token" type="text" placeholder="es. m1o2n3d4">
+        <label>Access token (empty = public)</label>
+        <input id="s_token" type="text" placeholder="e.g. m1o2n3d4">
       </div>
       <div>
-        <label>URL pubblico (nginx / dominio personale)</label>
-        <input id="s_publicBaseUrl" type="text" placeholder="https://mio.dominio">
-        <div class="hint" data-info>Se l'addon sta dietro nginx con dominio + certificato, scrivi qui la base
-          pubblica (es. <code>https://tv.miodominio.it</code>): i link mostrati useranno quella.</div>
+        <label>Public URL (nginx / personal domain)</label>
+        <input id="s_publicBaseUrl" type="text" placeholder="https://my.domain">
+        <div class="hint" data-i18n-html="hint.publicUrl">If the addon sits behind nginx with a domain + certificate, enter the public
+          base here (e.g. <code>https://tv.mydomain.com</code>): the links shown will use it.</div>
       </div>
       <div>
-        <label>URL EPG XMLTV (opzionale)</label>
-        <input id="s_epgUrl" type="text" placeholder="https://mio.dominio/guide.xml">
-        <div class="hint" data-info>Dichiarato nell'header della playlist generata (<code>url-tvg</code>/<code>x-tvg-url</code>).
-          Si aggiunge agli EPG ereditati dalle sorgenti m3u_plus/Xtream. Vuoto = solo quelli rilevati.</div>
+        <label>EPG XMLTV URL (optional)</label>
+        <input id="s_epgUrl" type="text" placeholder="https://my.domain/guide.xml">
+        <div class="hint" data-i18n-html="hint.epg">Declared in the generated playlist header (<code>url-tvg</code>/<code>x-tvg-url</code>).
+          It is added to the EPGs inherited from m3u_plus/Xtream sources. Empty = only the detected ones.</div>
       </div>
     </div>
     <div class="row" style="margin-top:12px">
-      <label class="chk on" style="flex:0 0 auto"><input type="checkbox" id="s_dedupeGlobal"> Rimuovi i duplicati globali (stesso URL)</label>
-      <label class="chk on" style="flex:0 0 auto"><input type="checkbox" id="s_fitLogos"> Loghi proporzionati nei cataloghi</label>
-      <label class="chk on" style="flex:0 0 auto"><input type="checkbox" id="s_streamDiag"> Diagnostica stream (errore a video)</label>
+      <label class="chk on" style="flex:0 0 auto"><input type="checkbox" id="s_dedupeGlobal"> Remove global duplicates (same URL)</label>
+      <label class="chk on" style="flex:0 0 auto"><input type="checkbox" id="s_fitLogos"> Proportional logos in catalogs</label>
+      <label class="chk on" style="flex:0 0 auto"><input type="checkbox" id="s_streamDiag"> Stream diagnostics (video error)</label>
       <div class="spacer"></div>
-      <button class="ghost small" id="btnClearCache" style="flex:0 0 auto">Svuota cache</button>
+      <button class="ghost small" id="btnClearCache" style="flex:0 0 auto">Clear cache</button>
     </div>
-    <div class="hint" data-info>Se imposti un <b>token</b>, manifest/playlist/cataloghi richiederanno
-      <code>?token=...</code>: la pagina di configurazione mostra già gli URL completi da incollare in
-      Nuvio e Stremio.</div>
-    <div class="hint" data-info><b>Diagnostica stream</b>: attiva per capire PERCHÉ un canale non parte.
-      Playlist e cataloghi consegneranno URL «diagnostici»: se lo stream risponde correttamente il
-      player viene reindirizzato alla fonte (il video NON passa dal container, niente banda sprecata);
-      se invece il pannello rifiuta o non risponde, a schermo compare un <b>video che spiega l'errore</b>
-      (403, limite connessioni, server spento…) invece del solito buffering infinito — e la causa esatta
-      viene registrata nei <a href="#logCard" style="color:inherit">Log live</a> qui sotto.
-      Ottimo in fase di configurazione; puoi spegnerlo quando tutto gira.</div>
+    <div class="hint" data-i18n-html="hint.token">If you set a <b>token</b>, manifest/playlist/catalogs will require
+      <code>?token=...</code>: the configuration page already shows the complete URLs to paste into
+      Nuvio and Stremio.</div>
+    <div class="hint" data-i18n-html="hint.streamDiag"><b>Stream diagnostics</b>: enable it to understand WHY a channel does not play.
+      Playlists and catalogs will deliver "diagnostic" URLs: if the stream responds correctly, the
+      player is redirected to the source (video does NOT pass through the container, no wasted bandwidth);
+      if the panel refuses or does not respond, a <b>video explaining the error</b> appears on screen
+      (403, connection limit, server down…) instead of the usual endless buffering — and the exact cause
+      is written to the <a href="#logCard" style="color:inherit">Live logs</a> below.
+      Great while configuring; you can turn it off once everything works.</div>
   </section>
 
-  <!-- ============ COLLEGA I CLIENT ============ -->
+  <!-- ============ CONNECT CLIENTS ============ -->
   <section class="card">
-    <h2><span class="n">3</span> Collega Nuvio, Stremio o un'app IPTV</h2>
+    <h2><span class="n">3</span> Connect Nuvio, Stremio or an IPTV app</h2>
     <div class="linkrow">
       <span class="lk">Nuvio / Stremio →</span>
       <code id="manifestUrl">…</code>
-      <button class="ghost small" id="btnCopyManifest" title="Copia l'URL del manifest negli appunti">⧉ copia</button>
+      <button class="ghost small" id="btnCopyManifest" title="Copy the manifest URL to the clipboard">⧉ copy</button>
     </div>
     <div class="linkrow">
-      <span class="lk">App IPTV →</span>
+      <span class="lk">IPTV app →</span>
       <code id="m3uUrl">…</code>
-      <button class="ghost small" id="btnCopyM3u" title="Copia l'URL della playlist M3U negli appunti">⧉ copia</button>
+      <button class="ghost small" id="btnCopyM3u" title="Copy the M3U playlist URL to the clipboard">⧉ copy</button>
     </div>
-    <div class="hint" data-info>In <b>Nuvio</b>: Impostazioni → Contenuti e scoperta → Componenti aggiuntivi, incolla l'URL del manifest.
-      In <b>Stremio</b>: Addon → Community, incolla lo stesso URL.
-      L'URL <b>M3U</b> funziona in qualsiasi lettore IPTV (contiene solo le liste attive) ed è già in
-      formato <b>m3u_plus</b>: se le sorgenti hanno un EPG (o ne imposti uno nelle impostazioni generali)
-      il lettore caricherà da solo la guida programmi.</div>
+    <div class="hint" data-i18n-html="hint.clients">In <b>Nuvio</b>: Settings → Content and discovery → Add-ons, paste the manifest URL.
+      In <b>Stremio</b>: Add-ons → Community, paste the same URL.
+      The <b>M3U</b> URL works in any IPTV player (it only contains active lists) and is already in
+      <b>m3u_plus</b> format: if the sources have an EPG (or you set one in general settings)
+      the player will load the program guide by itself.</div>
   </section>
 
-  <!-- ============ LISTE ============ -->
-  <h2 class="secttl"><span class="n">4</span> Le tue liste</h2>
+  <!-- ============ LISTS ============ -->
+  <h2 class="secttl"><span class="n">4</span> Your lists</h2>
   <section id="lists"></section>
 
-  <!-- ============ CRONOLOGIA CONFIGURAZIONE ============ -->
-  <h2 class="secttl" data-collapsed="1"><span class="n">5</span> Cronologia configurazione</h2>
+  <!-- ============ CONFIGURATION HISTORY ============ -->
+  <h2 class="secttl" data-collapsed="1"><span class="n">5</span> Configuration history</h2>
   <section class="card" id="historyCard">
     <div class="histbar">
-      <label for="histList">Lista</label>
-      <select id="histList" title="Filtra la cronologia per lista"><option value="">Tutte le liste</option></select>
-      <button class="ghost small" id="histReload" title="Ricarica la cronologia">↻ Aggiorna</button>
-      <button class="ghost small" id="histCheckpoint" title="Salva uno stato con un nome, prima di una modifica importante">★ Checkpoint…</button>
+      <label for="histList">List</label>
+      <select id="histList" title="Filter the history by list"><option value="">All lists</option></select>
+      <button class="ghost small" id="histReload" title="Reload the history">↻ Refresh</button>
+      <button class="ghost small" id="histCheckpoint" title="Save a named state before an important change">★ Checkpoint…</button>
       <span class="spacer"></span>
       <span id="histStatus" class="cnt"></span>
     </div>
-    <div class="hint" data-info>Ogni modifica alla configurazione viene salvata in automatico nella cronologia
-    (sul volume dati, ultimi 60 stati o 30 giorni). Scegli uno stato e ripristina <b>solo le categorie che
-    vuoi</b>: ordine, nomi, esclusioni, unioni, cestino o impostazioni. Il ripristino crea a sua volta un
-    nuovo stato, quindi è sempre annullabile. Le liste aggiunte dopo lo snapshot non vengono eliminate.
-    Con <b>★ Checkpoint</b> salvi uno stato con un nome (es. prima di un merge): i checkpoint non scadono.
-    Se la configurazione cambia altrove mentre stai modificando, il salvataggio viene bloccato e ti viene
-    chiesto se ricaricare la versione del server.</div>
-    <div id="histBody" class="histlist"><div class="hint">Apertura della cronologia…</div></div>
+    <div class="hint" data-i18n-html="hint.history">Every configuration change is automatically saved to the history
+    (on the data volume, last 60 states or 30 days). Choose a state and restore <b>only the categories you
+    want</b>: order, names, exclusions, merges, trash or settings. A restore creates a new state of its own,
+    so it can always be undone. Lists added after the snapshot are not deleted.
+    With <b>★ Checkpoint</b> you save a state with a name (e.g. before a merge): checkpoints do not expire.
+    If the configuration changes elsewhere while you are editing, saving is blocked and you are
+    asked whether to reload the server version.</div>
+    <div id="histBody" class="histlist"><div class="hint">Opening the history…</div></div>
   </section>
 
-  <!-- ============ LOG LIVE ============ -->
-  <h2 class="secttl" data-collapsed="1"><span class="n">6</span> Log live</h2>
+  <!-- ============ LIVE LOGS ============ -->
+  <h2 class="secttl" data-collapsed="1"><span class="n">6</span> Live logs</h2>
   <section class="card" id="logCard">
     <div class="logbar">
-      <select id="logScope" title="Filtra per area">
-        <option value="all" selected>Tutte le aree</option>
+      <select id="logScope" title="Filter by area">
+        <option value="all" selected>All areas</option>
         <option value="stream">stream</option>
         <option value="download">download</option>
         <option value="playlist">playlist</option>
-        <option value="catalog">catalogo</option>
-        <option value="system">sistema</option>
+        <option value="catalog">catalog</option>
+        <option value="system">system</option>
       </select>
-      <input id="logFilter" type="text" placeholder="🔎 filtra… (canale, lista, url, errore)">
+      <input id="logFilter" type="text" placeholder="🔎 filter… (channel, list, url, error)">
       <span class="spacer"></span>
-      <button class="ghost small" id="logPause" title="Metti in pausa o riprendi l'aggiornamento automatico">⏸ Pausa</button>
-      <button class="ghost small" id="logDownload" title="Scarica i log correnti come file di testo">⭳ Scarica</button>
-      <button class="danger small" id="logClear" title="Svuota i log">Svuota</button>
+      <button class="ghost small" id="logPause" title="Pause or resume automatic refresh">⏸ Pause</button>
+      <button class="ghost small" id="logDownload" title="Download the current logs as a text file">⭳ Download</button>
+      <button class="danger small" id="logClear" title="Clear the logs">Clear</button>
     </div>
     <div id="logBox" class="logbox">
-      <div class="hint">In attesa di eventi… i log partono da soli quando qualcuno guarda un canale
-      (stream), l'addon scarica una lista (download) o viene chiesta la playlist. Le stesse righe
-      compaiono anche con <code>docker logs -f wisem3u</code>.</div>
+      <div class="hint">Waiting for events… logs start by themselves when someone watches a channel
+      (stream), the addon downloads a list (download) or the playlist is requested. The same lines
+      also appear with <code>docker logs -f wisem3u</code>.</div>
     </div>
     <details class="help">
-      <summary>⚠️ Attenzione alla privacy dei log</summary>
-      <div class="hint">Le righe contengono gli URL delle tue liste e dei canali, che possono
-      includere username e password dei servizi IPTV. Prima di condividere uno screenshot o il
-      file scaricato, oscura le credenziali.</div>
+      <summary>⚠️ Log privacy notice</summary>
+      <div class="hint" data-i18n-html="hint.logPrivacy">Lines contain the URLs of your lists and channels, which may
+      include usernames and passwords of IPTV services. Before sharing a screenshot or the
+      downloaded file, redact the credentials.</div>
     </details>
   </section>
 
 </main>
 
-<button class="ghost small" id="sdToggle" title="Mostra/nascondi l'elenco delle liste">☰ Liste</button>
+<button class="ghost small" id="sdToggle" title="Show/hide the list menu">☰ Lists</button>
 <aside id="sidemenu" hidden></aside>
 
 <footer>
-  <button id="btnSave">💾 Salva configurazione</button>
-  <button class="ghost" id="btnReload">↻ Ricarica</button>
+  <button id="btnSave">💾 Save configuration</button>
+  <button class="ghost" id="btnReload">↻ Reload</button>
   <span id="status" class="kv"></span>
   <span id="appVersion" class="kv dim"></span>
 </footer>
 
-<!-- su smartphone: Salva e Ricarica flottanti sulla stessa riga (il footer resta in fondo alla pagina) -->
+<!-- on phones: Save and Reload float on the same row (the footer stays at the bottom of the page) -->
 <div class="fabbar" id="fabbar">
-  <button id="fabSave" title="Salva la configurazione">💾 Salva</button>
-  <button class="ghost" id="fabReload" title="Ricarica la configurazione" aria-label="Ricarica la configurazione">↻</button>
+  <button id="fabSave" title="Save the configuration">💾 Save</button>
+  <button class="ghost" id="fabReload" title="Reload the configuration" aria-label="Reload the configuration">↻</button>
 </div>
-<!-- su smartphone: torna in alto, sempre flottante -->
-<button id="toTop" type="button" title="Torna in alto" aria-label="Torna in alto">↑</button>
+<!-- on phones: always-visible back-to-top button -->
+<button id="toTop" type="button" title="Back to top" aria-label="Back to top">↑</button>
 
 <div class="toast" id="toast"></div>
 
+<script src="/i18n.js"></script>
 <script src="/configure.js" defer></script>
 </body>
 </html>

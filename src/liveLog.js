@@ -1,11 +1,11 @@
 'use strict';
 
 /**
- * Log live dell'addon: buffer circolare in memoria (ultimi N eventi) letto
- * dall'endpoint /api/logs e dalla pagina di configurazione. Ogni voce viene
- * anche specchiata su console, cosi' "docker logs" mostra tutto in tempo reale.
+ * Addon live log: in-memory ring buffer (last N events) read by
+ * the /api/logs endpoint and the configuration page. Every entry is
+ * also mirrored to the console, so "docker logs" shows everything in real time.
  *
- * Scope usati: stream | download | playlist | catalog | meta | system
+ * Scopes used: stream | download | playlist | catalog | meta | system
  */
 
 const MAX_ENTRIES = Number(process.env.LIVE_LOG_BUFFER || 1000);
@@ -15,10 +15,10 @@ const buffer = [];
 const LEVELS = new Set(['debug', 'info', 'warn', 'error']);
 
 /**
- * @param {string} scope  area funzionale (stream, download, playlist, ...)
+ * @param {string} scope  functional area (stream, download, playlist, ...)
  * @param {string} level  debug | info | warn | error
- * @param {string} msg    messaggio leggibile (riga singola)
- * @param {object} [data] campi extra strutturati (url, listId, channel, ...)
+ * @param {string} msg    human-readable message (single line)
+ * @param {object} [data] extra structured fields (url, listId, channel, ...)
  */
 function add(scope, level, msg, data) {
   if (!LEVELS.has(level)) level = 'info';
@@ -34,7 +34,7 @@ function add(scope, level, msg, data) {
   buffer.push(entry);
   if (buffer.length > MAX_ENTRIES) buffer.splice(0, buffer.length - MAX_ENTRIES);
 
-  // specchio su console per "docker logs -f wisem3u"
+  // mirror to the console for "docker logs -f wisem3u"
   const line = `[${entry.scope}] ${entry.msg}`;
   if (level === 'error') console.error(line);
   else if (level === 'warn') console.warn(line);
@@ -44,7 +44,7 @@ function add(scope, level, msg, data) {
 
 /**
  * @param {object} q { since?: number, limit?: number, scope?: string, level?: string }
- * since: restituisce solo voci con id > since (polling incrementale della UI)
+ * since: returns only entries with id > since (incremental UI polling)
  */
 function list(q = {}) {
   const since = Number(q.since) || 0;

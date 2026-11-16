@@ -1,8 +1,8 @@
 'use strict';
 
 /**
- * Lint di WiseM3U: errori bloccanti solo per problemi reali (variabili non
- * definite, chiavi/argomenti duplicati, codice irraggiungibile). Le regole di
+ * WiseM3U lint: blocking errors only for real problems (undefined
+ * variables, duplicate keys/arguments, unreachable code). Style rules
  * stile non sono imposte: il codebase ha una formattazione coerente e un
  * riformattamento massivo renderebbe il diff illeggibile.
  */
@@ -27,11 +27,11 @@ module.exports = [
     },
   },
   {
-    files: ['public/configure.js'],
+    files: ['public/configure.js', 'public/i18n.js'],
     languageOptions: {
       ecmaVersion: 2023,
       sourceType: 'script',
-      globals: { ...globals.browser },
+      globals: { ...globals.browser, WM_I18N: 'readonly' },
     },
     rules: {
       'no-unused-vars': ['warn', { args: 'none', caughtErrors: 'none' }],

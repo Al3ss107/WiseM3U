@@ -23,13 +23,13 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Dipendenze
+      - name: Dependencies
         run: npm ci --no-audit --no-fund
 
       - name: Lint
         run: npm run lint
 
-      - name: Test di regressione
+      - name: Regression tests
         run: npm test
 
   build:
@@ -48,14 +48,14 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login a GHCR
+      - name: GHCR login
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Metadata immagine
+      - name: Image metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -64,11 +64,11 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            # i branch di lavoro (es. arena/...) pubblicano un tag col nome del branch:
-            # ghcr.io/<utente>/wisem3u:arena-7045a7cd-wisem3u — "latest" resta su main
+            # working branches (e.g. arena/...) publish a tag named after the branch:
+            # ghcr.io/<user>/wisem3u:arena-7045a7cd-wisem3u — "latest" stays on main
             type=ref,event=branch
 
-      - name: Build e push (amd64 + arm64 + armv7)
+      - name: Build and push (amd64 + arm64 + armv7)
         uses: docker/build-push-action@v6
         with:
           context: .

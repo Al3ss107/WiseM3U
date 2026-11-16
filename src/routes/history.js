@@ -1,11 +1,11 @@
 'use strict';
 
 /**
- * Rotte della cronologia configurazione.
+ * Configuration history routes.
  *
- * Espone l'elenco degli snapshot, il ripristino selettivo per categorie, la
- * creazione di checkpoint nominati e l'undo delle operazioni distruttive.
- * Tutte le rotte sono protette dal middleware admin passato dal server.
+ * Exposes the snapshot list, selective restore by category, named checkpoint
+ * creation and undo of destructive operations.
+ * All routes are protected by the admin middleware passed by the server.
  */
 
 const express = require('express');
@@ -14,7 +14,7 @@ const cache = require('../cache');
 const history = require('../history');
 const C = require('../constants');
 
-/** Riporta nome/URL/tipo della lista corrente a quelli dello snapshot. */
+/** Restores the current list name/URL/kind from the snapshot. */
 function applyListIdentity(current, saved) {
   current.name = saved.name || current.name;
   current.url = saved.url || current.url;
@@ -29,24 +29,24 @@ module.exports = function createHistoryRouter({ admin }) {
     res.json({ entries: history.listEntries({ listId }) });
   });
 
-  /** Crea un checkpoint nominato: sempre registrato, anche a config invariata. */
+  /** Creates a named checkpoint: always recorded, even when the config is unchanged. */
   router.post('/checkpoints', admin, (req, res) => {
     try {
       const name = String((req.body || {}).name || '').trim().slice(0, 80);
-      if (!name) return res.status(400).json({ error: 'serve un nome per il checkpoint' });
+      if (!name) return res.status(400).json({ error: 'a checkpoint name is required' });
       const entry = history.checkpoint(store.loadConfig(), name);
-      if (!entry) return res.status(500).json({ error: 'checkpoint non salvato' });
+      if (!entry) return res.status(500).json({ error: 'checkpoint not saved' });
       res.json({ ok: true, entry: { id: entry.id, ts: entry.ts, name: entry.name } });
     } catch (err) {
       res.status(400).json({ error: err.message });
     }
   });
 
-  /** Ripristina da uno snapshot: tutto o solo le categorie scelte. */
+  /** Restores from a snapshot: everything or only the chosen categories. */
   router.post('/:id/restore', admin, (req, res) => {
     try {
       const snap = history.getEntry(req.params.id);
-      if (!snap) return res.status(404).json({ error: 'snapshot non trovato' });
+      if (!snap) return res.status(404).json({ error: 'snapshot not found' });
       const body = req.body || {};
       const cfg = store.loadConfig();
       const targetList = body.listId ? String(body.listId) : '';
@@ -56,7 +56,7 @@ module.exports = function createHistoryRouter({ admin }) {
       const restored = { settings: false, lists: false, options: {} };
 
       if (body.settings) {
-        // il token non si ripristina: un vecchio snapshot potrebbe chiudere fuori
+        // the token is not restored: an old snapshot could lock you out
         const settings = { ...(snap.config.settings || {}) };
         delete settings.token;
         cfg.settings = { ...cfg.settings, ...settings };
@@ -64,8 +64,8 @@ module.exports = function createHistoryRouter({ admin }) {
       }
 
       if (body.lists) {
-        // aggiorna nome/URL delle liste esistenti e riaggiunge quelle sparite;
-        // non elimina le liste create dopo lo snapshot
+        // updates name/URL of existing lists and re-adds missing ones;
+        // it does not delete lists created after the snapshot
         for (const saved of snap.config.lists || []) {
           const current = cfg.lists.find((l) => l.id === saved.id);
           if (current) {
@@ -89,12 +89,12 @@ module.exports = function createHistoryRouter({ admin }) {
       }
 
       if (!restored.settings && !restored.lists && !Object.keys(restored.options).length) {
-        return res.status(400).json({ error: 'nessuna categoria selezionata' });
+        return res.status(400).json({ error: 'no category selected' });
       }
 
       const list = targetList ? cfg.lists.find((l) => l.id === targetList) : null;
       const savedCfg = store.saveConfig(cfg, {
-        reason: 'ripristino cronologia',
+        reason: 'history restore',
         listId: targetList,
         listName: list ? list.name || list.url : '',
       });
@@ -105,16 +105,16 @@ module.exports = function createHistoryRouter({ admin }) {
     }
   });
 
-  /** Annulla un'operazione: riporta le liste indicate allo stato precedente. */
+  /** Undoes an operation: returns the given lists to their previous state. */
   router.post('/:id/undo', admin, (req, res) => {
     try {
       const snap = history.getEntry(req.params.id);
-      if (!snap) return res.status(404).json({ error: 'snapshot non trovato' });
+      if (!snap) return res.status(404).json({ error: 'snapshot not found' });
 
       const ids = Array.isArray((req.body || {}).listIds)
         ? [...new Set(req.body.listIds.map((x) => String(x || '')).filter(Boolean))]
         : [];
-      if (!ids.length) return res.status(400).json({ error: 'serve la lista da ripristinare' });
+      if (!ids.length) return res.status(400).json({ error: 'the list to restore is required' });
 
       const cfg = store.loadConfig();
       const restored = [];
@@ -127,18 +127,18 @@ module.exports = function createHistoryRouter({ admin }) {
           applyListIdentity(current, saved);
           current.options = JSON.parse(JSON.stringify(saved.options || {}));
         } else {
-          // la lista era stata eliminata: la riaggiungo com'era nello snapshot
+          // the list had been deleted: re-add it as it was in the snapshot
           cfg.lists.push({ ...JSON.parse(JSON.stringify(saved)), state: { status: 'idle' } });
           cache.invalidate(id);
         }
         restored.push(id);
       }
 
-      if (!restored.length) return res.status(404).json({ error: 'lista non presente nello snapshot' });
+      if (!restored.length) return res.status(404).json({ error: 'list not present in the snapshot' });
 
       const list = cfg.lists.find((l) => l.id === restored[0]);
       store.saveConfig(cfg, {
-        reason: 'annullamento operazione',
+        reason: 'operation undo',
         listId: restored[0],
         listName: list ? list.name || list.url : '',
       });

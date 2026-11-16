@@ -1,18 +1,18 @@
 'use strict';
 
 /**
- * Parser e serializzatore M3U / M3U8, con supporto al formato esteso
- * "m3u_plus" (Xtream Codes: tvg-id/tvg-name/tvg-logo/group-title, EPG
- * x-tvg-url/url-tvg, direttiva #EXTGRP delle playlist type=m3u).
- * Serve sia per importare i rami "isHost" delle liste WisePlay (che sono vere m3u)
- * sia per produrre la playlist finale esposta dall'addon.
+ * M3U / M3U8 parser and serializer, with support for the extended
+ * "m3u_plus" format (Xtream Codes: tvg-id/tvg-name/tvg-logo/group-title, EPG
+ * x-tvg-url/url-tvg, #EXTGRP directive of type=m3u playlists).
+ * Used both to import "isHost" branches of WisePlay lists (real m3u files)
+ * and to produce the final playlist exposed by the addon.
  */
 
 const ATTR_RE = /([a-zA-Z0-9_-]+)="([^"]*)"/g;
 
 /**
- * @param {string} text contenuto grezzo della m3u
- * @param {string} [fallbackGroup] group-title da usare quando assente
+ * @param {string} text raw m3u content
+ * @param {string} [fallbackGroup] group-title to use when missing
  * @returns {{header: object, entries: Array}}
  */
 function parseM3U(text, fallbackGroup = '') {
@@ -36,16 +36,16 @@ function parseM3U(text, fallbackGroup = '') {
       continue;
     }
     if (line.startsWith('#EXTGRP:')) {
-      // direttiva delle playlist Xtream "type=m3u": vale per il canale successivo
+      // Xtream "type=m3u" playlist directive: applies to the next channel
       lastExtGrp = line.slice('#EXTGRP:'.length).trim();
       continue;
     }
     if (line.startsWith('#')) continue; // #EXTVLCOPT, #KODIPROP, commenti...
 
-    // riga URL
+    // URL line
     const url = line;
     const meta = pending || {};
-    // precedenza: group-title dell'EXTINF, poi #EXTGRP, poi il fallback passato dal chiamante
+    // precedence: EXTINF group-title, then #EXTGRP, then the caller fallback
     const groupTitle = (meta['group-title'] || lastExtGrp || fallbackGroup || '').trim();
     entries.push({
       name: (meta.title || '').trim() || url,
@@ -64,11 +64,11 @@ function parseM3U(text, fallbackGroup = '') {
 }
 
 /**
- * Gli URL EPG (XMLTV) dichiarati nell'header della playlist
- * (x-tvg-url e' la forma Kodi/Xtream, url-tvg quella di molte app IPTV;
- * entrambi ammettono piu' URL separati da virgola).
- * @param {object} header attributi della riga #EXTM3U
- * @returns {string[]} URL http(s) unici, nell'ordine in cui compaiono
+ * EPG (XMLTV) URLs declared in the playlist header
+ * (x-tvg-url is the Kodi/Xtream form, url-tvg the one used by many IPTV apps;
+ * both allow multiple comma-separated URLs).
+ * @param {object} header attributes of the #EXTM3U line
+ * @returns {string[]} unique http(s) URLs, in order of appearance
  */
 function epgUrlsFromHeader(header) {
   const raw = header && (header['url-tvg'] || header['x-tvg-url']);
@@ -89,10 +89,10 @@ function parseAttrs(line) {
 }
 
 /**
- * Divide "#EXTINF:<durata> attr...,Titolo canale" in testa e titolo.
- * Il separatore e' la prima virgola FUORI dalle virgolette: nelle liste
- * m3u_plus i valori tvg-name/group-title possono contenere virgole
- * (es. group-title="Sport, Calcio"), e non devono spezzare il titolo.
+ * Splits "#EXTINF:<duration> attr...,Channel title" into head and title.
+ * The separator is the first comma OUTSIDE quotes: in m3u_plus lists
+ * tvg-name/group-title values may contain commas
+ * (e.g. group-title="Sport, Football"), and must not split the title.
  */
 function splitExtInf(line) {
   let inQuote = false;
@@ -108,8 +108,8 @@ function splitExtInf(line) {
 
 function parseExtInf(line) {
   const { head, title } = splitExtInf(line);
-  // gli attributi si leggono solo dalla parte prima del titolo: virgolette
-  // e coppie chiave="valore" nel nome del canale non devono diventare attributi
+  // attributes are read only from the part before the title: quotes
+  // and key="value" pairs in the channel name must not become attributes
   const attrs = parseAttrs(head);
   const durMatch = head.match(/#EXTINF:\s*(-?[\d.]+)/);
   return { ...attrs, title, duration: durMatch ? Number(durMatch[1]) : -1 };

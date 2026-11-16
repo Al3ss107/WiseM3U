@@ -1,26 +1,25 @@
 #!/bin/sh
-# Entra come root (necessario per sistemare i bind-mount), poi cede i
-# privilegi all'utente "app". Risolve i due problemi tipici di chi monta
-# una cartella dell'host:
+# Starts as root (needed to fix bind mounts), then drops privileges to the
+# "app" user. Solves the two typical problems when mounting a host folder:
 #
-#  1) EISDIR  -> al primo avvio Docker autocrea "config.json" come DIRECTORY
-#                se il path non esiste sull'host: la rimuoviamo (se vuota)
-#                o la spostiamo, cosi' l'app puo' crearla come file.
-#  2) EACCES  -> i bind-mount ereditano l'ownership dell'host (spesso root):
-#                facciamo chown sulla cartella dati prima di avviare l'app.
+#  1) EISDIR  -> on first start Docker auto-creates "config.json" as a DIRECTORY
+#                if the path does not exist on the host: we remove it (if empty)
+#                or move it, so the app can create it as a file.
+#  2) EACCES  -> bind mounts inherit host ownership (often root):
+#                we chown the data folder before starting the app.
 
 CFG="${CONFIG_FILE:-/data/config.json}"
 CACHEDIR="${CACHE_DIR:-/data/cache}"
 
-# dieta RAM: --expose-gc permette al server di rilasciare heap inutilizzata
-# periodicamente (vedi il timer GC in scena); l'utente puo' sovrascrivere o
-# ampliare tutto con NODE_OPTIONS (es. anche --max-old-space-size)
+# RAM diet: --expose-gc lets the server release unused heap periodically
+# (see the GC timer in the scene); the user can override or extend
+# everything with NODE_OPTIONS (e.g. also --max-old-space-size)
 export NODE_OPTIONS="--expose-gc ${NODE_OPTIONS}"
 
 if [ -d "$CFG" ]; then
-  echo "[entrypoint] $CFG e' una directory (autocreatata da Docker): la sistemo"
+  echo "[entrypoint] $CFG is a directory (auto-created by Docker): fixing it"
   rmdir "$CFG" 2>/dev/null || mv "$CFG" "${CFG}.autodir-backup" 2>/dev/null || \
-    echo "[entrypoint] attenzione: non riesco a rimuovere $CFG, l'app lo segnalerà"
+    echo "[entrypoint] warning: cannot remove $CFG, the app will report it"
 fi
 
 if [ "$(id -u)" = "0" ]; then

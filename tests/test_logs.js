@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * Test log live + retry mirati (v1.1.3)
- * A) https su server solo-HTTP -> downgrade a http (ERR_SSL_WRONG_VERSION_NUMBER)
- * B) risposta vuota 0 byte -> messaggio "contenuto vuoto"
- * C) pagina HTML -> suggerimento link diretto
- * D) HTTP 403 -> spiegazione accesso negato
- * E) /api/logs + righe download/stream con canale, lista, url, ua
+ * Live log + targeted retry test (v1.1.3)
+ * A) https on an HTTP-only server -> downgrade to http (ERR_SSL_WRONG_VERSION_NUMBER)
+ * B) empty 0-byte response -> "empty content" message
+ * C) HTML page -> direct link suggestion
+ * D) HTTP 403 -> access denied explanation
+ * E) /api/logs + download/stream lines with channel, list, url, ua
  */
 const http = require('http');
 const path = require('path');
@@ -23,13 +23,13 @@ const BASE = `http://127.0.0.1:${APP_PORT}`;
 
 const CHAN_URL = `http://127.0.0.1:${MOCK_PORT}/live/NewTestHD/ch1.ts`;
 const CHAN_NAME = 'New Test HD';
-const LIST_NAME = 'Lista Mock Logs';
+const LIST_NAME = 'Mock Logs List';
 const M3U = ['#EXTM3U', `#EXTINF:-1 tvg-id="newtest",${CHAN_NAME}`, CHAN_URL, ''].join('\n');
 
 function mockServer() {
   return http.createServer((req, res) => {
-    if (req.url === '/lista.m3u') { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end(M3U); }
-    else if (req.url === '/vuota.m3u') { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end(''); }
+    if (req.url === '/list.m3u') { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end(M3U); }
+    else if (req.url === '/empty.m3u') { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end(''); }
     else if (req.url === '/websignin.jsp') { res.writeHead(200, { 'Content-Type': 'text/html' }); res.end('<!DOCTYPE html><html><head><title>Google</title></head><body>sorry</body></html>'); }
     else if (req.url === '/negato.m3u') { res.writeHead(403); res.end('Forbidden'); }
     else { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end(''); }
@@ -87,41 +87,41 @@ async function waitFor(pred, ms, step = 400) {
   let ok = true;
 
   ok = await run('A: https→http (ERR_SSL_WRONG_VERSION_NUMBER)', async () => {
-    const r = await buildTree(`https://127.0.0.1:${MOCK_PORT}/lista.m3u`, { maxDepth: 5 });
+    const r = await buildTree(`https://127.0.0.1:${MOCK_PORT}/list.m3u`, { maxDepth: 5 });
     assert(r.stats && r.stats.stations >= 1, `stats: ${JSON.stringify(r.stats)}`);
-    assert(JSON.stringify(r.children).includes('Test'), `canale assente`);
+    assert(JSON.stringify(r.children).includes('Test'), `channel missing`);
   }) && ok;
 
-  ok = await run('B: risposta vuota 0 byte → messaggio esplicito', async () => {
+  ok = await run('B: empty 0-byte response → explicit message', async () => {
     let err = null;
-    try { await buildTree(`http://127.0.0.1:${MOCK_PORT}/vuota.m3u`, { maxDepth: 5 }); }
+    try { await buildTree(`http://127.0.0.1:${MOCK_PORT}/empty.m3u`, { maxDepth: 5 }); }
     catch (e) { err = e; }
-    assert(err && /vuot|0 byte/i.test(err.message), `messaggio: ${err && err.message}`);
+    assert(err && /vuot|0 byte/i.test(err.message), `message: ${err && err.message}`);
   }) && ok;
 
-  ok = await run('C: pagina HTML → suggerimento link diretto', async () => {
+  ok = await run('C: HTML page → direct link suggestion', async () => {
     let err = null;
     try { await buildTree(`http://127.0.0.1:${MOCK_PORT}/websignin.jsp`, { maxDepth: 5 }); }
     catch (e) { err = e; }
-    assert(err && /PAGINA WEB HTML|LINK DIRETTO/i.test(err.message), `messaggio: ${err && err.message}`);
+    assert(err && /HTML WEB PAGE|DIRECT LINK/i.test(err.message), `message: ${err && err.message}`);
   }) && ok;
 
   ok = await run('D: HTTP 403 → spiegazione accesso negato', async () => {
     let err = null;
     try { await buildTree(`http://127.0.0.1:${MOCK_PORT}/negato.m3u`, { maxDepth: 5 }); }
     catch (e) { err = e; }
-    assert(err && /403/.test(err.message) && /accesso negato/i.test(err.message), `messaggio: ${err && err.message}`);
+    assert(err && /403/.test(err.message) && /access denied/i.test(err.message), `message: ${err && err.message}`);
   }) && ok;
 
-  ok = await run('E: log live (endpoint, download, stream ▶)', async () => {
+  ok = await run('E: live log (endpoint, download, stream ▶)', async () => {
     const boot = await apiJ('/api/logs');
     assert(boot.status === 200 && Array.isArray(boot.body.entries), `api/logs -> ${boot.status}`);
     const unauth = await fetch(`${BASE}/api/logs`);
-    assert(unauth.status === 401, `senza token -> ${unauth.status}`);
+    assert(unauth.status === 401, `without token -> ${unauth.status}`);
 
     const add = await apiJ('/api/lists', {
       method: 'POST',
-      body: JSON.stringify({ url: `http://127.0.0.1:${MOCK_PORT}/lista.m3u`, name: LIST_NAME }),
+      body: JSON.stringify({ url: `http://127.0.0.1:${MOCK_PORT}/list.m3u`, name: LIST_NAME }),
     });
     assert(add.status === 200, `POST /api/lists -> ${add.status}`);
     const listId = add.body.id || (add.body.list && add.body.list.id);
@@ -139,16 +139,16 @@ async function waitFor(pred, ms, step = 400) {
     assert(brPath, `branches: ${JSON.stringify(treeR.body).slice(0, 200)}`);
     const chans = await apiJ(`/api/lists/${listId}/channels?path=${encodeURIComponent(brPath.path)}`);
     assert((chans.body.channels || []).length === 1, `channels: ${JSON.stringify(chans.body).slice(0, 200)}`);
-    // gli URL degli stream (che contengono le credenziali del pannello) non
-    // vengono piu' esposti all'UI: la riga "URL sorgente" e' stata rimossa
+    // stream URLs (which contain panel credentials) are not
+    // exposed to the UI anymore: the "Source URL" line was removed
     assert(chans.body.channels[0].url === undefined,
-      `url non esposto nell'API canali: ${JSON.stringify(chans.body.channels)}`);
+      `url not exposed in channels API: ${JSON.stringify(chans.body.channels)}`);
 
     const cat = await apiJ(`/catalog/tv/wise%3A${encodeURIComponent(listId)}.json?skip=0`);
     const metas = (cat.body && cat.body.metas) || [];
     const meta = metas.find((m) => (m.name || '').includes('Test'));
     assert(meta, `catalogo: ${JSON.stringify(metas).slice(0, 200)}`);
-    // i canali TV devono uscire come card landscape (loghi orizzontali):
+    // TV channels must come out as landscape cards (horizontal logos):
     // se ricompare 'square' i client ricominciano a tagliare i loghi (v1.4.7)
     assert(meta.posterShape === 'landscape',
       `posterShape catalogo: ${meta.posterShape}`);
@@ -160,8 +160,8 @@ async function waitFor(pred, ms, step = 400) {
     assert(stream.status === 200 && (stream.body.streams || []).some((s) => s.url === CHAN_URL),
       `stream: ${JSON.stringify(stream.body).slice(0, 200)}`);
 
-    // eliminazione IN BLOCCO (tasto "Cancella selezionate", v1.4.9): {paths:[...]}
-    // — conteggio nuovi, idempotenza, ripristino via /restore
+    // BULK deletion ("Delete selected" button, v1.4.9): {paths:[...]}
+    // — new count, idempotency, restore via /restore
     const bulk1 = await apiJ(`/api/lists/${listId}/delete`, {
       method: 'POST', body: JSON.stringify({ paths: [brPath.path] }),
     });
@@ -170,17 +170,17 @@ async function waitFor(pred, ms, step = 400) {
     const bulk2 = await apiJ(`/api/lists/${listId}/delete`, {
       method: 'POST', body: JSON.stringify({ paths: [brPath.path] }),
     });
-    assert(bulk2.body.deleted === 0, `bulk delete idempotente: ${JSON.stringify(bulk2.body)}`);
+    assert(bulk2.body.deleted === 0, `bulk delete idempotent: ${JSON.stringify(bulk2.body)}`);
     const treeDel = await apiJ(`/api/lists/${listId}/tree`);
     assert(!(treeDel.body.branches || []).some((b) => b.path === brPath.path),
-      'ramo sparito dalla tree dopo il bulk');
+      'branch gone from tree after bulk');
     const rest = await apiJ(`/api/lists/${listId}/restore`, {
       method: 'POST', body: JSON.stringify({ path: brPath.path }),
     });
     assert(rest.status === 200, `restore: ${JSON.stringify(rest.body)}`);
     const treeBack = await apiJ(`/api/lists/${listId}/tree`);
     assert((treeBack.body.branches || []).some((b) => b.path === brPath.path),
-      'ramo ripristinato dopo /restore');
+      'branch restored after /restore');
 
     const st = await apiJ('/api/logs?scope=stream&limit=200');
     const stMsgs = st.body.entries.map((e) => e.msg).join('\n');
@@ -194,19 +194,19 @@ async function waitFor(pred, ms, step = 400) {
     const after = await apiJ('/api/logs');
     assert(after.body.entries.length === 0, `buffer: ${after.body.entries.length}`);
 
-    // regressione bug v1.4.4→v1.4.5: la versione UI nella pagina DEVE essere
-    // iniettata dal server = stessa versione del backend (altrimenti l'avviso
-    // "pagina vecchia" resta per sempre anche dopo l'aggiornamento)
+    // v1.4.4→v1.4.5 bug regression: the UI version in the page MUST be
+    // injected by the server = same version as the backend (otherwise the
+    // "old page" warning stays forever even after updating)
     const page = await fetch(`${BASE}/configure`);
     const html = await page.text();
     const pkgV = JSON.parse(fs.readFileSync(path.join(REPO, 'package.json'), 'utf8')).version;
     assert(html.includes(`name="wm-ui-version" content="${pkgV}"`),
-      `marcatore in pagina diverso da package.json (${pkgV})`);
-    assert(!html.includes('__WM_UI_VERSION__'), 'placeholder non sostituito in pagina');
+      `page marker differs from package.json (${pkgV})`);
+    assert(!html.includes('__WM_UI_VERSION__'), 'placeholder not replaced in page');
   }) && ok;
 
   app.kill('SIGTERM');
   mock.close();
-  console.log(ok ? '\nTUTTI I TEST PASSATI ✔' : '\nALCUNI TEST FALLITI ✖');
+  console.log(ok ? '\nALL TESTS PASSED ✔' : '\nSOME TESTS FAILED ✖');
   process.exit(ok ? 0 : 1);
 })().catch((e) => { console.error(e); process.exit(1); });

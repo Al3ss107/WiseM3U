@@ -1,20 +1,20 @@
 'use strict';
 
 /**
- * Riformatta i loghi dei canali in poster proporzionati (contain su tela
- * scura), cosi' i client che ritagliano "cover" non li mostrano tagliati.
+ * Reformats channel logos into proportional posters (contain on a dark
+ * canvas), so clients that crop "cover" do not cut them.
  *
- * Decodifica e composizione con sharp/libvips (binari precompilati, anche
- * musl/ARM): digerisce PNG, JPEG, WebP, SVG, GIF, TIFF, e — con un parsing
- * minimo — anche i FAVICON .ICO moderni (PNG embedded): i CDN di Pluto TV /
- * Rakuten servono proprio quei formati e coi decoder "solo PNG/JPEG" i
- * canali passavano in grezzo al client, che li ritagliava (poster tagliati).
+ * Decoding and composition with sharp/libvips (prebuilt binaries, including
+ * musl/ARM): handles PNG, JPEG, WebP, SVG, GIF, TIFF, and — with minimal
+ * parsing — modern .ICO FAVICONS (embedded PNG): Pluto TV / Rakuten CDNs
+ * serve exactly those formats, and with "PNG/JPEG only" decoders the
+ * channels were passed through raw and cropped by the client (cut posters).
  *
- * - on-demand: elabora solo i loghi effettivamente richiesti dai client;
- * - cache su disco (data/imgcache) con Cache-Control lungo;
- * - single-flight + concurrency limitata;
- * - qualsiasi problema (formato ignoto, rete, timeout) -> 302 all'URL
- *   originale: nessuna regressione rispetto a prima.
+ * - on-demand: processes only the logos actually requested by clients;
+ * - disk cache (data/imgcache) with a long Cache-Control;
+ * - single-flight + limited concurrency;
+ * - any problem (unknown format, network, timeout) -> 302 to the original
+ *   URL: no regression compared to before.
  */
 
 const crypto = require('crypto');
@@ -25,7 +25,7 @@ const sharp = require('sharp');
 const { getImgUserAgent } = require('./constants');
 
 const CACHE_DIR = process.env.IMGFIT_DIR || path.join(__dirname, '..', 'data', 'imgcache');
-const MAX_BYTES = 8 * 1024 * 1024; // webp/svg di brand possono pesare
+const MAX_BYTES = 8 * 1024 * 1024; // brand webp/svg files can be large
 const MAX_PIXELS = 4096 * 4096;
 const FETCH_TIMEOUT_MS = 6000;
 const CONCURRENCY = 4;
@@ -67,7 +67,7 @@ async function fetchBuf(url) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const buf = Buffer.from(await res.arrayBuffer());
     if (!buf.length) throw new Error('immagine vuota');
-    if (buf.length > MAX_BYTES) throw new Error('immagine troppo grande');
+    if (buf.length > MAX_BYTES) throw new Error('image too large');
     return buf;
   } finally {
     clearTimeout(t);
@@ -75,12 +75,12 @@ async function fetchBuf(url) {
 }
 
 /**
- * ICO: i favicon moderni (es. quelli di Rakuten) incorporano direttamente
- * un PNG: lo estraiamo e lo diamo a sharp. BMP-in-ICO classici -> null
- * (il chiamante fa redirect, formato di nicchia).
+ * ICO: modern favicons (e.g. Rakuten's) embed a PNG directly: we extract it
+ * and pass it to sharp. Classic BMP-in-ICO -> null (the caller redirects,
+ * it is a niche format).
  */
 function icoToPng(buf) {
-  // header ICO: reserved(2)=0, type(2)=1, count(2); entry: w,h,pal,res,planes,bitcount,size,offset
+  // ICO header: reserved(2)=0, type(2)=1, count(2); entry: w,h,pal,res,planes,bitcount,size,offset
   if (buf.length < 6 || buf[0] !== 0 || buf[1] !== 0 || buf[2] !== 1 || buf[3] !== 0) return null;
   const count = buf.readUInt16LE(4);
   let best = null;
@@ -90,7 +90,7 @@ function icoToPng(buf) {
     const size = buf.readUInt32LE(off + 8);
     const dataOff = buf.readUInt32LE(off + 12);
     if (dataOff + size > buf.length) continue;
-    // dentro c'e' un PNG?
+    // is there a PNG inside?
     if (buf[dataOff] === 0x89 && buf[dataOff + 1] === 0x50 && buf[dataOff + 2] === 0x4e && buf[dataOff + 3] === 0x47) {
       const w = buf[off] || 256;
       if (!best || w > best.w) best = { w: dataOff, data: buf.subarray(dataOff, dataOff + size) };
@@ -104,12 +104,12 @@ async function produce(url, shape) {
   let buf = await fetchBuf(url);
   const png = icoToPng(buf);
   if (png) buf = png;
-  // padding ~10%: logo in contain su tela (W-2p)x(H-2p), poi estesa alla
-  // dimensione finale — il client mostra la tela gia' delle sue proporzioni
+  // padding ~10%: logo contained in a (W-2p)x(H-2p) canvas, then extended to
+  // the final size — the client shows the canvas already at its proportions
   const padX = Math.round(W * 0.10);
   const padY = Math.round(H * 0.10);
   return sharp(buf, { limitInputPixels: MAX_PIXELS, density: 150, animated: false })
-    .flatten({ background: BG }) // trasparenza -> fondo scuro (JPEG non ha alpha)
+    .flatten({ background: BG }) // transparency -> dark background (JPEG has no alpha)
     .resize(W - 2 * padX, H - 2 * padY, { fit: 'contain', background: BG })
     .extend({ top: padY, bottom: padY, left: padX, right: padX, background: BG })
     .jpeg({ quality: 82 })
@@ -131,14 +131,14 @@ function runQueued(fn) {
   });
 }
 
-/** Fallback: passa l'immagine GREZZA al client. Cache breve cosi' il client
- *  non martella gli stessi URL ma il poster puo' sistemarsi da solo più tardi. */
+/** Fallback: passes the RAW image to the client. Short cache so the client
+ *  does not hammer the same URLs, but the poster can fix itself later. */
 function fallbackRedirect(res, url) {
   res.setHeader('Cache-Control', 'public, max-age=300');
   return res.redirect(302, url);
 }
 
-// un avviso per poster fallito (diagnosi da docker logs; host-only = niente URL)
+// one warning per failed poster (diagnostics from docker logs; host-only = no URL)
 const WARNED = new Set();
 function warnFailed(key, url, err) {
   if (WARNED.has(key)) return;
@@ -146,7 +146,7 @@ function warnFailed(key, url, err) {
   if (WARNED.size > 200) WARNED.clear();
   let host = 'sconosciuto';
   try { host = new URL(url).hostname; } catch (_) { /* url grezza */ }
-  console.warn(`[imgfit] logo non processato da ${host}: ${(err && err.message) || 'formato ignoto'} — fallback all'originale`);
+  console.warn(`[imgfit] logo not processed from ${host}: ${(err && err.message) || 'unknown format'} — falling back to the original`);
 }
 
 /** Handler express: GET /imgfit?shape=landscape&url=https://… */
@@ -189,7 +189,7 @@ async function handle(req, res) {
   }
 }
 
-/** Svuota la cache su disco (chiamato da /api/cache/clear). */
+/** Clears the disk cache (called by /api/cache/clear). */
 function purge() {
   try { fs.rmSync(CACHE_DIR, { recursive: true, force: true }); } catch (_) { /* ignora */ }
 }

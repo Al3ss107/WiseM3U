@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * Test diagnostica stream (v1.4.0)
- * A) diag SPENTA: playlist e stream JSON hanno gli URL originali
- * B) diag ACCESA: playlist.m3u e /stream contengono URL /proxy/play (+token propagato)
- * C) /proxy/play su canale OK -> 302 verso la fonte
- * D) /proxy/play su 403 -> video di errore a schermo (ffmpeg) o 502 testuale
- * E) log live: riga ⛔ con canale e motivo
+ * Stream diagnostics test (v1.4.0)
+ * A) diag OFF: playlist and JSON streams have the original URLs
+ * B) diag ON: playlist.m3u and /stream contain /proxy/play URLs (+ propagated token)
+ * C) /proxy/play on a working channel -> 302 to the source
+ * D) /proxy/play on 403 -> on-screen error video (ffmpeg) or textual 502
+ * E) live log: ⛔ line with channel and reason
  */
 const http = require('http');
 const path = require('path');
@@ -24,7 +24,7 @@ const OK_URL = `http://127.0.0.1:${MOCK_PORT}/ok-ch1.ts`;
 const BAD_URL = `http://127.0.0.1:${MOCK_PORT}/bad-ch2.ts`;
 const CH_OK = 'Diag OK HD';
 const CH_BAD = 'Diag KO HD';
-const LIST_NAME = 'Lista Diag';
+const LIST_NAME = 'Diag List';
 
 const M3U = [
   '#EXTM3U',
@@ -42,9 +42,9 @@ const HAS_FFMPEG = (() => {
 
 function mockServer() {
   return http.createServer((req, res) => {
-    // req.url in node include la query: per i path lo confrontiamo senza query
+    // req.url in node includes the query: compare paths without it
     const path2 = new URL(req.url, 'http://x').pathname;
-    if (path2 === '/lista.m3u') { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end(M3U); }
+    if (path2 === '/list.m3u') { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end(M3U); }
     else if (path2 === '/ok-ch1.ts') {
       res.writeHead(200, { 'Content-Type': 'video/mp2t' });
       res.end(Buffer.alloc(376, 0x47));
@@ -113,7 +113,7 @@ async function waitFor(pred, ms, step = 400) {
 
   const add = await apiJ('/api/lists', {
     method: 'POST',
-    body: JSON.stringify({ url: `http://127.0.0.1:${MOCK_PORT}/lista.m3u`, name: LIST_NAME }),
+    body: JSON.stringify({ url: `http://127.0.0.1:${MOCK_PORT}/list.m3u`, name: LIST_NAME }),
   });
   assert(add.status === 200, `POST /api/lists -> ${add.status}: ${JSON.stringify(add.body)}`);
   const listId = add.body.id || (add.body.list && add.body.list.id);
@@ -123,15 +123,15 @@ async function waitFor(pred, ms, step = 400) {
   }, 20000);
 
   /* A) spenta: URL originali */
-  ok = await run('A: diag spenta -> URL originali invariati', async () => {
+  ok = await run('A: diag off -> original URLs unchanged', async () => {
     const m3u = await apiJ('/playlist.m3u');
     assert(m3u.status === 200, `playlist -> ${m3u.status}`);
-    assert(m3u.body.includes(OK_URL), `playlist senza URL originale:\n${m3u.body.slice(0, 400)}`);
-    assert(!m3u.body.includes('/proxy/play'), 'diag spenta ma URL /proxy/play presenti');
+    assert(m3u.body.includes(OK_URL), `playlist without original URL:\n${m3u.body.slice(0, 400)}`);
+    assert(!m3u.body.includes('/proxy/play'), 'diag off but /proxy/play URLs present');
   }) && ok;
 
   /* B) accesa: URL riscritti */
-  ok = await run('B: diag accesa -> playlist e stream riscritti', async () => {
+  ok = await run('B: diag on -> playlist and streams rewritten', async () => {
     const cfgGet = await apiJ('/api/config');
     const cfg = cfgGet.body.config || cfgGet.body;
     cfg.settings.streamDiag = true;
@@ -141,52 +141,52 @@ async function waitFor(pred, ms, step = 400) {
 
     const m3u = await pubJ('/playlist.m3u');
     assert(m3u.status === 200, `playlist -> ${m3u.status}`);
-    assert(m3u.body.includes('/proxy/play?'), `manca URL diagnostico:\n${m3u.body.slice(0, 500)}`);
+    assert(m3u.body.includes('/proxy/play?'), `missing diagnostic URL:\n${m3u.body.slice(0, 500)}`);
     const line = m3u.body.split('\n').find((l) => l.includes('/proxy/play'));
-    assert(decodeURIComponent(line).includes(OK_URL), `parametro u diverso: ${line}`);
-    assert(line.includes(`token=${PUBLIC_TOKEN}`), `manca token propagato: ${line}`);
+    assert(decodeURIComponent(line).includes(OK_URL), `different u parameter: ${line}`);
+    assert(line.includes(`token=${PUBLIC_TOKEN}`), `missing propagated token: ${line}`);
 
     const cat = await pubJ(`/catalog/tv/wise%3A${encodeURIComponent(listId)}.json`);
     const metas = (cat.body && cat.body.metas) || [];
     const st = await pubJ(`/stream/tv/${encodeURIComponent(metas.find((m) => m.name.includes('OK')).id)}.json`);
     const s0 = (st.body.streams || [])[0];
-    assert(s0 && s0.url.includes('/proxy/play') && s0.url.includes(`token=${PUBLIC_TOKEN}`), `stream non riscritto`);
+    assert(s0 && s0.url.includes('/proxy/play') && s0.url.includes(`token=${PUBLIC_TOKEN}`), `stream not rewritten`);
   }) && ok;
 
   /* C) OK -> 302 */
-  ok = await run('C: stream OK -> redirect 302 diretto', async () => {
+  ok = await run('C: stream OK -> direct 302 redirect', async () => {
     const u = `/proxy/play?u=${encodeURIComponent(OK_URL)}&n=${encodeURIComponent(CH_OK)}&l=${encodeURIComponent(LIST_NAME)}`;
     const r = await pubJ(u);
     assert(r.status === 302, `status ${r.status}: ${JSON.stringify(r.body).slice(0, 200)}`);
     assert(r.headers.get('location') === OK_URL, `Location: ${r.headers.get('location')}`);
   }) && ok;
 
-  /* D) 403 -> video/errore */
-  ok = await run('D: stream 403 -> messaggio a schermo', async () => {
+  /* D) 403 -> video/error */
+  ok = await run('D: stream 403 -> on-screen message', async () => {
     const u = `/proxy/play?u=${encodeURIComponent(BAD_URL)}&n=${encodeURIComponent(CH_BAD)}&l=${encodeURIComponent(LIST_NAME)}`;
     const res = await fetch(`${BASE}${u}&token=${PUBLIC_TOKEN}`, { redirect: 'manual' });
     const ct = res.headers.get('content-type') || '';
     const buf = Buffer.from(await res.arrayBuffer());
     if (HAS_FFMPEG) {
-      assert(res.status === 200, `ffmpeg presente ma status ${res.status}`);
+      assert(res.status === 200, `ffmpeg present but status ${res.status}`);
       assert(/mp2t|octet-stream/.test(ct), `content-type: ${ct}`);
-      assert(buf.length > 1000 && buf[0] === 0x47, `payload non TS`);
+      assert(buf.length > 1000 && buf[0] === 0x47, `payload not TS`);
     } else {
-      assert(res.status === 502, `senza ffmpeg atteso 502, status ${res.status}`);
+      assert(res.status === 502, `without ffmpeg expected 502, status ${res.status}`);
       const txt = buf.toString('utf8');
-      assert(txt.includes('STREAM NON DISPONIBILE') && txt.includes(CH_BAD) && txt.includes('403'), `testo:\n${txt}`);
+      assert(txt.includes('STREAM UNAVAILABLE') && txt.includes(CH_BAD) && txt.includes('403'), `text:\n${txt}`);
     }
   }) && ok;
 
   /* E) log ⛔ */
-  ok = await run('E: log live contiene ⛔ diagnostico', async () => {
+  ok = await run('E: live log contains diagnostic ⛔', async () => {
     const logs = await apiJ('/api/logs?scope=stream&limit=200');
     const msgs = logs.body.entries.map((e) => e.msg).join('\n');
-    assert(/⛔/.test(msgs) && msgs.includes(CH_BAD) && /accesso negato|403/.test(msgs) && /⏯/.test(msgs), `log:\n${msgs}`);
+    assert(/⛔/.test(msgs) && msgs.includes(CH_BAD) && /access denied|403/.test(msgs) && /⏯/.test(msgs), `log:\n${msgs}`);
   }) && ok;
 
   app.kill('SIGTERM');
   mock.close();
-  console.log(ok ? '\nTUTTI I TEST DIAG PASSATI ✔' : '\nALCUNI TEST DIAG FALLITI ✖');
+  console.log(ok ? '\nALL DIAG TESTS PASSED ✔' : '\nSOME DIAG TESTS FAILED ✖');
   process.exit(ok ? 0 : 1);
 })().catch((e) => { console.error(e); process.exit(1); });

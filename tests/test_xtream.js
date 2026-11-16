@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * Test scadenza account Xtream (v1.4.1)
- * A) lista get.php con user/pass -> /api/lists/:id/xtream ok con scadenza + giorni
- * B) la seconda chiamata usa la cache(30 min): fetchedAt identico
- * C) lista non-Xtream (m3u semplice) -> {ok:false, xtream:false}
+ * Xtream account expiry test (v1.4.1)
+ * A) get.php list with user/pass -> /api/lists/:id/xtream ok with expiry + days
+ * B) the second call uses the cache (30 min): identical fetchedAt
+ * C) non-Xtream list (plain m3u) -> {ok:false, xtream:false}
  * D) pannello irraggiungibile ma cache presente -> stale:true
  * E) xtreamInfo parser: no username/password -> null
  */
@@ -24,7 +24,7 @@ const BASE = `http://127.0.0.1:${APP_PORT}`;
 const LIST_URL = `http://127.0.0.1:${MOCK_PORT}/get.php?username=demo&password=segreto&type=m3u_plus&output=ts`;
 
 const EXP_TS = Math.floor(Date.now() / 1000) + 45 * 86400; // scade tra 45 giorni
-const M3U = ['#EXTM3U', '#EXTINF:-1,Canale Test', `${M3U_TS_HOST()}/ts/1.ts`, ''].join('\n');
+const M3U = ['#EXTM3U', '#EXTINF:-1,Test Channel', `${M3U_TS_HOST()}/ts/1.ts`, ''].join('\n');
 function M3U_TS_HOST() { return `http://127.0.0.1:${MOCK_PORT}`; }
 
 let playerApiHits = 0;
@@ -81,57 +81,57 @@ async function waitFor(pred, ms, step = 400) {
 
   let ok = true;
 
-  // lista Xtream + una lista non-Xtream
+  // Xtream list + a non-Xtream list
   const add1 = await apiJ('/api/lists', { method: 'POST', body: JSON.stringify({ url: LIST_URL, name: 'Panel Demo' }) });
   const id1 = add1.body.id || (add1.body.list && add1.body.list.id);
   const add2 = await apiJ('/api/lists', { method: 'POST', body: JSON.stringify({ url: `http://127.0.0.1:${MOCK_PORT}/notfound.m3u`, name: 'Plain' }) });
   const id2 = add2.body.id || (add2.body.list && add2.body.list.id);
 
-  ok = await run('A: scadenza letta dal pannello Xtream', async () => {
+  ok = await run('A: expiry read from the Xtream panel', async () => {
     const r = await apiJ(`/api/lists/${id1}/xtream`);
-    assert(r.status === 200 && r.body.ok === true, `risposta: ${JSON.stringify(r.body)}`);
-    assert(r.body.user && r.body.user.status === 'Active', `stato: ${JSON.stringify(r.body.user)}`);
+    assert(r.status === 200 && r.body.ok === true, `response: ${JSON.stringify(r.body)}`);
+    assert(r.body.user && r.body.user.status === 'Active', `status: ${JSON.stringify(r.body.user)}`);
     assert(r.body.user.daysLeft >= 44 && r.body.user.daysLeft <= 46, `giorni: ${r.body.user.daysLeft}`);
     assert(/^\d{4}-\d{2}-\d{2}T/.test(r.body.user.expiryIso), `expiryIso: ${r.body.user.expiryIso}`);
     assert(r.body.user.maxConnections === 2, `maxConn: ${r.body.user.maxConnections}`);
   }) && ok;
 
-  ok = await run('B: cache 30 min (nessuna nuova richiesta al pannello)', async () => {
+  ok = await run('B: 30 min cache (no new panel request)', async () => {
     const hitsBefore = playerApiHits;
     const r = await apiJ(`/api/lists/${id1}/xtream`);
     assert(r.body.cached === true, `cached: ${JSON.stringify(r.body).slice(0, 200)}`);
-    assert(playerApiHits === hitsBefore, `richiesta ripetuta non cachata (${hitsBefore} -> ${playerApiHits})`);
+    assert(playerApiHits === hitsBefore, `repeated request not cached (${hitsBefore} -> ${playerApiHits})`);
     // refresh forzato
     const r2 = await apiJ(`/api/lists/${id1}/xtream?refresh=1`);
-    assert(r2.body.cached === false && r2.body.ok === true, `refresh forzato: ${JSON.stringify(r2.body).slice(0, 200)}`);
-    assert(playerApiHits === hitsBefore + 1, `refresh forzato non ha interrogato il pannello`);
+    assert(r2.body.cached === false && r2.body.ok === true, `forced refresh: ${JSON.stringify(r2.body).slice(0, 200)}`);
+    assert(playerApiHits === hitsBefore + 1, `forced refresh did not query the panel`);
   }) && ok;
 
-  ok = await run('C: lista non-Xtream -> ok:false', async () => {
+  ok = await run('C: non-Xtream list -> ok:false', async () => {
     const r = await apiJ(`/api/lists/${id2}/xtream`);
-    assert(r.status === 200 && r.body.ok === false && r.body.xtream === false, `risposta: ${JSON.stringify(r.body)}`);
+    assert(r.status === 200 && r.body.ok === false && r.body.xtream === false, `response: ${JSON.stringify(r.body)}`);
   }) && ok;
 
-  ok = await run('D: pannello giu ma cache esiste -> stale', async () => {
+  ok = await run('D: panel down but cache exists -> stale', async () => {
     mock.closeAllConnections();
-    // fai fallire la chiamata fresca spegnendo il mini server temporaneamente
+    // make the fresh call fail by temporarily stopping the mini server
     const data = JSON.parse(fs.readFileSync(path.join(dataDir, 'config.json'), 'utf8'));
     const saved = data.lists.find((l) => l.id === id1).state.xtream;
-    assert(saved && saved.user, `cache non persistita in config: ${JSON.stringify(saved)}`);
+    assert(saved && saved.user, `cache not persisted in config: ${JSON.stringify(saved)}`);
     await new Promise((r) => mock.close(r));
     const r = await apiJ(`/api/lists/${id1}/xtream?refresh=1`);
     assert(r.body.ok === true && r.body.stale === true, `stale: ${JSON.stringify(r.body).slice(0, 300)}`);
-    assert(r.body.fetchError, `fetchError mancante: ${JSON.stringify(r.body).slice(0, 300)}`);
+    assert(r.body.fetchError, `fetchError missing: ${JSON.stringify(r.body).slice(0, 300)}`);
   }) && ok;
 
   ok = await run('E: parsificatore URL Xtream', async () => {
     assert(xtream.xtreamInfo(LIST_URL).panelApi.includes('username=demo'), 'panelApi');
-    assert(xtream.xtreamInfo(`http://h/get.php?username=demo`) === null, 'manca password -> null');
+    assert(xtream.xtreamInfo(`http://h/get.php?username=demo`) === null, 'missing password -> null');
     assert(xtream.xtreamInfo(`http://h/playlist.m3u`) === null, 'non get.php -> null');
-    assert(xtream.xtreamInfo('non-un-url') === null, 'url rotto -> null');
+    assert(xtream.xtreamInfo('non-un-url') === null, 'broken url -> null');
   }) && ok;
 
   try { app.kill('SIGTERM'); } catch (_) { }
-  console.log(ok ? '\nTUTTI I TEST XTREAM PASSATI ✔' : '\nALCUNI TEST XTREAM FALLITI ✖');
+  console.log(ok ? '\nALL XTREAM TESTS PASSED ✔' : '\nSOME XTREAM TESTS FAILED ✖');
   process.exit(ok ? 0 : 1);
 })().catch((e) => { console.error(e); process.exit(1); });

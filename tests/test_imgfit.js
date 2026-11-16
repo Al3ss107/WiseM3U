@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * Test composizione poster (v1.5.0)
+ * Poster composition test (v1.5.0)
  * =================================
- * Regressione "poster tagliati": i CDN dei canali servono WebP/SVG/ICO oltre
- * al classico PNG/JPEG (Pluto TV, Rakuten). Solo P/J fallivano in decode e il
- * client finiva per mostrare l'immagine GREZZA ritagliata cover. Con sharp
- * (libvips) tutti i formati entrano nel flusso contain su tela 640x360.
+ * Regression "cut posters": channel CDNs serve WebP/SVG/ICO besides
+ * classic PNG/JPEG (Pluto TV, Rakuten). Only P/J failed to decode and the
+ * client ended up showing the RAW image cropped cover. With sharp
+ * (libvips) all formats go through the contain flow on a 640x360 canvas.
  */
 const http = require('http');
 const express = require('express');
@@ -25,7 +25,7 @@ const isCanvas = async (buf, W, H) => { try { const m = await sharp(buf).metadat
 
 (async () => {
   // fixture: png verticale, webp banner orizzontale (tipo Rakuten genre),
-  // svg vettoriale (tipo Pluto logo), ico con png embedded (favicon Rakuten)
+  // vector SVG (Pluto-style logo), ICO with embedded PNG (Rakuten favicon)
   const png = await sharp({ create: { width: 50, height: 300, channels: 4, background: { r: 0, g: 200, b: 0, alpha: 1 } } }).png().toBuffer();
   const webp = await sharp({ create: { width: 1200, height: 200, channels: 4, background: { r: 0, g: 0, b: 200, alpha: 1 } } }).webp().toBuffer();
   const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="700" height="300"><rect width="700" height="300" fill="#a00"/><text x="40" y="170" font-size="90" fill="#fff">FILM</text></svg>');
@@ -39,7 +39,7 @@ const isCanvas = async (buf, W, H) => { try { const m = await sharp(buf).metadat
   let lastImgUa = '';
   const mediaSrv = http.createServer((q, r) => {
     const px = new URL(q.url, 'http://x').pathname;
-    // /cf.png emula un CDN dietro Cloudflare: 403 se l'UA puzza di bot
+    // /cf.png emulates a CDN behind Cloudflare: 403 if the UA smells like a bot
     if (px === '/cf.png') {
       lastImgUa = q.headers['user-agent'] || '';
       if (/WiseM3U|node-fetch|undici|axios|^$/.test(lastImgUa) || !/Chrome\//.test(lastImgUa)) {
@@ -55,27 +55,27 @@ const isCanvas = async (buf, W, H) => { try { const m = await sharp(buf).metadat
   await new Promise((r) => mediaSrv.listen(PORT, '127.0.0.1', r));
 
   // --- extract: ICO ----------------------------------------------------------------
-  assert(icoToPng(ico) && icoToPng(ico).length === inner.length, 'ico parser: png embedded estratto');
+  assert(icoToPng(ico) && icoToPng(ico).length === inner.length, 'ico parser: embedded png extracted');
   assert(icoToPng(Buffer.from('MZ��')) === null, 'ico parser: non-ico -> null');
 
-  // --- produce(): tutti i formati rendono la stessa tela --------------------------------
+  // --- produce(): all formats render the same canvas -----------------------------------
   for (const [f, exp] of [['x.png', true], ['x.webp', true], ['x.svg', true], ['x.ico', true], ['x.txt', false]]) {
     let out = null;
     try { out = await produce(`${BASE}/${f}`, 'landscape'); } catch (_) { out = null; }
     if (exp) assert(out && (await isCanvas(out, 640, 360)), `produce ${f} -> canvas JPEG 640x360`);
-    else assert(out === null, `produce ${f} -> ignoto resta null (fallback redirect)`);
+    else assert(out === null, `produce ${f} -> unknown stays null (redirect fallback)`);
   }
 
   const sq = await produce(`${BASE}/x.webp`, 'square');
   assert(sq && (await isCanvas(sq, 512, 512)), 'produce square -> canvas JPEG 512x512');
 
-  // i loghi devono uscire con UA da browser pulito (CDN worker = 403 altrimenti,
-  // v1.5.1: poster tagliati dopo svuotamento cache)
+  // logos must go out with a clean browser UA (CDN worker = 403 otherwise,
+  // v1.5.1: cut posters after cache clear)
   const cf = await produce(`${BASE}/cf.png`, 'landscape');
   assert(cf && (await isCanvas(cf, 640, 360)),
     `produce dietro wannabe-Cloudflare: ok (UA='${lastImgUa.slice(0, 60)}…')`);
   assert(/Chrome\/126/.test(lastImgUa) && !/WiseM3U/.test(lastImgUa),
-    `UA immagini pulita da suffisso bot: ${lastImgUa}`);
+    `image UA clean of bot suffix: ${lastImgUa}`);
 
   // --- handler express: 200 jpeg, 302 fallback, cache su disco ---------------------------
   const app = express();
@@ -86,17 +86,17 @@ const isCanvas = async (buf, W, H) => { try { const m = await sharp(buf).metadat
 
   const okRes = await fetch(`${acc}/imgfit?shape=landscape&url=${encodeURIComponent(`${BASE}/x.webp`)}`);
   assert(okRes.status === 200 && (okRes.headers.get('content-type') || '').includes('image/jpeg'),
-    `handler: ${okRes.status} jpeg (canvas servito)`);
-  assert(await isCanvas(Buffer.from(await okRes.arrayBuffer()), 640, 360), 'handler: il deposito e\' la tela');
+    `handler: ${okRes.status} jpeg (canvas served)`);
+  assert(await isCanvas(Buffer.from(await okRes.arrayBuffer()), 640, 360), 'handler: the store is the canvas');
   const fall = await fetch(`${acc}/imgfit?shape=landscape&url=${encodeURIComponent(`${BASE}/x.txt`)}`, { redirect: 'manual' });
-  assert(fall.status === 302, `handler: immagine ignota -> 302 all'origine (${fall.status})`);
+  assert(fall.status === 302, `handler: unknown image -> 302 to origin (${fall.status})`);
   assert(/max-age=300/.test(fall.headers.get('cache-control') || ''),
-    `handler: fallback con cache breve (${fall.headers.get('cache-control')})`);
+    `handler: fallback with short cache (${fall.headers.get('cache-control')})`);
   const cached = await fetch(`${acc}/imgfit?shape=landscape&url=${encodeURIComponent(`${BASE}/x.webp`)}`);
-  assert(cached.status === 200, 'handler: seconda richiesta servita (cache disco)');
+  assert(cached.status === 200, 'handler: second request served (disk cache)');
 
   appSrv.close();
   mediaSrv.close();
-  console.log(failures ? `\n${failures} TEST FALLITI ✖` : '\nTUTTI I TEST IMGFIT PASSATI ✔');
+  console.log(failures ? `\n${failures} TESTS FAILED ✖` : '\nALL IMGFIT TESTS PASSED ✔');
   process.exit(failures ? 1 : 0);
-})().catch((e) => { console.error('ERRORE TEST:', e); process.exit(1); });
+})().catch((e) => { console.error('TEST ERROR:', e); process.exit(1); });
