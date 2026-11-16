@@ -1019,7 +1019,6 @@ app.get('/api/lists/:id/channels', requireAdmin, async (req, res) => {
         home: path,
         cur: path,
         from: '',
-        url: st.url || '', // URL dell'origine (prima di qualunque riscrittura proxy/diag)
       });
     });
   }
@@ -1032,7 +1031,6 @@ app.get('/api/lists/:id/channels', requireAdmin, async (req, res) => {
       home: inc.srcPath,
       cur: path,
       from: inc.srcName,
-      url: (inc.st && inc.st.url) || '',
     });
   }
 
@@ -1064,40 +1062,6 @@ app.get('/api/lists/:id/tree', requireAdmin, async (req, res) => {
     error: entry.error || '',
     branches: playlist.buildBranches(entry, list),
   });
-});
-
-/** Risolve la FONTE reale di un URL stream: segue i redirect del pannello
- *  fino al CDN/server di origine effettivo, cosi' canali diversi che condividono
- *  la stessa sorgente si riconoscono anche se arrivano da pannelli diversi.
- *  sourceKey = host+path SENZA query/token (redirezione anti-hotlink). Due canali
- *  con la stessa sourceKey attingono dalla stessa sorgente, token diversi o no. */
-app.get('/api/probeurl', requireAdmin, async (req, res) => {
-  const u = String(req.query.u || '').trim();
-  if (!/^https?:\/\//i.test(u)) {
-    return res.json({ ok: false, reason: 'URL non http/https (es. acestream:// non e\' risolvibile via redirect)' });
-  }
-  try {
-    const r = await streamdiag.probe(u);
-    const final = r.finalUrl || (r.chain && r.chain.length > 1 ? r.chain[r.chain.length - 1] : null);
-    let sourceKey = null;
-    if (final) {
-      try {
-        const f = new URL(final);
-        sourceKey = `${f.protocol}//${f.host}${f.pathname}`;
-      } catch (_) { sourceKey = final; }
-    }
-    res.json({
-      ok: r.ok,
-      status: r.status || 0,
-      finalUrl: final,
-      redirected: !!(final && final !== u),
-      sourceKey,
-      chain: r.chain || [u],
-      reason: r.reason || '',
-    });
-  } catch (err) {
-    res.json({ ok: false, reason: err.message || String(err) });
-  }
 });
 
 /** Test rapido di un URL senza salvarlo. */

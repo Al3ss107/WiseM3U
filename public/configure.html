@@ -167,18 +167,6 @@
   .crow .cname{flex:1 1 150px;min-width:0;padding:6px 10px;font-size:12.5px}
   .crow .cname.renamed{border-color:#3c6bd6}
   .crow .cmove{flex:1 1 130px;max-width:200px;background:#101a3a;color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-size:11.5px}
-  .crow .curl{flex:0 0 100%;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;color:#8a97c4;
-    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:1px 2px 3px 26px;cursor:pointer;user-select:all}
-  .crow .curl:hover{color:#cfe0ff}
-  .crow .curl::before{content:'⮕ ';color:#55617f}
-  .crow .cfont{flex:0 0 100%;padding:0 2px 4px 26px}
-  .crow .ckfont{background:#1d2849;border:1px solid var(--line);color:#9fc1ff;border-radius:7px;
-    padding:1px 8px;font-size:11px;cursor:pointer}
-  .crow .ckfont:hover{border-color:var(--line2);background:#22305a}
-  .crow .ckfont:disabled{opacity:.45;cursor:wait}
-  .crow .fontres{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;color:#7ef0ac;
-    word-break:break-all;white-space:pre-wrap;display:inline-block}
-  .crow .fontres.ko{color:#ffd479}
   .crow .cmove.renamed{border-color:#3c6bd6}
   .crow input[type=checkbox]{width:15px;height:15px;accent-color:var(--acc);cursor:pointer;flex:0 0 auto}
   /* ---------- drag & drop ---------- */
@@ -677,8 +665,6 @@ function renderChannels(list, b){
       <button class="ghost small" data-capply="${i}" title="Sposta il canale nel gruppo scritto o scelto">➜</button>
       <button class="ghost small" data-creset="${i}" title="Riporta il canale nella sua playlist originale">↺</button>
       <button class="ghost small" data-cdel="${i}" title="Elimina il canale (recuperabile nel cestino)">✕</button>
-      ${c.url ? `<div class="curl" data-curl="${i}" title="URL della sorgente video (quella del pannello, prima di proxy/diagnostica) — click per copiare">${esc(c.url)}</div>` : ''}
-      ${c.url ? `<div class="cfont"><button class="ckfont" data-cresolve="${i}" title="Segue i redirect del pannello e mostra la FONTE reale dello stream (CDN/server d'origine): due canali diversi con la stessa fonte condividono la sorgente — e i suoi eventuali problemi">⚡ risolvi fonte</button></div>` : ''}
     </div>`;
   }).join('');
   return `<div class="chans" data-chans="${esc(b.path)}">
@@ -731,12 +717,6 @@ function renderLists(){
 function fmtItDate(iso){
   try { return new Date(iso).toLocaleDateString('it-IT', { day:'numeric', month:'short', year:'numeric' }); }
   catch(_) { return iso; }
-}
-
-/** Chiave fonte di un URL (host+path senza query/token): dedup lato client. */
-function keyFromUrl(u){
-  try { const x = new URL(u); return `${x.protocol}//${x.host}${x.pathname}`; }
-  catch(_){ return String(u || ''); }
 }
 
 async function fillXtreamBadge(l, force){
@@ -1341,50 +1321,6 @@ function bindListEvents(){
           await refreshTrash(id);
           renderLists();
         } catch (e){ toast(e.message, 4000); }
-        return;
-      }
-      const cresolve = ev.target.closest('button[data-cresolve]');
-      if (cresolve){
-        const path = cresolve.closest('.chans').dataset.chans;
-        const c = (CHANS[`${id}|${path}`] || [])[Number(cresolve.dataset.cresolve)];
-        const holder = cresolve.closest('.cfont');
-        const rowEl = cresolve.closest('.crow');
-        if (holder && c && c.url){
-          cresolve.disabled = true;
-          cresolve.textContent = '… risolvo…';
-          try {
-            const r = await api(`/api/probeurl?u=${encodeURIComponent(c.url)}`);
-            if (r.sourceKey){
-              // chiave dedup: host+path senza token/query; il redirect anti-hotlink
-              // sullo stesso percorso NON significa "non risolto": la fonte e' la stessa
-              const hops = (r.chain || []).length - 1;
-              const note = hops <= 0
-                ? 'nessun redirect (endpoint diretto)'
-                : r.sourceKey === keyFromUrl(c.url)
-                  ? `redirect ${hops}x sullo stesso percorso (token anti-hotlink): la fonte è questo host+path`
-                  : `redirect ${hops}x: la fonte reale è sotto`;
-              holder.innerHTML = `<span class="fontres" title="${note} — identica fonte = stesso canale anche se token/query diversi">🔑 fonte: <b>${esc(r.sourceKey)}</b> <i style="color:#9fc1ff;font-style:normal">(${esc(note)})</i></span>`;
-              // la fonte entra nel filtro testuale della playlist (senza token: confrontabile)
-              if (rowEl) rowEl.dataset.csearch = ((rowEl.dataset.csearch || '') + ' ' + r.sourceKey).toLowerCase();
-            } else {
-              holder.innerHTML = `<span class="fontres ko">⚠ ${esc(r.reason || 'fonte non risolvibile')}</span>`;
-            }
-          } catch(e){
-            holder.innerHTML = `<span class="fontres ko">⚠ ${esc(e.message)}</span>`;
-          }
-        }
-        return;
-      }
-      const curl = ev.target.closest('.curl');
-      if (curl){
-        const path = curl.closest('.chans').dataset.chans;
-        const c = (CHANS[`${id}|${path}`] || [])[Number(curl.dataset.curl)];
-        if (c && c.url){
-          copyText(c.url).then(
-            () => toast('URL sorgente copiato ✔'),
-            (e) => toast('Copia non riuscita: ' + e.message, 4000)
-          );
-        }
         return;
       }
       const cdel = ev.target.closest('button[data-cdel]');

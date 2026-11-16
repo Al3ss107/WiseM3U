@@ -49,9 +49,6 @@ function mockServer() {
       res.writeHead(200, { 'Content-Type': 'video/mp2t' });
       res.end(Buffer.alloc(376, 0x47));
     } else if (path2 === '/bad-ch2.ts') { res.writeHead(403, { 'Content-Type': 'text/plain' }); res.end('Forbidden'); }
-    else if (path2 === '/redir.ts') { res.writeHead(302, { Location: `http://127.0.0.1:${MOCK_PORT}/ok-ch1.ts` }); res.end(''); }
-    else if (path2 === '/redir2.ts') { res.writeHead(302, { Location: `http://127.0.0.1:${MOCK_PORT}/redir.ts` }); res.end(''); }
-    else if (path2 === '/redirtok.ts') { res.writeHead(302, { Location: `http://127.0.0.1:${MOCK_PORT}/ok-ch1.ts?token=abcXYZ789&t=9999` }); res.end(''); }
     else { res.writeHead(404); res.end(''); }
   });
 }
@@ -186,30 +183,6 @@ async function waitFor(pred, ms, step = 400) {
     const logs = await apiJ('/api/logs?scope=stream&limit=200');
     const msgs = logs.body.entries.map((e) => e.msg).join('\n');
     assert(/⛔/.test(msgs) && msgs.includes(CH_BAD) && /accesso negato|403/.test(msgs) && /⏯/.test(msgs), `log:\n${msgs}`);
-  }) && ok;
-
-  /* F) risoluzione fonte: redirect singolo, doppio e con token anti-hotlink */
-  ok = await run('F: /api/probeurl risolve la fonte reale (+sourceKey dedup)', async () => {
-    const r1 = await apiJ(`/api/probeurl?u=${encodeURIComponent(`http://127.0.0.1:${MOCK_PORT}/redir.ts`)}`);
-    assert(r1.body.ok === true && r1.body.finalUrl === OK_URL, `1 hop: ${JSON.stringify(r1.body)}`);
-    assert(r1.body.sourceKey === OK_URL, `sourceKey 1 hop: ${JSON.stringify(r1.body)}`);
-    assert(r1.body.redirected === true, `redirected: ${JSON.stringify(r1.body)}`);
-    assert((r1.body.chain || []).length === 2, `chain 1 hop: ${JSON.stringify(r1.body.chain)}`);
-
-    const r2 = await apiJ(`/api/probeurl?u=${encodeURIComponent(`http://127.0.0.1:${MOCK_PORT}/redir2.ts`)}`);
-    assert(r2.body.ok === true && r2.body.finalUrl === OK_URL, `2 hop: ${JSON.stringify(r2.body)}`);
-    assert((r2.body.chain || []).length === 3, `chain 2 hop: ${JSON.stringify(r2.body.chain)}`);
-
-    // redirect "anti-hotlink": stesso path + token= → la sourceKey ripulisce il token
-    const r5 = await apiJ(`/api/probeurl?u=${encodeURIComponent(`http://127.0.0.1:${MOCK_PORT}/redirtok.ts`)}`);
-    assert(r5.body.ok === true && r5.body.finalUrl.includes('token=abcXYZ789'), `token hop: ${JSON.stringify(r5.body)}`);
-    assert(r5.body.sourceKey === OK_URL, `sourceKey con token: ${r5.body.sourceKey} attesa ${OK_URL}`);
-
-    const r3 = await apiJ(`/api/probeurl?u=${encodeURIComponent(`http://127.0.0.1:${MOCK_PORT}/bad-ch2.ts`)}`);
-    assert(r3.body.ok === false && r3.body.status === 403, `403: ${JSON.stringify(r3.body)}`);
-
-    const r4 = await apiJ(`/api/probeurl?u=${encodeURIComponent('acestream://abcdef0123456789abcdef01')}`);
-    assert(r4.body.ok === false, `acestream: ${JSON.stringify(r4.body)}`);
   }) && ok;
 
   app.kill('SIGTERM');

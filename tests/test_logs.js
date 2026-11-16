@@ -139,8 +139,10 @@ async function waitFor(pred, ms, step = 400) {
     assert(brPath, `branches: ${JSON.stringify(treeR.body).slice(0, 200)}`);
     const chans = await apiJ(`/api/lists/${listId}/channels?path=${encodeURIComponent(brPath.path)}`);
     assert((chans.body.channels || []).length === 1, `channels: ${JSON.stringify(chans.body).slice(0, 200)}`);
-    assert(chans.body.channels[0].url === CHAN_URL,
-      `url sorgente atteso ${CHAN_URL}: ${JSON.stringify(chans.body.channels)}`);
+    // gli URL degli stream (che contengono le credenziali del pannello) non
+    // vengono piu' esposti all'UI: la riga "URL sorgente" e' stata rimossa
+    assert(chans.body.channels[0].url === undefined,
+      `url non esposto nell'API canali: ${JSON.stringify(chans.body.channels)}`);
 
     const cat = await apiJ(`/catalog/tv/wise%3A${encodeURIComponent(listId)}.json?skip=0`);
     const metas = (cat.body && cat.body.metas) || [];
