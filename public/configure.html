@@ -246,6 +246,23 @@
   .drag-into{outline:2px dashed var(--md-primary);outline-offset:-2px;background:rgba(173,198,255,.10)}
   @keyframes sdflash{0%{box-shadow:0 0 0 4px var(--acc)}100%{box-shadow:0 0 0 0 rgba(79,140,255,0)}}
   .flash{animation:sdflash 1.4s ease-out}
+  /* ---------- cronologia configurazione ---------- */
+  .histbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+  .histbar label{margin:0}
+  .histbar select{flex:0 1 240px;width:auto}
+  .histlist{display:grid;gap:8px}
+  .histrow{background:var(--md-surface-2);border-radius:12px;padding:10px 12px}
+  .histhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .histhead b{font-size:13px;font-weight:500;color:var(--md-on-surface)}
+  .histchanges{font-size:11.5px;color:var(--mut);margin-top:4px}
+  .histactions{margin-left:auto;display:flex;gap:6px}
+  .histrestore{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);display:grid;gap:8px}
+  .histrestore[hidden]{display:none}
+  .histrestore .hcats{display:flex;flex-wrap:wrap;gap:6px}
+  .histrestore label.hopt{display:inline-flex;align-items:center;gap:6px;background:var(--md-surface-3);
+    border-radius:10px;padding:6px 10px;font-size:12px;color:var(--md-on-surface);margin:0;cursor:pointer}
+  .histrestore label.hopt input{width:16px;height:16px;accent-color:var(--md-primary);margin:0}
+  .histrestore .hrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
   /* ---------- cestino ---------- */
   .trash{margin-top:10px;border:1px dashed var(--md-outline-variant);border-radius:16px;padding:12px;background:var(--md-surface-1)}
   .trashrow{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:6px 2px}
@@ -388,6 +405,11 @@
     .crow>button[data-creset]{grid-area:reset;width:42px;min-height:42px;padding:0;font-size:15px}
     .crow>button[data-cdel]{grid-area:del;width:42px;min-height:42px;padding:0;font-size:15px}
     .crow>.cnt{grid-area:from;justify-self:start;white-space:normal;font-size:11.5px;line-height:1.35}
+
+    /* --- cronologia --- */
+    .histbar select{flex:1 1 100%}
+    .histactions{margin-left:0;width:100%}
+    .histrestore label.hopt{flex:1 1 100%}
 
     /* --- cestino --- */
     .trash{padding:8px}
@@ -635,8 +657,25 @@
   <h2 class="secttl"><span class="n">4</span> Le tue liste</h2>
   <section id="lists"></section>
 
+  <!-- ============ CRONOLOGIA CONFIGURAZIONE ============ -->
+  <h2 class="secttl" data-collapsed="1"><span class="n">5</span> Cronologia configurazione</h2>
+  <section class="card" id="historyCard">
+    <div class="histbar">
+      <label for="histList">Lista</label>
+      <select id="histList" title="Filtra la cronologia per lista"><option value="">Tutte le liste</option></select>
+      <button class="ghost small" id="histReload" title="Ricarica la cronologia">↻ Aggiorna</button>
+      <span class="spacer"></span>
+      <span id="histStatus" class="cnt"></span>
+    </div>
+    <div class="hint" data-info>Ogni modifica alla configurazione viene salvata in automatico nella cronologia
+    (sul volume dati, ultimi 60 stati o 30 giorni). Scegli uno stato e ripristina <b>solo le categorie che
+    vuoi</b>: ordine, nomi, esclusioni, unioni, cestino o impostazioni. Il ripristino crea a sua volta un
+    nuovo stato, quindi è sempre annullabile. Le liste aggiunte dopo lo snapshot non vengono eliminate.</div>
+    <div id="histBody" class="histlist"><div class="hint">Apertura della cronologia…</div></div>
+  </section>
+
   <!-- ============ LOG LIVE ============ -->
-  <h2 class="secttl" data-collapsed="1"><span class="n">5</span> Log live</h2>
+  <h2 class="secttl" data-collapsed="1"><span class="n">6</span> Log live</h2>
   <section class="card" id="logCard">
     <div class="logbar">
       <select id="logScope" title="Filtra per area">
@@ -1288,7 +1327,7 @@ async function applyChannelMove(list, c, target, curPath){
   // salva subito sul server: albero e canali vengono riletti da li', quindi
   // lo spostamento deve gia' essere registrato perche' la UI lo mostri
   try {
-    await api('/api/config', { method:'PUT', body: JSON.stringify({ settings: CFG.settings, lists: CFG.lists }) });
+    await api('/api/config', { method:'PUT', body: JSON.stringify({ settings: CFG.settings, lists: CFG.lists, reason: 'spostamento canale' }) });
   } catch(e){ toast('Errore: '+e.message, 4000); return; }
   await loadBranches(list.id); // aggiorna conteggi e gruppi personali
   for (const p of new Set([curPath, target])) {
@@ -2150,11 +2189,12 @@ function readSettings(){
 
 async function saveConfig(){
   readSettings();
-  const payload = { settings: CFG.settings, lists: CFG.lists };
+  const payload = { settings: CFG.settings, lists: CFG.lists, reason: 'salvataggio manuale' };
   try {
     const saved = await api('/api/config', { method:'PUT', body: JSON.stringify(payload) });
     CFG = saved;
     renderAll();
+    loadHistory();
     toast('Configurazione salvata ✔');
   } catch(e){ toast('Errore: '+e.message, 4000); }
 }
@@ -2341,6 +2381,154 @@ $('#btnClearCache').addEventListener('click', async ()=>{
   if(!confirm('Svuotare la cache di tutte le liste?')) return;
   try { await api('/api/cache/clear',{method:'POST'}); toast('Cache svuotata'); } catch(e){ toast(e.message); }
 });
+
+/* ---------------- cronologia configurazione ---------------- */
+
+const HIST = { entries: [] };
+
+const HIST_CATS = [
+  ['settings', 'Impostazioni generali'],
+  ['lists', 'Elenco liste (nomi e URL)'],
+  ['order', 'Ordine delle playlist'],
+  ['names', 'Nomi di playlist e canali'],
+  ['exclusions', 'Esclusioni'],
+  ['moves', 'Unioni e spostamenti'],
+  ['trash', 'Cestino'],
+  ['groups', 'Gruppi personali'],
+  ['listSettings', 'Impostazioni delle liste'],
+];
+const HIST_LABEL = Object.fromEntries(HIST_CATS);
+
+function histListOptions(){
+  const sel = $('#histList');
+  if (!sel || typeof CFG === 'undefined' || !CFG) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">Tutte le liste</option>' +
+    CFG.lists.map((l)=>`<option value="${esc(l.id)}">${esc(l.name || l.url || l.id)}</option>`).join('');
+  if (cur && CFG.lists.some((l)=>l.id===cur)) sel.value = cur;
+}
+
+function describeChanges(ch){
+  if (!ch) return 'nessuna differenza calcolata';
+  const parts = [];
+  if (ch.settings) parts.push('impostazioni generali');
+  if (ch.lists) parts.push('elenco liste');
+  const cats = new Set();
+  for (const arr of Object.values(ch.options || {})) (arr || []).forEach((c)=>cats.add(c));
+  for (const c of cats) parts.push((HIST_LABEL[c] || c).toLowerCase());
+  return parts.length ? `Cambia: ${parts.join(', ')}` : 'Nessuna differenza';
+}
+
+function renderHistory(){
+  const box = $('#histBody');
+  if (!box) return;
+  if (!HIST.entries.length){
+    box.innerHTML = '<div class="hint">Nessuna modifica registrata: la cronologia parte dal prossimo salvataggio.</div>';
+    return;
+  }
+  box.innerHTML = HIST.entries.map((e)=>{
+    const when = new Date(e.ts).toLocaleString('it-IT');
+    return `<div class="histrow" data-hrow="${esc(e.id)}">
+      <div class="histhead">
+        <b>${esc(when)}</b>
+        ${e.reason ? `<span class="badge idle">${esc(e.reason)}</span>` : ''}
+        ${e.listName ? `<span class="cnt">${esc(e.listName)}</span>` : ''}
+        <div class="histactions"><button class="ghost small" data-hpick="${esc(e.id)}">↩ Ripristina…</button></div>
+      </div>
+      <div class="histchanges">${esc(describeChanges(e.changes))}</div>
+      <div class="histrestore" hidden data-hpanel="${esc(e.id)}"></div>
+    </div>`;
+  }).join('');
+}
+
+function histPanelHtml(entry){
+  const listId = $('#histList').value;
+  const cats = HIST_CATS
+    .filter(([k])=>!(k === 'lists' && listId))
+    .map(([k,label])=>`<label class="hopt"><input type="checkbox" name="hcat" value="${k}" ${
+      (k === 'settings' || k === 'lists') ? '' : 'checked'}>${esc(label)}</label>`)
+    .join('');
+  const when = new Date(entry.ts).toLocaleString('it-IT');
+  return `<div class="hint">Stato del <b>${esc(when)}</b>${entry.listName ? ` · ${esc(entry.listName)}` : ''}.
+      ${listId ? 'Le categorie si applicano solo alla lista selezionata.' : 'Le categorie delle opzioni si applicano a tutte le liste.'}
+      <br>Il ripristino verrà registrato come nuovo stato: potrai annullarlo.</div>
+    <div class="hcats">${cats}</div>
+    <div class="hrow">
+      <button class="danger small" data-hgo="${esc(entry.id)}">Ripristina selezionato</button>
+      <button class="ghost small" data-hcancel="1">Annulla</button>
+    </div>`;
+}
+
+async function loadHistory(){
+  const box = $('#histBody');
+  if (!box) return;
+  histListOptions();
+  const listId = $('#histList').value;
+  $('#histStatus').textContent = 'Carico…';
+  try {
+    const r = await api('/api/history' + (listId ? `?list=${encodeURIComponent(listId)}` : ''));
+    HIST.entries = r.entries || [];
+    renderHistory();
+    $('#histStatus').textContent = `${HIST.entries.length} stati`;
+  } catch (e){
+    HIST.entries = [];
+    box.innerHTML = `<div class="err">${esc(e.message)}</div>`;
+    $('#histStatus').textContent = '';
+  }
+}
+
+(function bindHistory(){
+  const card = $('#historyCard');
+  if (!card) return;
+  $('#histReload').addEventListener('click', loadHistory);
+  $('#histList').addEventListener('change', loadHistory);
+  card.addEventListener('click', async (ev)=>{
+    const pick = ev.target.closest('[data-hpick]');
+    if (pick){
+      const panel = card.querySelector(`[data-hpanel="${CSS.escape(pick.dataset.hpick)}"]`);
+      const entry = HIST.entries.find((e)=>e.id === pick.dataset.hpick);
+      if (!panel || !entry) return;
+      if (!panel.hidden){ panel.hidden = true; panel.innerHTML = ''; return; }
+      card.querySelectorAll('[data-hpanel]').forEach((p)=>{ p.hidden = true; p.innerHTML = ''; });
+      panel.innerHTML = histPanelHtml(entry);
+      panel.hidden = false;
+      return;
+    }
+    if (ev.target.closest('[data-hcancel]')){
+      card.querySelectorAll('[data-hpanel]').forEach((p)=>{ p.hidden = true; p.innerHTML = ''; });
+      return;
+    }
+    const go = ev.target.closest('[data-hgo]');
+    if (!go) return;
+    const panel = go.closest('[data-hpanel]');
+    const entry = HIST.entries.find((e)=>e.id === go.dataset.hgo);
+    if (!panel || !entry) return;
+    const listId = $('#histList').value;
+    const cats = [...panel.querySelectorAll('input[name="hcat"]:checked')].map((i)=>i.value);
+    if (!cats.length){ toast('Spunta almeno una categoria da ripristinare'); return; }
+    const when = new Date(entry.ts).toLocaleString('it-IT');
+    if (!confirm(`Ripristinare le categorie selezionate dallo stato del ${when}?\nVerrà creato un nuovo stato, quindi potrai annullare anche questo ripristino.`)) return;
+    go.disabled = true;
+    try {
+      const r = await api(`/api/history/${encodeURIComponent(entry.id)}/restore`, {
+        method: 'POST',
+        body: JSON.stringify({
+          settings: cats.includes('settings'),
+          lists: cats.includes('lists'),
+          options: cats.filter((c)=>c !== 'settings' && c !== 'lists'),
+          listId,
+        }),
+      });
+      await loadConfig();
+      for (const lid of Object.keys((r.restored && r.restored.options) || {})) await loadBranches(lid);
+      renderLists();
+      for (const lid of [...TRASHOPEN]) await refreshTrash(lid);
+      renderLists();
+      toast('Ripristino completato ✔');
+      await loadHistory();
+    } catch (e){ toast(e.message, 4000); go.disabled = false; }
+  });
+})();
 
 /* ---------------- icone info e sezioni comprimibili ---------------- */
 
@@ -2545,7 +2733,7 @@ $('#toTop').addEventListener('click', ()=>{
   catch (_) { window.scrollTo(0, 0); }
 });
 
-loadConfig().catch(e=>{
+loadConfig().then(()=>{ loadHistory(); }).catch(e=>{
   $('#lists').innerHTML = `<section class="card"><div class="err">Impossibile caricare la configurazione: ${esc(e.message)}</div></section>`;
 });
 </script>

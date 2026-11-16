@@ -15,6 +15,7 @@ const { buildTree, treeForUi } = require('./wiseplay');
 const imgfit = require('./imgfit');
 const live = require('./liveLog');
 const streamdiag = require('./streamdiag');
+const history = require('./history');
 const xtream = require('./xtream');
 const C = require('./constants');
 
@@ -461,7 +462,10 @@ app.put('/api/config', requireAdmin, (req, res) => {
     if (typeof nextSettings.token !== 'string') nextSettings.token = '';
 
     const nextLists = Array.isArray(incoming.lists) ? incoming.lists : current.lists;
-    const saved = store.saveConfig({ settings: nextSettings, lists: nextLists });
+    const saved = store.saveConfig(
+      { settings: nextSettings, lists: nextLists },
+      { reason: String(incoming.reason || 'salvataggio configurazione').slice(0, 160) }
+    );
     // la UA personalizzata ha effetto immediato (download successivi)
     C.setCustomUserAgent(saved.settings.userAgent);
 
@@ -551,6 +555,79 @@ function startRefresh(listId, force = true) {
     .finally(() => refreshing.delete(listId));
 }
 
+/* ------------------------------------------------------------------ */
+/* cronologia configurazione: elenco e ripristino selettivo           */
+/* ------------------------------------------------------------------ */
+
+app.get('/api/history', requireAdmin, (req, res) => {
+  const listId = String(req.query.list || '').trim();
+  res.json({ entries: history.listEntries({ listId }) });
+});
+
+/** Ripristina da uno snapshot: tutto o solo le categorie scelte. */
+app.post('/api/history/:id/restore', requireAdmin, (req, res) => {
+  try {
+    const snap = history.getEntry(req.params.id);
+    if (!snap) return res.status(404).json({ error: 'snapshot non trovato' });
+    const body = req.body || {};
+    const cfg = store.loadConfig();
+    const targetList = body.listId ? String(body.listId) : '';
+    const cats = Array.isArray(body.options)
+      ? [...new Set(body.options.map(String))].filter((c) => c === 'listSettings' || history.CATEGORIES[c])
+      : [];
+    const restored = { settings: false, lists: false, options: {} };
+
+    if (body.settings) {
+      // il token non si ripristina: un vecchio snapshot potrebbe chiudere fuori
+      const s = { ...(snap.config.settings || {}) };
+      delete s.token;
+      cfg.settings = { ...cfg.settings, ...s };
+      restored.settings = true;
+    }
+
+    if (body.lists) {
+      // aggiorna nome/URL delle liste esistenti e riaggiunge quelle sparite;
+      // non elimina le liste create dopo lo snapshot
+      for (const sl of snap.config.lists || []) {
+        const cur = cfg.lists.find((l) => l.id === sl.id);
+        if (cur) {
+          cur.name = sl.name || cur.name;
+          cur.url = sl.url || cur.url;
+          if (sl.kind) cur.kind = sl.kind;
+        } else {
+          cfg.lists.push({ ...sl, state: { status: 'idle' } });
+        }
+      }
+      restored.lists = true;
+    }
+
+    if (cats.length) {
+      const ids = targetList ? [targetList] : (snap.config.lists || []).map((l) => l.id);
+      for (const id of ids) {
+        const sl = (snap.config.lists || []).find((l) => l.id === id);
+        const cl = cfg.lists.find((l) => l.id === id);
+        if (!sl || !cl) continue;
+        cl.options = history.mergeOptions(cl.options, sl.options, cats);
+        restored.options[id] = cats;
+      }
+    }
+
+    if (!restored.settings && !restored.lists && !Object.keys(restored.options).length) {
+      return res.status(400).json({ error: 'nessuna categoria selezionata' });
+    }
+    const ln = targetList ? store.findList(targetList) : null;
+    const saved = store.saveConfig(cfg, {
+      reason: 'ripristino cronologia',
+      listId: targetList,
+      listName: ln ? ln.name || ln.url : '',
+    });
+    if (restored.settings) C.setCustomUserAgent(saved.settings.userAgent);
+    res.json({ ok: true, restored });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 /** Aggiunge una lista; lo scaricamento parte in background (UI: /state). */
 app.post('/api/lists', requireAdmin, (req, res) => {
   try {
@@ -564,7 +641,10 @@ app.post('/api/lists', requireAdmin, (req, res) => {
     }
 
     const list = store.newList(url, name);
-    const withList = store.saveConfig({ ...cfg, lists: [...cfg.lists, list] });
+    const withList = store.saveConfig(
+      { ...cfg, lists: [...cfg.lists, list] },
+      { reason: 'aggiunta lista', listId: list.id, listName: list.name || list.url }
+    );
     const saved = withList.lists[withList.lists.length - 1];
 
     startRefresh(saved.id, true);
@@ -624,7 +704,11 @@ app.delete('/api/lists/:id', requireAdmin, (req, res) => {
   const next = cfg.lists.filter((l) => l.id !== req.params.id);
   if (next.length === cfg.lists.length) return res.status(404).json({ error: 'lista non trovata' });
   cache.invalidate(req.params.id);
-  store.saveConfig({ ...cfg, lists: next });
+  const gone = cfg.lists.find((l) => l.id === req.params.id);
+  store.saveConfig(
+    { ...cfg, lists: next },
+    { reason: 'eliminazione lista', listId: req.params.id, listName: gone ? gone.name || gone.url : '' }
+  );
   res.json({ ok: true });
 });
 
@@ -741,7 +825,7 @@ app.post('/api/lists/:id/addchannel', requireAdmin, async (req, res) => {
           list.options.channelMoves = list.options.channelMoves || {};
           list.options.channelMoves[delKey] = path;
         }
-        store.saveConfig(cfg);
+        store.saveConfig(cfg, { reason: 'canale aggiunto', listId: list.id, listName: list.name || list.url });
         return res.json({ ok: true, from: list.name || list.id, revived: true });
       }
       const hit = e && e.tree
@@ -750,7 +834,7 @@ app.post('/api/lists/:id/addchannel', requireAdmin, async (req, res) => {
       if (hit) {
         list.options.channelMoves = list.options.channelMoves || {};
         list.options.channelMoves[`${hit.home}::${hit.name}`] = path;
-        store.saveConfig(cfg);
+        store.saveConfig(cfg, { reason: 'canale spostato', listId: list.id, listName: list.name || list.url });
         return res.json({ ok: true, from: list.name || list.id });
       }
     } catch (_) { /* albero non disponibile: provo con le altre liste */ }
@@ -779,7 +863,7 @@ app.post('/api/lists/:id/addchannel', requireAdmin, async (req, res) => {
     if (!l.options.disabledChannels.includes(`${hit.home}::${hit.name}`)) {
       l.options.disabledChannels.push(`${hit.home}::${hit.name}`);
     }
-    store.saveConfig(cfg);
+    store.saveConfig(cfg, { reason: 'canale importato', listId: list.id, listName: list.name || list.url });
     return res.json({ ok: true, from: l.name || l.id });
   }
   res.status(404).json({ error: 'canale non trovato in nessuna lista' });
@@ -805,7 +889,7 @@ app.post('/api/lists/:id/delete', requireAdmin, (req, res) => {
       const pp = String(p || '');
       if (pp && !o.deletedBranches.includes(pp)) { o.deletedBranches.push(pp); added++; }
     }
-    if (added) store.saveConfig(cfg);
+    if (added) store.saveConfig(cfg, { reason: `${added} playlist eliminate`, listId: list.id, listName: list.name || list.url });
     return res.json({ ok: true, deleted: added });
   }
 
@@ -816,14 +900,14 @@ app.post('/api/lists/:id/delete', requireAdmin, (req, res) => {
     o.deletedChannels = o.deletedChannels || [];
     if (!o.deletedChannels.includes(key)) o.deletedChannels.push(key);
     // mosse e disattivazioni restano intatte: il cestino ripristina tutto com'era
-    store.saveConfig(cfg);
+    store.saveConfig(cfg, { reason: 'canale eliminato', listId: list.id, listName: list.name || list.url });
     return res.json({ ok: true, deleted: key });
   }
 
   // playlist (ramo reale o gruppo personale "@Nome"): finisce nel cestino
   o.deletedBranches = o.deletedBranches || [];
   if (!o.deletedBranches.includes(path)) o.deletedBranches.push(path);
-  store.saveConfig(cfg);
+  store.saveConfig(cfg, { reason: 'playlist eliminata', listId: list.id, listName: list.name || list.url });
   res.json({ ok: true, deleted: path });
 });
 
@@ -897,11 +981,11 @@ app.post('/api/lists/:id/restore', requireAdmin, (req, res) => {
   if (typeof name === 'string' && name.trim()) {
     const key = `${path}::${name}`;
     o.deletedChannels = (o.deletedChannels || []).filter((k) => k !== key);
-    store.saveConfig(cfg);
+    store.saveConfig(cfg, { reason: 'ripristino dal cestino', listId: list.id, listName: list.name || list.url });
     return res.json({ ok: true, restored: key });
   }
   o.deletedBranches = (o.deletedBranches || []).filter((p) => p !== path);
-  store.saveConfig(cfg);
+  store.saveConfig(cfg, { reason: 'ripristino dal cestino', listId: list.id, listName: list.name || list.url });
   res.json({ ok: true, restored: path });
 });
 
@@ -928,7 +1012,7 @@ app.post('/api/lists/:id/mergebranch', requireAdmin, async (req, res) => {
     for (const [k, v] of Object.entries(oT.channelMoves || {})) {
       if (v === from) { oT.channelMoves[k] = to; n++; }
     }
-    store.saveConfig(cfg);
+    store.saveConfig(cfg, { reason: 'unione playlist', listId: target.id, listName: target.name || target.url });
     return res.json({ ok: true, moved: n, from: from.slice(1) });
   }
 
@@ -946,7 +1030,7 @@ app.post('/api/lists/:id/mergebranch', requireAdmin, async (req, res) => {
   if (fromList === target.id) {
     oT.channelMoves = oT.channelMoves || {};
     for (const st of stations) oT.channelMoves[`${from}::${st.name}`] = to;
-    store.saveConfig(cfg);
+    store.saveConfig(cfg, { reason: 'unione playlist', listId: target.id, listName: target.name || target.url });
     return res.json({ ok: true, moved: stations.length, from: src.name || src.id });
   }
 
@@ -964,7 +1048,7 @@ app.post('/api/lists/:id/mergebranch', requireAdmin, async (req, res) => {
     const k = `${from}::${st.name}`;
     if (!oS.disabledChannels.includes(k)) oS.disabledChannels.push(k);
   }
-  store.saveConfig(cfg);
+  store.saveConfig(cfg, { reason: 'unione playlist', listId: target.id, listName: target.name || target.url });
   res.json({ ok: true, moved: n, from: src.name || src.id });
 });
 
@@ -1015,7 +1099,7 @@ app.post('/api/lists/:id/restoreorigin', requireAdmin, (req, res) => {
   list.options = store.defaultListOptions();
   if (personal) list.options.inCatalog = false; // come una lista personale appena creata
   list.state = { status: 'idle', error: '', fatal: false, fetchedAt: '', stats: null, kind: '' };
-  store.saveConfig(cfg);
+  store.saveConfig(cfg, { reason: 'ripristino lista', listId: list.id, listName: list.name || list.url });
   cache.invalidate(list.id);            // niente vecchio albero/snapshot
   playlist.clearRows(list.id);
   startRefresh(list.id, true);          // riscarica da zero
@@ -1035,7 +1119,7 @@ app.post('/api/lists/:id/emptytrash', requireAdmin, (req, res) => {
   const freshBr = (o.deletedBranches || []).filter((p) => !purgedBr.has(p));
   o.purgedChannels = [...new Set([...purgedCh, ...freshCh])];
   o.purgedBranches = [...new Set([...purgedBr, ...freshBr])];
-  store.saveConfig(cfg);
+  store.saveConfig(cfg, { reason: 'svuota cestino', listId: list.id, listName: list.name || list.url });
   res.json({ ok: true, removed: freshCh.length + freshBr.length });
 });
 

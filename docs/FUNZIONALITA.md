@@ -100,6 +100,18 @@ scaricamento in background con stato e statistiche.
 token di accesso, URL pubblico, URL EPG, User-Agent personalizzato, deduplica
 globale, loghi proporzionati, diagnostica stream, svuota cache.
 
+**Cronologia configurazione** — ogni modifica "stabile" (impostazioni, liste,
+opzioni) crea automaticamente uno snapshot JSON in `/data/history`, al massimo
+60 stati o 30 giorni. Lo stato runtime delle liste (scaricamento, statistiche)
+è escluso, quindi la cronologia non si riempie di rumore. Dalla sezione
+«Cronologia configurazione» si filtra per lista e si ripristinano **solo le
+categorie scelte** (ordine, nomi, esclusioni, unioni/spostamenti, cestino,
+gruppi, impostazioni delle liste, impostazioni generali, elenco liste); le liste
+aggiunte dopo lo snapshot non vengono eliminate e il token admin non viene mai
+ripristinato. Il ripristino crea a sua volta un nuovo stato, quindi è
+annullabile. Gli snapshot contengono URL e credenziali: restano sul volume dati
+e le API sono protette da `ADMIN_TOKEN`.
+
 **Log live** — buffer circolare (1000 eventi, `LIVE_LOG_BUFFER`), aree
 stream/download/playlist/catalogo/sistema, filtro testo, pausa, svuota, scarica,
 polling 1,5 s; stesse righe in `docker logs -f`.

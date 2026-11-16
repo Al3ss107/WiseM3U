@@ -8,6 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { DEFAULT_ENABLED } = require('./protocols');
+const history = require('./history');
 
 const CONFIG_FILE = process.env.CONFIG_FILE || path.join(__dirname, '..', 'data', 'config.json');
 
@@ -300,7 +301,7 @@ function loadConfig() {
   return cache;
 }
 
-function saveConfig(cfg) {
+function saveConfig(cfg, meta = {}) {
   const next = normalizeConfig(cfg);
   if (fs.existsSync(CONFIG_FILE) && fs.statSync(CONFIG_FILE).isDirectory()) {
     throw new Error(
@@ -324,6 +325,8 @@ function saveConfig(cfg) {
     throw err;
   }
   cache = next;
+  // snapshot della cronologia (escluso quando si aggiorna solo lo stato runtime)
+  if (meta.history !== false) history.record(next, meta);
   return cache;
 }
 
@@ -333,7 +336,7 @@ function updateListState(id, patch) {
   const list = cfg.lists.find((l) => l.id === id);
   if (!list) return null;
   list.state = { ...list.state, ...patch };
-  return saveConfig(cfg);
+  return saveConfig(cfg, { history: false });
 }
 
 function findList(id) {

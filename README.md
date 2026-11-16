@@ -194,6 +194,8 @@ API usate dalla pagina di configurazione (utili anche per script/automazioni):
 | `POST /api/probe` `{url}` | analizza un URL senza salvarlo |
 | `POST /api/easyproxy/test` `{base,password,testUrl}` | verifica (indicativa) un'istanza EasyProxy |
 | `POST /api/cache/clear` | svuota la cache |
+| `GET /api/history?list=:id` | cronologia automatica della configurazione (filtro opzionale per lista) |
+| `POST /api/history/:id/restore` | ripristina uno snapshot, in tutto o solo per categorie scelte |
 
 ---
 
@@ -488,6 +490,9 @@ Robustezza e prestazioni (misurate sulle due liste di esempio):
 | `HOST` | `0.0.0.0` | interfaccia di ascolto |
 | `CONFIG_FILE` | `/data/config.json` | percorso del file di configurazione |
 | `CACHE_DIR` | `/data/cache` | cartella degli snapshot gzip |
+| `HISTORY_DIR` | `/data/history` | cronologia della configurazione (snapshot JSON) |
+| `HISTORY_MAX` | `60` | numero massimo di stati conservati nella cronologia |
+| `HISTORY_DAYS` | `30` | eta' massima (giorni) degli stati conservati |
 | `ADMIN_TOKEN` | *(vuoto)* | se impostato, protegge `/configure` e le API `/api/*` |
 | `LIVE_LOG_BUFFER` | `1000` | numero di eventi mantenuti nel buffer dei **log live** |
 | `WM_HOT_TREES` | `1` | quante liste restano **parseate in RAM** insieme (LRU): alzalo se i client saltano spesso tra liste grandi, abbassa se la RAM scarseggia |
