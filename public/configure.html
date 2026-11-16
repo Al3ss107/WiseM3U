@@ -224,25 +224,153 @@
     /* 16px: evita lo zoom automatico di iOS al focus degli input */
     input[type=text],input[type=url],input[type=number],input[type=password],select,textarea,
     .crow .cname,.crow .cmove,.chead .cfilter{font-size:16px}
+    body{padding-bottom:calc(150px + env(safe-area-inset-bottom))}
+
+    /* --- testata: titolo su una riga, link in una striscia scorrevole --- */
+    /* non sticky: su un telefono 90px di barra fissa sono spazio tolto alla lista */
+    header{position:static;padding:8px 12px;gap:8px}
+    header img{width:34px;height:34px;border-radius:9px}
+    header h1{font-size:15px;line-height:1.25}
+    header h1 .sub,header .sub,header .spacer{display:none}
+    header .links{flex-wrap:nowrap;overflow-x:auto;width:100%;gap:5px;padding:2px 0 2px;
+                  scrollbar-width:none;-webkit-overflow-scrolling:touch}
+    header .links::-webkit-scrollbar{display:none}
+    a.lnk{padding:5px 9px;font-size:11px;white-space:nowrap;flex:0 0 auto}
+
+    /* --- contenitori e controlli --- */
+    main{padding:10px}
+    .card{padding:12px;border-radius:13px;margin-bottom:12px}
+    .row{gap:10px}
     .row>*{flex:1 1 100%}
-    .btns{flex:1 1 100%}
-    .btns button{flex:1 1 auto}
+    .btns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;flex:1 1 100%;align-items:stretch}
+    .btns button{width:100%}
+    .btns #btnNewPList{grid-column:1/-1}
+    .grid2{grid-template-columns:1fr;gap:10px}
     button{min-height:44px}
-    button.small{min-height:38px;padding:7px 12px}
+    button.small{min-height:40px;padding:8px 12px}
     .expbtn{min-height:38px;padding:7px 12px}
-    .bhandle{padding:8px 6px}
-    .grid2{grid-template-columns:1fr}
-    .listhead .name{font-size:16px}
-    .plhead h2{flex:1 1 100%}
-    footer{gap:8px}
+    .bhandle{padding:10px 5px;font-size:17px}
+    details.fold>summary{padding:10px 11px;font-size:13px}
+    details.fold .foldbody{padding:2px 11px 12px}
+
+    /* --- testata della lista: nome a tutta riga, azioni in griglia 2x2 --- */
+    .listhead{align-items:flex-start;gap:6px;margin-bottom:10px}
+    .listhead .name{flex:1 1 100%;font-size:16px;line-height:1.3;overflow-wrap:anywhere}
+    .listhead .badge{margin-left:0}
+    .listhead .spacer{display:none}
+    .acts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;width:100%}
+    .acts button{width:100%;min-height:42px}
+    /* URL sorgente su max 2 righe; nelle liste personali il blocco contiene
+       anche il pulsante "copia", quindi resta intero */
+    .listcard:not([data-kind=personal])>.url{display:-webkit-box;-webkit-line-clamp:2;
+      -webkit-box-orient:vertical;overflow:hidden}
+
+    /* --- playlist: ricerca larga, poi griglia di azioni --- */
+    .plhead{gap:8px;margin-top:14px}
+    .plhead h2{flex:1 1 100%;font-size:14px}
+    .pltools{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+    .pltools input{grid-column:1/-1;order:0}
+    .pltools button{width:100%;min-height:40px;font-size:12.5px;padding:6px 8px;white-space:normal;line-height:1.2}
+    .pltools [data-act=onlyactive]{order:1}
+    .pltools [data-act=all]{order:2}
+    .pltools [data-act=none]{order:3}
+    .pltools [data-act=trash]{order:4}
+    .pltools [data-act=delsel]{order:5;grid-column:1/-1}
+
+    /* --- rami: riga a griglia, niente scroll annidato su touch --- */
+    .branches{max-height:none;overflow:visible;padding:6px;border-radius:11px}
+    .brow{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;
+          grid-template-areas:"handle cb name del" "exp exp info info";
+          gap:4px 8px;padding:8px 6px;align-items:center;
+          border-bottom:1px solid rgba(255,255,255,.06);border-radius:8px}
+    .brow:last-child{border-bottom:0}
+    .brow>.bhandle{grid-area:handle}
+    .brow>input[type=checkbox]{grid-area:cb;width:22px;height:22px;justify-self:center}
+    .brow>.bname{grid-area:name;padding:9px 10px}
+    .brow>.badge{display:none} /* il badge "personale" è già sulla scheda della lista */
+    .brow>.expbtn{grid-area:exp;justify-self:start}
+    .brow>.bcount{grid-area:info;justify-self:end;text-align:right;white-space:normal;font-size:11.5px}
+    .brow>button[data-bdel]{grid-area:del;width:42px;min-height:42px;padding:0;font-size:15px}
+
+    /* --- canali: nome, gruppo, poi azioni; "da …" su una riga intera --- */
+    .chans{margin:2px 0 10px 8px;padding:6px;border-radius:0 10px 10px 0}
+    .chead{gap:6px;padding:2px 2px 8px}
+    .chead .cfilter{flex:1 1 160px;max-width:none}
+    .chead .ccount{flex:0 0 auto}
+    .chead input[data-cadd]{flex:1 1 100%}
+    .chead button[data-caddbtn]{flex:1 1 100%}
+    .crow{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto auto;
+          grid-template-areas:"handle cb name name del" "mv mv mv apply reset" "from from from from from";
+          gap:5px 6px;padding:8px 6px;align-items:center;
+          border-bottom:1px solid rgba(255,255,255,.06);border-radius:8px}
+    .crow:last-child{border-bottom:0}
+    .crow>.bhandle{grid-area:handle}
+    .crow>input[type=checkbox]{grid-area:cb;width:22px;height:22px;justify-self:center}
+    .crow>.cname{grid-area:name;padding:9px 10px}
+    .crow>.cmove{grid-area:mv;width:100%;max-width:none;padding:9px 10px}
+    .crow>button[data-capply]{grid-area:apply;width:42px;min-height:42px;padding:0;font-size:15px}
+    .crow>button[data-creset]{grid-area:reset;width:42px;min-height:42px;padding:0;font-size:15px}
+    .crow>button[data-cdel]{grid-area:del;width:42px;min-height:42px;padding:0;font-size:15px}
+    .crow>.cnt{grid-area:from;justify-self:start;white-space:normal;font-size:11.5px;line-height:1.35}
+
+    /* --- cestino --- */
+    .trash{padding:8px}
+    .trashrow{gap:6px;padding:8px 2px}
+    .trashrow button{flex:1 1 100%;min-height:40px}
+    .trashrow b,.trashrow .cnt{overflow-wrap:anywhere;white-space:normal;min-width:0}
+
+    /* --- log --- */
+    .logbar{gap:6px}
+    .logbar select{flex:1 1 auto}
+    .logbar input{flex:1 1 100%}
+    .logbar button{flex:1 1 auto}
+    .logbar .spacer{display:none}
+    .logbox{height:42vh;font-size:11.5px}
+
+    /* --- footer: due righe fisse, il contenuto resta leggibile --- */
+    footer{gap:8px;padding:8px 12px calc(8px + env(safe-area-inset-bottom))}
     footer #btnSave{flex:1 1 100%;min-height:46px}
-    footer #btnReload{flex:1 1 auto}
-    footer #status,footer #appVersion{flex:1 1 auto;text-align:center;font-size:12px}
+    footer #btnReload{flex:0 0 auto;min-height:40px}
+    footer #status{flex:1 1 auto;min-width:0;text-align:center;font-size:11.5px;line-height:1.35}
+    footer #appVersion{flex:0 0 auto;text-align:right;font-size:10.5px}
     footer #status{margin-left:0}
-    #sidemenu{left:8px;right:8px;top:auto;bottom:calc(78px + env(safe-area-inset-bottom));width:auto;max-height:55vh}
-    .sditem .sdname{padding:9px 11px}
-    .sditem .updn{padding:9px 10px;font-size:11px}
-    #sdToggle{top:58px}
+
+    /* --- menu liste: bottom sheet sopra il pulsante flottante --- */
+    #sdToggle{top:auto;right:12px;bottom:calc(128px + env(safe-area-inset-bottom));
+              width:auto;height:46px;padding:0 15px;border-radius:999px;font-size:13px;z-index:61}
+    #sidemenu{left:8px;right:8px;top:auto;bottom:calc(186px + env(safe-area-inset-bottom));
+              width:auto;max-height:50vh;padding:8px}
+    .sditem .sdname{padding:10px 12px;font-size:13px;min-height:40px}
+    .sditem .updn{padding:0;width:38px;height:38px;min-height:0;font-size:12px}
+    .toast{bottom:calc(186px + env(safe-area-inset-bottom))}
+
+    /* il titolo della card non finisce a filo del bordo quando si salta da una lista all'altra */
+    .listcard{scroll-margin-top:12px}
+    button,a.lnk,summary{touch-action:manipulation}
+  }
+  /* ---------- telefoni molto piccoli (iPhone SE & co.) ---------- */
+  @media (max-width:380px){
+    main{padding:8px}
+    .card{padding:10px}
+    header h1{font-size:14px}
+    .acts{grid-template-columns:1fr}
+    footer #appVersion{display:none} /* a 320px il footer resterebbe su tre righe */
+    header .links{flex-wrap:wrap;overflow:visible}
+    a.lnk{flex:1 1 auto;text-align:center}
+    .pltools button{font-size:12px;padding:6px}
+    .listhead .name{font-size:15px}
+    .brow>.bname,.crow>.cname{padding:9px 8px}
+    .crow>button[data-capply],.crow>button[data-creset],.crow>button[data-cdel],
+    .brow>button[data-bdel]{width:38px;min-height:40px}
+  }
+  /* ---------- touch: niente hover "appiccicoso" ---------- */
+  @media (hover:none){
+    button:hover{filter:none}
+    button.ghost:hover{border-color:var(--line);background:#1d2849}
+    .brow:hover,.crow:hover{background:transparent}
+    .brow:active,.crow:active{background:#131d3d}
+    a.lnk:hover{border-color:var(--line);background:#131c38}
+    details.fold>summary:hover{background:transparent}
   }
   @media (prefers-reduced-motion:reduce){
     *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
@@ -1980,6 +2108,8 @@ $('#sidemenu').addEventListener('click', async (ev) => {
       card.scrollIntoView({ behavior: 'smooth', block: 'start' });
       card.classList.remove('flash'); void card.offsetWidth; card.classList.add('flash');
     }
+    // su smartphone il menu è un bottom sheet: chiudilo, altrimenti copre la lista raggiunta
+    ev.currentTarget.hidden = true;
     return;
   }
   const up = ev.target.closest('[data-sdup]');
