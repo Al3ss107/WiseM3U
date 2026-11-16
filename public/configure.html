@@ -5,238 +5,275 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>WiseM3U — configurazione</title>
 <style>
-  /* ============ token di design ============ */
+  /* ============ Material 3 — token di design (tema scuro) ============ */
   :root{
-    --bg:#0b1020; --card:#151d38; --card2:#1a2342;
-    --line:#2a3763; --line2:#3a4c85; --txt:#e8edff; --mut:#93a0c9;
-    --acc:#4f8cff; --ok:#22c55e; --warn:#f59e0b; --err:#ef4444; --chip:#22305c;
+    /* ruoli colore M3 */
+    --md-primary:#adc6ff;          --md-on-primary:#002e69;
+    --md-primary-container:#284777;--md-on-primary-container:#d8e2ff;
+    --md-secondary-container:#3b4759;--md-on-secondary-container:#d8e3f8;
+    --md-surface:#111318;          --md-surface-1:#191c20;
+    --md-surface-2:#1d2024;        --md-surface-3:#272a2f;  --md-surface-4:#32353a;
+    --md-on-surface:#e2e2e9;       --md-on-surface-variant:#c4c6d0;
+    --md-outline:#8e9099;          --md-outline-variant:#44474f;
+    --md-error:#ffb4ab;            --md-on-error:#690005;
+    --md-error-container:#93000a;  --md-on-error-container:#ffdad6;
+    --md-success:#8ad8a4;          --md-warning:#ffd479;
+    /* alias storici usati dai componenti */
+    --bg:var(--md-surface); --card:var(--md-surface-1); --card2:var(--md-surface-2);
+    --line:var(--md-outline-variant); --line2:var(--md-outline);
+    --txt:var(--md-on-surface); --mut:var(--md-on-surface-variant);
+    --acc:var(--md-primary); --ok:var(--md-success); --warn:var(--md-warning);
+    --err:var(--md-error); --chip:var(--md-secondary-container);
     color-scheme:dark;
   }
   *{box-sizing:border-box}
   html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
-  body{margin:0;color:var(--txt);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Ubuntu,sans-serif;
-       background:radial-gradient(1100px 650px at 12% -10%,#1c2a5e 0%,transparent 55%),
-                  radial-gradient(900px 550px at 105% 0%,#16224e 0%,transparent 50%),
-                  var(--bg);
-       background-attachment:fixed;
-       padding-bottom:calc(90px + env(safe-area-inset-bottom))}
-  ::selection{background:rgba(79,140,255,.4)}
-  /* ---------- barra superiore ---------- */
-  header{position:sticky;top:0;z-index:20;background:rgba(11,16,32,.82);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
-         border-bottom:1px solid var(--line);padding:10px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-  header img{width:38px;height:38px;border-radius:10px;box-shadow:0 2px 12px rgba(0,0,0,.4)}
-  header h1{font-size:17px;margin:0;letter-spacing:.2px}
+  body{margin:0;color:var(--txt);font:15px/1.5 Roboto,system-ui,-apple-system,"Segoe UI",Ubuntu,sans-serif;
+       background:var(--md-surface);padding-bottom:calc(90px + env(safe-area-inset-bottom))}
+  ::selection{background:rgba(173,198,255,.32)}
+  /* ---------- top app bar ---------- */
+  header{position:sticky;top:0;z-index:20;background:var(--md-surface-2);
+         border-bottom:1px solid var(--md-outline-variant);padding:10px 16px;
+         display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  header img{width:32px;height:32px;border-radius:8px}
+  header h1{font-size:18px;font-weight:500;margin:0;letter-spacing:.1px}
   header .sub{color:var(--mut);font-size:12.5px}
   .spacer{flex:1}
   main{max-width:1180px;margin:0 auto;padding:16px}
   .links{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
-  a.lnk{color:#a9e8ff;text-decoration:none;font-size:12.5px;background:#131c38;border:1px solid var(--line);
-        padding:4px 11px;border-radius:999px;transition:border-color .15s,background .15s}
-  a.lnk:hover{border-color:var(--line2);background:#182346}
+  a.lnk{color:var(--md-on-secondary-container);text-decoration:none;font-size:12px;font-weight:500;
+        background:var(--md-secondary-container);border:1px solid transparent;
+        padding:5px 12px;border-radius:8px;transition:background .15s}
+  a.lnk:hover{background:#46536a}
   /* ---------- card e sezioni ---------- */
-  .card{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--line);
-        border-radius:16px;padding:16px;margin-bottom:16px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
-  h2{font-size:15px;margin:0 0 12px;letter-spacing:.4px;color:#c6d6ff;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
-  h2 .n{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 5px;border-radius:7px;
-        background:linear-gradient(180deg,#3b76e8,#2b5cc4);color:#fff;font-size:12px;font-weight:800;flex:0 0 auto}
+  .card{background:var(--md-surface-1);border:0;border-radius:16px;padding:16px;margin-bottom:16px;
+        box-shadow:0 1px 2px rgba(0,0,0,.3)}
+  h2{font-size:16px;font-weight:500;margin:0 0 12px;letter-spacing:.15px;color:var(--md-on-surface);
+     display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  h2 .n{display:inline-grid;place-items:center;min-width:24px;height:24px;padding:0 6px;border-radius:50%;
+        background:var(--md-primary-container);color:var(--md-on-primary-container);
+        font-size:12px;font-weight:600;flex:0 0 auto}
   .secttl{margin:22px 2px 12px}
-  label{display:block;font-size:12px;color:var(--mut);margin-bottom:4px}
+  label{display:block;font-size:12px;font-weight:500;color:var(--mut);margin-bottom:5px;letter-spacing:.2px}
   .hint{color:var(--mut);font-size:12.5px;margin-top:6px}
-  .hint b{color:#cdd9ff}
-  code{background:#0e1530;border:1px solid var(--line);border-radius:7px;padding:2px 7px;font-size:12.5px;
-       color:#a9e8ff;word-break:break-all}
+  .hint b{color:var(--txt)}
+  code{background:var(--md-surface-3);border-radius:6px;padding:2px 7px;font-size:12.5px;
+       color:var(--md-primary);word-break:break-all}
   .sep{height:1px;background:var(--line);margin:12px 0}
   .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(225px,1fr));gap:12px}
   .kv{font-size:12.5px;color:var(--mut)}
-  .kv b{color:var(--txt)}
+  .kv b{color:var(--txt);font-weight:600}
   .dim{opacity:.75}
-  /* ---------- controlli ---------- */
+  /* ---------- campi (filled text field M3) ---------- */
   input[type=text],input[type=url],input[type=number],input[type=password],select,textarea{
-    width:100%;background:#0e1530;border:1px solid var(--line);color:var(--txt);
-    border-radius:10px;padding:9px 11px;font:inherit;outline:none;
-    transition:border-color .15s,box-shadow .15s}
-  input:focus,select:focus,textarea:focus{border-color:var(--acc);box-shadow:0 0 0 3px rgba(79,140,255,.18)}
-  input::placeholder,textarea::placeholder{color:#5d6b96}
+    width:100%;background:var(--md-surface-3);border:1px solid transparent;color:var(--txt);
+    border-radius:12px;padding:11px 14px;font:inherit;outline:none;
+    transition:background .15s,border-color .15s}
+  input:focus,select:focus,textarea:focus{border-color:var(--md-primary);background:var(--md-surface-4)}
+  input::placeholder,textarea::placeholder{color:#8e9099}
   textarea{resize:vertical}
-  button{background:linear-gradient(180deg,#4f8cff,#3a6fe0);color:#fff;border:1px solid #3a6fe0;border-radius:10px;
-         padding:9px 15px;font:inherit;font-weight:600;cursor:pointer;
-         transition:filter .15s,transform .05s,box-shadow .15s;box-shadow:0 2px 10px rgba(58,111,224,.25)}
-  button:hover{filter:brightness(1.12)}
+  /* ---------- pulsanti M3: filled / tonal / error ---------- */
+  button{background:var(--md-primary);color:var(--md-on-primary);border:0;border-radius:20px;
+         padding:10px 20px;font:inherit;font-size:14px;font-weight:500;letter-spacing:.1px;cursor:pointer;
+         transition:filter .15s,transform .05s,box-shadow .15s;box-shadow:none}
+  button:hover{filter:brightness(1.08)}
   button:active{transform:translateY(1px)}
-  button.ghost{background:#1d2849;color:#cfe0ff;border:1px solid var(--line);box-shadow:none}
-  button.ghost:hover{border-color:var(--line2);background:#22305a}
-  button.danger{background:#3a1220;color:#ffb3c0;border:1px solid #5c1d2c;box-shadow:none}
-  button.danger:hover{background:#4a1828}
-  button.small{padding:6px 11px;font-size:12.5px;border-radius:9px}
+  button.ghost{background:var(--md-secondary-container);color:var(--md-on-secondary-container)}
+  button.ghost:hover{background:#46536a}
+  button.danger{background:var(--md-error-container);color:var(--md-on-error-container)}
+  button.danger:hover{background:#a50f10}
+  button.small{padding:7px 14px;font-size:12.5px;border-radius:16px}
   button:disabled{opacity:.5;cursor:progress}
-  :where(button,a,input,select,textarea,summary):focus-visible{outline:2px solid var(--acc);outline-offset:2px}
-  .chk{display:flex;align-items:center;gap:8px;background:#0e1530;border:1px solid var(--line);
-       border-radius:10px;padding:8px 11px;cursor:pointer;user-select:none;transition:border-color .15s,background .15s}
+  :where(button,a,input,select,textarea,summary):focus-visible{outline:2px solid var(--md-primary);outline-offset:2px}
+  .chk{display:flex;align-items:center;gap:8px;background:var(--md-surface-2);border:1px solid var(--line);
+       border-radius:12px;padding:8px 12px;cursor:pointer;user-select:none;transition:border-color .15s,background .15s}
   .chk:hover{border-color:var(--line2)}
-  .chk input{width:17px;height:17px;accent-color:var(--acc);flex:0 0 auto}
-  .chk.on{border-color:#3c6bd6;background:#14213f}
+  .chk input{width:18px;height:18px;accent-color:var(--md-primary);flex:0 0 auto}
+  .chk.on{border-color:var(--md-primary);background:var(--md-primary-container)}
+  .chk.on{color:var(--md-on-primary-container)}
   /* ---------- feedback e badge ---------- */
-  .badge{display:inline-flex;align-items:center;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;
-         background:var(--chip);color:#cfe0ff;margin-left:6px;white-space:nowrap}
-  .badge.ready{background:#123324;color:#7ef0ac}
-  .badge.error{background:#3a1220;color:#ff9aa8}
-  .badge.fetching{background:#3a2c0d;color:#ffd479;animation:pulse 1.6s ease-in-out infinite}
-  .badge.idle{background:#242c4a;color:#a9b6dd}
+  .badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:8px;font-size:11.5px;font-weight:500;
+         background:var(--chip);color:var(--md-on-secondary-container);margin-left:6px;white-space:nowrap}
+  h2 .badge,.listhead .badge,.plhead .badge{margin-left:0}
+  .badge.ready{background:#173823;color:#9be7b4}
+  .badge.error{background:var(--md-error-container);color:var(--md-on-error-container)}
+  .badge.fetching{background:#3a2c0d;color:var(--md-warning);animation:pulse 1.6s ease-in-out infinite}
+  .badge.idle{background:var(--md-surface-3);color:var(--mut)}
   @keyframes pulse{50%{opacity:.55}}
   .cnt{color:var(--mut);font-size:11.5px;white-space:nowrap}
-  .pill{display:inline-flex;gap:6px;align-items:center;background:#0e1530;border:1px solid var(--line);
-        border-radius:999px;padding:3px 10px;font-size:12px;color:var(--mut)}
-  .err{color:#ff9aa8;font-size:12.5px;background:#2a1220;border:1px solid #5c1d2c;border-radius:9px;padding:8px 11px;margin-top:8px}
-  .warn{color:#ffd28a;font-size:12.5px;background:#2a2012;border:1px solid #5c4a1d;border-radius:9px;padding:8px 11px;margin-top:8px}
+  .pill{display:inline-flex;gap:6px;align-items:center;background:var(--md-surface-3);
+        border-radius:8px;padding:4px 10px;font-size:12px;color:var(--mut)}
+  .err{color:var(--md-on-error-container);font-size:12.5px;background:#3b1519;border-radius:12px;padding:9px 12px;margin-top:8px}
+  .warn{color:#ffdf9e;font-size:12.5px;background:#33280f;border-radius:12px;padding:9px 12px;margin-top:8px}
   .url{font-size:12px;color:var(--mut);word-break:break-all}
   .row{display:flex;gap:12px;flex-wrap:wrap}
   .row>*{flex:1 1 180px}
   .btns{display:flex;gap:8px;align-items:flex-end;flex:0 0 auto;flex-wrap:wrap}
   /* ---------- pannelli richiudibili ---------- */
-  details.fold{border:1px solid var(--line);border-radius:12px;margin-top:12px;background:rgba(14,21,48,.55)}
-  details.fold>summary{cursor:pointer;list-style:none;padding:11px 13px;font-weight:700;font-size:13.5px;color:#c6d6ff;
-    display:flex;align-items:center;gap:8px;user-select:none;border-radius:12px}
+  details.fold{border:0;border-radius:16px;margin-top:12px;background:var(--md-surface-1)}
+  details.fold>summary{cursor:pointer;list-style:none;padding:14px 16px;font-weight:500;font-size:14px;color:var(--md-on-surface);
+    display:flex;align-items:center;gap:10px;user-select:none;border-radius:16px}
   details.fold>summary::-webkit-details-marker{display:none}
-  details.fold>summary::before{content:"\25B8";color:var(--acc);transition:transform .15s;flex:0 0 auto}
-  details.fold[open]>summary::before{transform:rotate(90deg)}
-  details.fold[open]>summary{border-radius:12px 12px 0 0}
-  details.fold>summary:hover{background:rgba(79,140,255,.07)}
-  details.fold .foldbody{padding:4px 13px 13px}
+  details.fold>summary::before{content:"\25BE";color:var(--md-primary);transition:transform .2s;flex:0 0 auto;font-size:12px}
+  details.fold[open]>summary::before{transform:rotate(0)}
+  details.fold:not([open])>summary::before{transform:rotate(-90deg)}
+  details.fold[open]>summary{border-radius:16px 16px 0 0}
+  details.fold>summary:hover{background:rgba(173,198,255,.08)}
+  details.fold .foldbody{padding:0 16px 16px}
   details.help{margin-top:8px}
   details.help>summary{cursor:pointer;color:var(--mut);font-size:12.5px;user-select:none}
-  details.help>summary:hover{color:#cfe0ff}
-  details.help .hint{margin:6px 0 2px;padding:9px 11px;background:rgba(14,21,48,.6);border:1px solid var(--line);border-radius:9px}
+  details.help>summary:hover{color:var(--md-primary)}
+  details.help .hint{margin:6px 0 2px;padding:10px 12px;background:var(--md-surface-2);border-radius:12px}
 
-  /* ---------- icone info (i) e sezioni comprimibili ---------- */
-  details.info{margin-top:7px}
-  /* un solo aspetto per ogni "i": l'etichetta resta nel DOM per gli screen reader,
-     il cerchio ha un'area di tocco di ~44px grazie al ::after trasparente */
-  details.info>summary,details.help>summary{
+  /* ---------- icone info: un pannello per sezione, accanto al titolo ---------- */
+  details.info{flex:0 0 auto;margin:0}
+  /* icona "i" M3: 24px, area di tocco ~44px col ::after trasparente */
+  details.info>summary{
     list-style:none;cursor:pointer;display:inline-grid;place-items:center;position:relative;
-    width:26px;height:26px;border-radius:50%;border:1px solid var(--line2);background:#16203d;
-    color:#9fc1ff;font-size:0;user-select:none;vertical-align:middle;
-    transition:background .15s,border-color .15s,color .15s}
-  details.info>summary::-webkit-details-marker,details.help>summary::-webkit-details-marker{display:none}
-  details.info>summary::before,details.help>summary::before{
-    content:"i";font:italic 700 13px/1 Georgia,"Times New Roman",serif}
-  details.info>summary::after,details.help>summary::after{
-    content:"";position:absolute;inset:-5px -10px -10px -10px;
-    border-radius:50%} /* area di tocco ampia senza coprire il campo sopra */
-  details.info>summary:hover,details.help>summary:hover{border-color:var(--acc);background:#1d2a4e;color:#dbe7ff}
-  details.info[open]>summary,details.help[open]>summary{border-color:var(--acc);background:#22305a;color:#dbe7ff}
-  details.info>.ibody{margin-top:6px}
-  .sectgl{margin-left:auto;flex:0 0 auto;width:30px;height:30px;min-height:30px;padding:0;
-    display:inline-grid;place-items:center;border-radius:8px;border:1px solid transparent;
-    background:transparent;color:var(--mut);font-size:12px;line-height:1;box-shadow:none}
-  .sectgl:hover{background:#1d2849;border-color:var(--line);color:#cfe0ff}
+    width:24px;height:24px;border-radius:50%;border:1px solid var(--md-outline);
+    background:transparent;color:var(--md-primary);font-size:0;user-select:none;vertical-align:middle;
+    flex:0 0 auto;transition:background .15s,color .15s}
+  details.info>summary::-webkit-details-marker{display:none}
+  details.info>summary::before{content:"i";font:italic 600 12px/1 Georgia,"Times New Roman",serif}
+  details.info>summary::after{content:"";position:absolute;inset:-8px;border-radius:50%}
+  details.info>summary:hover{background:rgba(173,198,255,.12)}
+  details.info[open]>summary{background:var(--md-primary-container);color:var(--md-on-primary-container);border-color:transparent}
+  /* pannello con le note della sezione: overlay ancorato all'icona (menu M3) */
+  .sectinfo{position:relative;flex:0 0 auto}
+  .sectinfo>.ibody{position:absolute;top:calc(100% + 8px);left:0;z-index:60;
+    width:min(520px,calc(100vw - 40px));max-height:52vh;overflow:auto;
+    background:var(--md-surface-3);border-radius:12px;padding:14px 16px;display:grid;gap:12px;
+    box-shadow:0 10px 30px rgba(0,0,0,.55)}
+  .sectinfo .inote .ilabel{font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;
+    color:var(--md-primary);margin-bottom:3px}
+  .sectinfo .inote .hint,.sectinfo .inote p{margin:0;padding:0;background:none;border:0;font-size:12.5px}
+  /* intestazioni: numero + titolo + (i) + espansione sempre sulla stessa riga */
+  h2>.n{order:0}
+  h2>.ttl{order:1;flex:1 1 0;min-width:0}
+  h2>.sectinfo{order:2}
+  h2>.sectgl{order:3}
+  h2>.badge{order:4}
+  .sectgl{margin-left:4px;flex:0 0 auto;width:36px;height:36px;min-height:36px;padding:0;
+    display:inline-grid;place-items:center;border-radius:50%;border:0;
+    background:transparent;color:var(--md-on-surface-variant);font-size:13px;line-height:1;box-shadow:none}
+  .sectgl:hover{background:rgba(173,198,255,.12);color:var(--md-primary);filter:none}
   .card.collapsed>*:not(h2):not(.listhead){display:none}
-  .listhead .name[data-ltgl]{cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px}
-  .listhead .name[data-ltgl]::before{content:"\25BE";color:var(--acc);font-size:11px;flex:0 0 auto}
-  .listcard.collapsed .listhead .name[data-ltgl]::before{content:"\25B8"}
+  /* riga del titolo delle schede lista: nome + icona info */
+  .listtitle{display:flex;align-items:center;gap:8px;flex:1 1 auto;min-width:0}
+  .linfo{flex:0 0 auto}
+  .listhead .name[data-ltgl]{cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px;
+    flex:1 1 auto;min-width:0;font-weight:500;font-size:17px;letter-spacing:.1px}
+  .listhead .name[data-ltgl]::before{content:"\25BE";color:var(--md-primary);font-size:11px;flex:0 0 auto;
+    transition:transform .2s}
+  .listcard.collapsed .listhead .name[data-ltgl]::before{transform:rotate(-90deg)}
   /* ---------- pulsanti flottanti (solo mobile) ---------- */
   .fabbar{display:none}
 
   /* log live */
   .logbox{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.7;
-    background:#050914;border:1px solid var(--line);border-radius:10px;padding:8px 10px;
+    background:#0d0f13;border-radius:12px;padding:10px 12px;
     height:330px;overflow-y:auto;overflow-x:auto;white-space:pre-wrap;word-break:break-all}
   .logbox .hint{margin:0;padding:0;background:none;border:none}
   .lgline{display:block;color:#cdd8f3}
-  .lgline.debug{color:#7f8bb3}
-  .lgline.warn{color:#ffd479}
-  .lgline.error{color:#ff9aa8}
-  .lgts{color:#55617f;margin-right:7px}
-  .lgscope{display:inline-block;background:#1d2849;color:#9fc1ff;border-radius:6px;
+  .lgline.debug{color:#8e9099}
+  .lgline.warn{color:var(--md-warning)}
+  .lgline.error{color:var(--md-error)}
+  .lgts{color:#5f636b;margin-right:7px}
+  .lgscope{display:inline-block;background:var(--md-surface-3);color:var(--md-primary);border-radius:6px;
     padding:0 6px;margin-right:7px;font-size:11px}
   .logbar{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-bottom:9px}
   .logbar .spacer{flex:1}
   .logbar select,.logbar input{flex:0 0 auto}
   .logbar input{flex:1 1 240px}
   /* ---------- card lista ---------- */
-  .listcard{border-left:3px solid var(--acc)}
-  .listhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
-  .listhead .name{font-weight:800;font-size:16.5px;letter-spacing:.2px}
-  .acts{display:flex;gap:6px;flex-wrap:wrap}
+  .listcard{background:var(--md-surface-2)}
+  .listhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+  .listhead .name{font-weight:500;font-size:17px;letter-spacing:.1px}
+  .acts{display:flex;gap:8px;flex-wrap:wrap}
   /* ---------- intestazione playlist ---------- */
-  .plhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:16px}
-  .plhead h2{margin:0}
+  .plhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:18px}
+  .plhead h2{margin:0;flex:1 1 100%}
   .pltools{display:flex;gap:6px;flex-wrap:wrap;align-items:center;flex:1 1 330px;justify-content:flex-end}
   .pltools input{flex:1 1 150px;max-width:230px}
   .pltools button{flex:0 0 auto}
   /* pulsante-filtro attivo (es. "Visualizza attive") */
-  .pltools button.on{border-color:#3c6bd6;background:#1b2b52;color:#dbe7ff;
-    box-shadow:inset 0 0 0 1px #2b4b96;filter:none}
+  .pltools button.on{background:var(--md-primary);color:var(--md-on-primary);filter:none}
+  /* blocco playlist comprimibile */
+  .plwrap.collapsed>.branches,.plwrap.collapsed>.trash,
+  .plwrap.collapsed>.hint,.plwrap.collapsed .pltools{display:none}
   /* ---------- rami ---------- */
-  .branches{max-height:min(520px,62vh);overflow:auto;background:#0b1129;border:1px solid var(--line);
-            border-radius:12px;padding:8px;margin-top:10px;scrollbar-width:thin}
-  .branches::-webkit-scrollbar{width:9px}
-  .branches::-webkit-scrollbar-thumb{background:#26335e;border-radius:9px;border:2px solid #0b1129}
+  .branches{max-height:min(520px,62vh);overflow:auto;background:var(--md-surface-1);
+            border-radius:12px;padding:6px;margin-top:10px;scrollbar-width:thin}
+  .branches::-webkit-scrollbar{width:8px}
+  .branches::-webkit-scrollbar-thumb{background:var(--md-outline-variant);border-radius:8px}
   .brow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 8px;border-radius:10px;transition:background .12s}
-  .brow:hover{background:#131d3d}
+  .brow:hover{background:rgba(173,198,255,.07)}
   .brow.off{opacity:.45}
-  .brow input[type=checkbox]{width:16px;height:16px;accent-color:var(--acc);cursor:pointer;flex:0 0 auto}
+  .brow input[type=checkbox]{width:18px;height:18px;accent-color:var(--md-primary);cursor:pointer;flex:0 0 auto}
   .brow .bname{flex:1 1 150px;min-width:0}
-  .brow .bname.renamed{border-color:#3c6bd6}
+  .brow .bname.renamed{border-color:var(--md-primary)}
   .bcount{flex:0 0 auto}
   .bhandle{cursor:grab;color:var(--mut);padding:2px 4px;flex:0 0 auto;user-select:none;font-size:15px;line-height:1}
   .bhandle:active{cursor:grabbing}
-  .expbtn{background:#1d2849;border:1px solid var(--line);color:#cfe0ff;border-radius:8px;
-          padding:4px 10px;font-size:11.5px;cursor:pointer;flex:0 0 auto;white-space:nowrap;transition:border-color .15s,background .15s}
-  .expbtn:hover{border-color:var(--line2);background:#22305a}
+  .expbtn{background:var(--md-surface-3);border:0;color:var(--md-on-surface-variant);border-radius:14px;
+          padding:6px 12px;font-size:11.5px;font-weight:500;cursor:pointer;flex:0 0 auto;white-space:nowrap;
+          transition:background .15s,color .15s}
+  .expbtn:hover{background:var(--md-surface-4);color:var(--md-primary)}
   /* ---------- canali di un ramo ---------- */
-  .chans{margin:2px 0 8px 26px;border-left:2px solid #2c3d74;padding:6px 8px;
-         background:#0d1430;border-radius:0 10px 10px 0}
+  .chans{margin:2px 0 8px 24px;border-left:2px solid var(--md-primary-container);padding:6px 8px;
+         background:var(--md-surface-2);border-radius:0 12px 12px 0}
   .chead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:2px 4px 6px}
   .chead .cfilter{flex:1 1 170px;max-width:250px;padding:6px 10px;font-size:12.5px}
   .chead input[data-cadd]{flex:1 1 220px}
   .chead button[data-caddbtn]{flex:0 0 auto}
   .crow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:5px 6px;border-radius:8px;transition:background .12s}
-  .crow:hover{background:#131d3d}
+  .crow:hover{background:rgba(173,198,255,.07)}
   .crow.off{opacity:.45}
   .crow .cname{flex:1 1 150px;min-width:0;padding:6px 10px;font-size:12.5px}
-  .crow .cname.renamed{border-color:#3c6bd6}
-  .crow .cmove{flex:1 1 130px;max-width:200px;background:#101a3a;color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-size:11.5px}
-  .crow .cmove.renamed{border-color:#3c6bd6}
-  .crow input[type=checkbox]{width:15px;height:15px;accent-color:var(--acc);cursor:pointer;flex:0 0 auto}
+  .crow .cname.renamed{border-color:var(--md-primary)}
+  .crow .cmove{flex:1 1 130px;max-width:200px;background:var(--md-surface-3);color:var(--txt);border:1px solid transparent;border-radius:10px;padding:6px 10px;font-size:11.5px}
+  .crow .cmove.renamed{border-color:var(--md-primary)}
+  .crow input[type=checkbox]{width:18px;height:18px;accent-color:var(--md-primary);cursor:pointer;flex:0 0 auto}
   /* ---------- drag & drop ---------- */
   .brow.dragging,.crow.dragging{opacity:.35}
-  .drag-before{box-shadow:0 -3px 0 var(--acc)}
-  .drag-after{box-shadow:0 3px 0 var(--acc)}
-  .drag-into{outline:2px dashed var(--acc);outline-offset:-2px;background:rgba(76,127,255,.10)}
+  .drag-before{box-shadow:0 -3px 0 var(--md-primary)}
+  .drag-after{box-shadow:0 3px 0 var(--md-primary)}
+  .drag-into{outline:2px dashed var(--md-primary);outline-offset:-2px;background:rgba(173,198,255,.10)}
   @keyframes sdflash{0%{box-shadow:0 0 0 4px var(--acc)}100%{box-shadow:0 0 0 0 rgba(79,140,255,0)}}
   .flash{animation:sdflash 1.4s ease-out}
   /* ---------- cestino ---------- */
-  .trash{margin-top:10px;border:1px dashed var(--line2);border-radius:12px;padding:10px;background:rgba(14,21,48,.4)}
+  .trash{margin-top:10px;border:1px dashed var(--md-outline-variant);border-radius:16px;padding:12px;background:var(--md-surface-1)}
   .trashrow{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:6px 2px}
   .trashrow+.trashrow{border-top:1px solid rgba(255,255,255,.05)}
   /* ---------- menu laterale liste ---------- */
   #sdToggle{position:fixed;right:12px;top:64px;z-index:60;box-shadow:0 4px 14px rgba(0,0,0,.4)}
-  #sidemenu{position:fixed;right:12px;top:100px;width:224px;max-height:calc(100vh - 130px);overflow:auto;
-    background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px;z-index:60;
-    box-shadow:0 8px 24px rgba(0,0,0,.4);scrollbar-width:thin}
+  #sidemenu{position:fixed;right:12px;top:100px;width:240px;max-height:calc(100vh - 130px);overflow:auto;
+    background:var(--md-surface-3);border-radius:16px;padding:8px;z-index:60;
+    box-shadow:0 8px 24px rgba(0,0,0,.45);scrollbar-width:thin}
   #sidemenu[hidden]{display:none}
-  .sdtitle{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.8px;padding:4px 6px 8px}
-  .sditem{display:flex;gap:4px;align-items:center;margin:2px 0}
+  .sdtitle{font-size:11px;font-weight:600;color:var(--mut);text-transform:uppercase;letter-spacing:.8px;padding:6px 8px 8px}
+  .sditem{display:flex;gap:6px;align-items:center;margin:2px 0}
   .sditem .sdname{flex:1 1 auto;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-    background:var(--card2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:6px 9px;cursor:pointer;
-    font:inherit;font-size:12.5px;transition:border-color .15s,background .15s}
-  .sditem .sdname:hover{border-color:var(--line2);background:#22305a}
-  .sditem .updn{background:var(--card2);border:1px solid var(--line);color:var(--mut);border-radius:7px;
-    padding:4px 6px;cursor:pointer;font-size:10px;min-height:0}
-  .sditem .updn:hover{color:#cfe0ff;border-color:var(--line2)}
+    background:transparent;border:0;color:var(--txt);border-radius:10px;padding:8px 10px;cursor:pointer;
+    font:inherit;font-size:13px;transition:background .15s}
+  .sditem .sdname:hover{background:rgba(173,198,255,.12)}
+  .sditem .updn{background:transparent;border:0;color:var(--mut);border-radius:50%;
+    padding:0;width:32px;height:32px;cursor:pointer;font-size:11px;min-height:0}
+  .sditem .updn:hover{color:var(--md-primary);background:rgba(173,198,255,.12)}
   /* ---------- righe dei link ---------- */
   .linkrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px}
   .linkrow .lk{font-size:12.5px;color:var(--mut);flex:0 0 auto;min-width:118px}
   .linkrow code{flex:1 1 220px}
   .linkrow button{flex:0 0 auto}
   /* ---------- footer e toast ---------- */
-  footer{position:fixed;left:0;right:0;bottom:0;background:rgba(11,16,32,.92);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
-         border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom));
+  footer{position:fixed;left:0;right:0;bottom:0;background:var(--md-surface-2);
+         border-top:1px solid var(--md-outline-variant);padding:10px 16px calc(10px + env(safe-area-inset-bottom));
          display:flex;gap:10px;align-items:center;flex-wrap:wrap;z-index:30}
   footer #status{margin-left:auto}
-  .toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translate(-50%,8px);background:#0f1a38;
-         border:1px solid var(--line2);border-radius:12px;padding:11px 18px;z-index:50;opacity:0;
-         transition:.25s;pointer-events:none;max-width:90vw;box-shadow:0 8px 26px rgba(0,0,0,.5)}
+  .toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translate(-50%,8px);
+         background:#e2e2e9;color:#303034;border-radius:12px;padding:12px 18px;z-index:50;opacity:0;
+         transition:.25s;pointer-events:none;max-width:90vw;box-shadow:0 8px 26px rgba(0,0,0,.5);
+         font-size:14px;font-weight:500}
   .toast.show{opacity:1;transform:translate(-50%,0)}
   /* le tendine aperte usano il fondo chiaro di sistema: forza il contrasto */
   select option, datalist option{background:#101725;color:#e8eef7}
@@ -257,8 +294,8 @@
     /* --- testata: titolo su una riga, link in una striscia scorrevole --- */
     /* non sticky: su un telefono 90px di barra fissa sono spazio tolto alla lista */
     header{position:static;padding:8px 12px;gap:8px}
-    header img{width:34px;height:34px;border-radius:9px}
-    header h1{font-size:15px;line-height:1.25}
+    header img{width:30px;height:30px;border-radius:8px}
+    header h1{font-size:16px;font-weight:500;line-height:1.25}
     header h1 .sub,header .sub,header .spacer{display:none}
     header .links{flex-wrap:nowrap;overflow-x:auto;width:100%;gap:5px;padding:2px 0 2px;
                   scrollbar-width:none;-webkit-overflow-scrolling:touch}
@@ -278,13 +315,18 @@
     button.small{min-height:40px;padding:8px 12px}
     .expbtn{min-height:38px;padding:7px 12px}
     .bhandle{padding:10px 5px;font-size:17px}
-    .sectgl{width:38px;height:38px;min-height:38px;font-size:14px}
+    .sectgl{width:40px;height:40px;min-height:40px;font-size:14px;margin-left:2px}
+    h2{gap:8px}
+    h2 .n{width:26px;height:26px;min-width:26px}
+    .sectinfo>.ibody{position:fixed;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom));
+      top:auto;width:auto;max-height:52vh}
     details.fold>summary{padding:10px 11px;font-size:13px}
     details.fold .foldbody{padding:2px 11px 12px}
 
     /* --- testata della lista: nome a tutta riga, azioni in griglia 2x2 --- */
     .listhead{align-items:flex-start;gap:6px;margin-bottom:10px}
-    .listhead .name{flex:1 1 100%;font-size:16px;line-height:1.3;overflow-wrap:anywhere}
+    .listtitle{flex:1 1 100%}
+    .listhead .name{flex:1 1 0;font-size:16px;line-height:1.3;overflow-wrap:anywhere}
     .listhead .badge{margin-left:0}
     .listhead .spacer{display:none}
     .acts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;width:100%}
@@ -296,7 +338,7 @@
 
     /* --- playlist: ricerca larga, poi griglia di azioni --- */
     .plhead{gap:8px;margin-top:14px}
-    .plhead h2{flex:1 1 100%;font-size:14px}
+    .plhead h2{flex:1 1 100%;font-size:15px}
     .pltools{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
     .pltools input{grid-column:1/-1;order:0}
     .pltools button{width:100%;min-height:40px;font-size:12.5px;padding:6px 8px;white-space:normal;line-height:1.2}
@@ -371,22 +413,23 @@
 
     /* --- pulsanti flottanti: Salva e Ricarica sulla stessa riga --- */
     .fabbar{display:flex;position:fixed;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));
-            gap:8px;z-index:61;transition:opacity .18s,transform .18s}
-    .fabbar button{box-shadow:0 8px 22px rgba(0,0,0,.45)}
-    #fabSave{min-height:46px;padding:0 16px}
-    #fabReload{width:46px;min-height:46px;padding:0;font-size:17px}
+            gap:10px;z-index:61;transition:opacity .18s,transform .18s}
+    .fabbar button{box-shadow:0 6px 16px rgba(0,0,0,.45);border-radius:16px}
+    #fabSave{min-height:54px;padding:0 20px;font-size:15px}
+    #fabReload{width:54px;min-height:54px;padding:0;font-size:19px;border-radius:16px}
     #sdToggle{top:auto;left:12px;right:auto;bottom:calc(12px + env(safe-area-inset-bottom));
-              width:auto;height:46px;padding:0 14px;border-radius:999px;font-size:13px;z-index:61;
-              transition:opacity .18s,transform .18s}
+              width:auto;height:54px;padding:0 18px;border-radius:16px;font-size:14px;z-index:61;
+              background:var(--md-surface-3);color:var(--md-on-surface);border:0;
+              box-shadow:0 6px 16px rgba(0,0,0,.45);transition:opacity .18s,transform .18s}
     /* tastiera aperta: i pulsanti flottanti si nascondono e non coprono nulla */
     body.kbd .fabbar,body.kbd #sdToggle{opacity:0;pointer-events:none;transform:translateY(10px)}
 
     /* --- menu liste: bottom sheet sopra i pulsanti flottanti --- */
-    #sidemenu{left:8px;right:8px;top:auto;bottom:calc(70px + env(safe-area-inset-bottom));
+    #sidemenu{left:8px;right:8px;top:auto;bottom:calc(80px + env(safe-area-inset-bottom));
               width:auto;max-height:56vh;padding:8px}
     .sditem .sdname{padding:10px 12px;font-size:13px;min-height:40px}
     .sditem .updn{padding:0;width:38px;height:38px;min-height:0;font-size:12px}
-    .toast{bottom:calc(72px + env(safe-area-inset-bottom))}
+    .toast{bottom:calc(82px + env(safe-area-inset-bottom))}
 
     /* il titolo della card non finisce a filo del bordo quando si salta da una lista all'altra */
     .listcard{scroll-margin-top:12px}
@@ -409,11 +452,13 @@
   /* ---------- touch: niente hover "appiccicoso" ---------- */
   @media (hover:none){
     button:hover{filter:none}
-    button.ghost:hover{border-color:var(--line);background:#1d2849}
+    button.ghost:hover{background:var(--md-secondary-container)}
     .brow:hover,.crow:hover{background:transparent}
-    .brow:active,.crow:active{background:#131d3d}
-    a.lnk:hover{border-color:var(--line);background:#131c38}
+    .brow:active,.crow:active{background:rgba(173,198,255,.12)}
+    a.lnk:hover{background:var(--md-secondary-container)}
     details.fold>summary:hover{background:transparent}
+    .sectgl:hover{background:transparent;color:var(--md-on-surface-variant)}
+    details.info>summary:hover{background:transparent}
   }
   @media (prefers-reduced-motion:reduce){
     *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
@@ -486,7 +531,7 @@
   </section>
 
   <!-- ============ IMPOSTAZIONI GLOBALI ============ -->
-  <section class="card">
+  <section class="card" data-collapsed="1">
     <h2><span class="n">2</span> Impostazioni generali</h2>
     <div class="grid2">
       <div>
@@ -580,7 +625,7 @@
   <section id="lists"></section>
 
   <!-- ============ LOG LIVE ============ -->
-  <h2 class="secttl"><span class="n">5</span> Log live</h2>
+  <h2 class="secttl" data-collapsed="1"><span class="n">5</span> Log live</h2>
   <section class="card" id="logCard">
     <div class="logbar">
       <select id="logScope" title="Filtra per area">
@@ -690,7 +735,8 @@ const EXPANDED = new Set();  // "listId|path" dei rami con la lista canali apert
 const CHANS = {};            // "listId|path" -> [{name, shown, enabled}]
 const BRSQ = {};             // listId -> testo del filtro playlist (persiste ai re-render)
 const BRONLY = new Set();    // listId con "Visualizza attive" attivo
-const COLLAPSED_LISTS = new Set(); // id delle schede lista compresse dall'utente
+const OPEN_LISTS = new Set();      // schede lista aperte (di default sono tutte chiuse)
+const PLAYLISTS_OPEN = new Set();  // id delle liste con il blocco "Playlist della lista" aperto
 
 /** Playlist (rami non personali) che rispettano il filtro corrente della scheda.
  *  E' lo scope su cui agiscono Tutto / Nulla / Cancella selezionate: durante
@@ -751,10 +797,13 @@ function renderBranches(list){
 
   const active = bs.filter(b=>branchEnabled(list, b.path)).length;
   const nTrash = (list.options.deletedChannels || []).length + (list.options.deletedBranches || []).length;
-  return `<div class="plhead">
-    <h2>Playlist della lista <span class="badge">${active}/${bs.length} attive</span>${
+  const plOpen = PLAYLISTS_OPEN.has(list.id);
+  return `<div class="plwrap${plOpen ? '' : ' collapsed'}">
+  <div class="plhead">
+    <h2><span class="ttl">Playlist della lista</span> <span class="badge">${active}/${bs.length} attive</span>${
       visible.length !== bs.length ? ` <span class="badge" title="Playlist mostrate con i filtri attivi">${visible.length} in vista</span>` : ''
-    }</h2>
+    }<button class="sectgl" type="button" data-ptgl="${esc(list.id)}" aria-expanded="${plOpen}"
+      title="${plOpen ? 'Comprimi le playlist' : 'Espandi le playlist'}">${plOpen ? '\u25be' : '\u25b8'}</button></h2>
     <div class="pltools">
       <button class="ghost small ${onlyActive?'on':''}" data-act="onlyactive"
         title="Mostra solo le playlist attive (e, se c'e' una ricerca, solo quelle che corrispondono)">👁 Visualizza attive</button>
@@ -792,7 +841,8 @@ function renderBranches(list){
     ${rows}
   </div>
   ${TRASHOPEN.has(list.id) ? renderTrash(list) : ''}
-  <datalist id="dl-${list.id}">${bs.map((b) => `<option value="${esc(b.displayName)}">`).join('')}</datalist>`;
+  <datalist id="dl-${list.id}">${bs.map((b) => `<option value="${esc(b.displayName)}">`).join('')}</datalist>
+  </div>`;
 }
 
 /* ---------------- cestino: eliminati recuperabili ---------------- */
@@ -880,7 +930,7 @@ function renderLists(){
   bindListEvents();
   for (const card of document.querySelectorAll('#lists .listcard')) plPopulateBranches(card);
   renderSideMenu();
-  decorateInfo(root);
+  decorateCards(root);
   for (const l of CFG.lists) fillXtreamBadge(l);
   requestAnimationFrame(() => {
     if (window.scrollY !== sy) window.scrollTo(0, sy);
@@ -914,11 +964,11 @@ async function fillXtreamBadge(l, force){
         ? '⏳ senza scadenza'
         : `⏳ scade il ${fmtItDate(u.expiryIso)} (${days} gg)`;
     const conn = u.maxConnections ? ` · max ${u.maxConnections} conn` : '';
-    const color = u.expired ? 'background:#3a1220;color:#ff9aa8'
-      : days == null ? 'background:#123324;color:#7ef0ac'
-      : days <= 7 ? 'background:#3a1220;color:#ff9aa8'
+    const color = u.expired ? 'background:#3b1519;color:#ffb4ab'
+      : days == null ? 'background:#173823;color:#9be7b4'
+      : days <= 7 ? 'background:#3b1519;color:#ffb4ab'
       : days <= 30 ? 'background:#3a2c0d;color:#ffd479'
-      : 'background:#123324;color:#7ef0ac';
+      : 'background:#173823;color:#9be7b4';
     el.innerHTML = `<span class="badge" style="${color};cursor:pointer" title="Account Xtream: ${esc(u.status)} · aggiornato ${fmtItDate(r.fetchedAt)} — click per rileggere" onclick="refreshXtreamBadge('${esc(l.id)}')">${expTxt}${conn}</span>`;
   } catch (_) { /* nessun dato: badge vuoto */ }
 }
@@ -976,8 +1026,10 @@ async function plResolveChan(lid, bp, value){
 
 async function createPersonalList(){
   const n = CFG.lists.filter((l) => l.kind === 'personal').length;
+  const newId = 'l_p' + Math.random().toString(16).slice(2, 8);
+  OPEN_LISTS.add(newId);
   CFG.lists.push({
-    id: 'l_p' + Math.random().toString(16).slice(2, 8),
+    id: newId,
     name: `La mia lista ${n + 1}`,
     kind: 'personal',
     url: '',
@@ -997,12 +1049,15 @@ function renderListCard(l){
   const purl = personal
     ? (CFG.settings.publicBaseUrl || location.origin).replace(/\/+$/, '') + '/personal/' + l.id + '.m3u' + tokenQs()
     : '';
-  const collapsed = COLLAPSED_LISTS.has(l.id);
+  const collapsed = !OPEN_LISTS.has(l.id);
   return `<section class="card listcard${collapsed ? ' collapsed' : ''}" data-id="${esc(l.id)}" ${personal ? 'data-kind="personal"' : ''}>
     <div class="listhead">
-      <span class="name" data-ltgl="${esc(l.id)}" role="button" tabindex="0"
-            aria-expanded="${collapsed ? 'false' : 'true'}"
-            title="${collapsed ? 'Espandi' : 'Comprimi'} la lista">${personal ? '⭐ ' : ''}${esc(l.name || l.url)}</span>
+      <div class="listtitle">
+        <span class="name" data-ltgl="${esc(l.id)}" role="button" tabindex="0"
+              aria-expanded="${collapsed ? 'false' : 'true'}"
+              title="${collapsed ? 'Espandi' : 'Comprimi'} la lista">${personal ? '⭐ ' : ''}${esc(l.name || l.url)}</span>
+        <div class="linfo"></div>
+      </div>
       ${personal ? '<span class="badge ready" title="Lista personale: composta da canali e playlist delle tue liste">personale</span>' : ''}
       ${s.kind === 'm3u' ? '<span class="badge ready" title="Sorgente playlist M3U">m3u</span>' : ''}
       <span class="badge ${st}">${st}</span>
@@ -1026,7 +1081,7 @@ function renderListCard(l){
     ${stats && stats.truncated ? `<div class="hint" style="margin-top:6px;color:#f5c451">⚠︎ Lista molto grande: importati i primi <b>${stats.stations}</b> canali (limite di sicurezza). Il resto viene saltato per non esaurire la memoria del container.</div>` : ''}
     ${s.error ? `<div class="err">${esc(s.error)}</div>` : ''}
 
-    <details class="fold" open>
+    <details class="fold">
       <summary>⚙️ Impostazioni della lista</summary>
       <div class="foldbody">
         <div class="grid2">
@@ -1139,7 +1194,7 @@ function renderListCard(l){
       </div>
     </details>
 
-    <details class="fold" open>
+    <details class="fold">
       <summary>➕ Aggiungi contenuto dalle tue liste</summary>
       <div class="foldbody">
         <div class="row" style="margin-top:2px">
@@ -1471,10 +1526,23 @@ function bindListEvents(){
       const ltl = ev.target.closest('[data-ltgl]');
       if (ltl){
         const lid = ltl.dataset.ltgl;
-        if (COLLAPSED_LISTS.has(lid)) COLLAPSED_LISTS.delete(lid); else COLLAPSED_LISTS.add(lid);
+        if (OPEN_LISTS.has(lid)) OPEN_LISTS.delete(lid); else OPEN_LISTS.add(lid);
         const open = !card.classList.toggle('collapsed');
         ltl.setAttribute('aria-expanded', String(open));
         ltl.title = `${open ? 'Comprimi' : 'Espandi'} la lista`;
+        return;
+      }
+      const ptgl = ev.target.closest('button[data-ptgl]');
+      if (ptgl){
+        const lid = ptgl.dataset.ptgl;
+        if (PLAYLISTS_OPEN.has(lid)) PLAYLISTS_OPEN.delete(lid); else PLAYLISTS_OPEN.add(lid);
+        const wrap = card.querySelector('.plwrap');
+        if (wrap){
+          const open = !wrap.classList.toggle('collapsed');
+          ptgl.textContent = open ? '\u25be' : '\u25b8';
+          ptgl.setAttribute('aria-expanded', String(open));
+          ptgl.title = open ? 'Comprimi le playlist' : 'Espandi le playlist';
+        }
         return;
       }
       const cab = ev.target.closest('button[data-caddbtn]');
@@ -2047,6 +2115,7 @@ async function addList(){
   const btn = $('#btnAdd'); btn.disabled = true; btn.textContent = 'Aggiungo…';
   try {
     const r = await api('/api/lists', { method:'POST', body: JSON.stringify({ url, name }) });
+    OPEN_LISTS.add(r.list.id);   // la lista appena creata si apre da sola
     $('#newUrl').value = ''; $('#newName').value = '';
     await loadConfig();
     toast('Lista aggiunta: scaricamento in background…');
@@ -2081,11 +2150,11 @@ async function testEasyProxy(card, list, btn){
       const pt = r.proxyTest;
       const ptHtml = pt
         ? (pt.error
-          ? `<span class="pill">test proxy <b style="color:#ff9aa8">KO</b></span><div class="${epNetErr(pt.error)?'warn':'err'}" style="margin-top:6px">${epNetErr(pt.error)?'<b>Avviso non bloccante.</b> ':''}${esc(pt.error)}${epHint(pt.error)}</div>`
-          : `<span class="pill">test proxy <b style="color:#7ef0ac">HTTP ${pt.status}</b> (${pt.ms} ms)</span>`)
+          ? `<span class="pill">test proxy <b style="color:#ffb4ab">KO</b></span><div class="${epNetErr(pt.error)?'warn':'err'}" style="margin-top:6px">${epNetErr(pt.error)?'<b>Avviso non bloccante.</b> ':''}${esc(pt.error)}${epHint(pt.error)}</div>`
+          : `<span class="pill">test proxy <b style="color:#9be7b4">HTTP ${pt.status}</b> (${pt.ms} ms)</span>`)
         : '';
       box.innerHTML = `<div class="hint" style="margin-top:8px">
-        <span class="pill">EasyProxy <b style="color:#7ef0ac">raggiungibile</b></span>
+        <span class="pill">EasyProxy <b style="color:#9be7b4">raggiungibile</b></span>
         ${v.version?`<span class="pill">versione <b style="color:#fff">${esc(v.version)}</b></span>`:''}
         ${v.public_ip?`<span class="pill">IP di uscita <b style="color:#fff">${esc(v.public_ip)}</b></span>`:''}
         ${ptHtml}
@@ -2201,34 +2270,99 @@ $('#btnClearCache').addEventListener('click', async ()=>{
 
 /* ---------------- icone info e sezioni comprimibili ---------------- */
 
-/** Trasforma una scritta informativa in un'icona (i) che si apre al tocco.
- *  L'etichetta originale resta nel DOM (screen reader) e diventa il tooltip. */
-function wrapInfoHint(hint){
-  if (!hint || hint.closest('details.info')) return;
-  const d = document.createElement('details');
-  d.className = 'info';
-  const sum = document.createElement('summary');
-  const label = hint.textContent.trim().replace(/\s+/g, ' ');
-  sum.textContent = 'i';
-  sum.title = label.slice(0, 90) || 'Informazioni';
-  sum.setAttribute('aria-label', 'Informazioni: ' + (label.slice(0, 80) || 'dettagli'));
-  const body = document.createElement('div');
-  body.className = 'ibody';
-  hint.replaceWith(d);
-  body.appendChild(hint);
-  d.append(sum, body);
+/** Racchiude il testo del titolo in uno span (.ttl) cosi' che numero, titolo,
+ *  icona info e pulsante di espansione restano sempre sulla stessa riga. */
+function wrapHeadingText(h2){
+  if (!h2 || h2.querySelector(':scope > .ttl')) return;
+  const texts = [...h2.childNodes].filter(n => n.nodeType === 3 && n.textContent.trim());
+  if (!texts.length) return;
+  const ttl = document.createElement('span');
+  ttl.className = 'ttl';
+  texts[0].before(ttl);
+  texts.forEach(n => ttl.appendChild(n));
 }
 
-/** Applica le icone info a tutto il documento (o a un sottoalbero appena ridisegnato). */
-function decorateInfo(root=document){
-  root.querySelectorAll('[data-info]').forEach(wrapInfoHint);
-  root.querySelectorAll('details.help>summary').forEach(sum=>{
-    if (!sum.title) sum.title = sum.textContent.trim().replace(/^[^A-Za-zÀ-ÿ0-9]+/, '') || 'Informazioni';
+/** Sposta tutte le note informative di un contenitore accanto al suo titolo,
+ *  dentro un unico pannello (i) apribile al tocco. */
+function collectInfo(container, host, { skip }={}){
+  if (!container || !host || host.querySelector(':scope > .sectinfo')) return;
+  const items = [...container.querySelectorAll('[data-info], details.help')]
+    .filter(el => !el.closest('details.info') && !(skip && el.closest(skip)));
+  if (!items.length) return;
+
+  const panel = document.createElement('details');
+  panel.className = 'info sectinfo';
+  const sum = document.createElement('summary');
+  sum.textContent = 'i';
+  sum.title = 'Informazioni';
+  sum.setAttribute('aria-label', 'Informazioni');
+  const body = document.createElement('div');
+  body.className = 'ibody';
+
+  for (const el of items){
+    let label = '';
+    let content = null;
+    if (el.matches('details.help')){
+      const s = el.querySelector('summary');
+      label = (s ? s.textContent : '').trim().replace(/^[^\p{L}\p{N}]+/u, '');
+      content = el.querySelector('.hint');
+      el.remove();                       // il blocco help diventa una nota del pannello
+    } else {
+      const p = el.parentElement;
+      const lab = (p && p !== container) ? p.querySelector('label') : null;
+      label = lab ? lab.textContent.trim() : '';
+      content = el;
+    }
+    if (!content) continue;
+    const note = document.createElement('div');
+    note.className = 'inote';
+    if (label){
+      const l = document.createElement('div');
+      l.className = 'ilabel';
+      l.textContent = label;
+      note.appendChild(l);
+    }
+    note.appendChild(content);
+    body.appendChild(note);
+  }
+  if (!body.children.length) return;
+  panel.append(sum, body);
+  host.appendChild(panel);
+}
+
+/** Sezioni statiche (1, 2, 3, 5): info nel titolo. */
+function decorateSections(){
+  document.querySelectorAll('main > section.card').forEach(sec=>{
+    const h2 = sec.querySelector(':scope > h2');
+    if (!h2 || h2.dataset.deco) return;
+    h2.dataset.deco = '1';
+    wrapHeadingText(h2);
+    collectInfo(sec, h2);
+  });
+  document.querySelectorAll('main > h2.secttl').forEach(h2=>{
+    if (h2.dataset.deco) return;
+    h2.dataset.deco = '1';
+    wrapHeadingText(h2);
+    const sec = h2.nextElementSibling;
+    if (sec && sec.matches('section.card') && !sec.querySelector(':scope > h2')) collectInfo(sec, h2);
+  });
+}
+
+/** Schede lista: info accanto al nome; il blocco playlist ha il suo pannello. */
+function decorateCards(root=document){
+  root.querySelectorAll('.listcard').forEach(card=>{
+    if (card.dataset.deco) return;
+    card.dataset.deco = '1';
+    const slot = card.querySelector('.linfo');
+    collectInfo(card, slot, { skip: '.plwrap' });
+    const plwrap = card.querySelector('.plwrap');
+    const plh = card.querySelector('.plhead h2');
+    if (plh){ wrapHeadingText(plh); if (plwrap) collectInfo(plwrap, plh); }
   });
 }
 
 /** Aggiunge il pulsante ▾/▸ accanto al titolo di una sezione. */
-function makeSectionToggle(h2, apply){
+function makeSectionToggle(h2, apply, initiallyCollapsed=false){
   if (!h2 || h2.querySelector('.sectgl')) return;
   let collapsed = false;
   const b = document.createElement('button');
@@ -2245,23 +2379,68 @@ function makeSectionToggle(h2, apply){
     b.setAttribute('aria-expanded', String(!collapsed));
   });
   h2.appendChild(b);
+  if (initiallyCollapsed){
+    collapsed = true;
+    apply(true);
+    b.textContent = '\u25b8';
+    b.title = 'Espandi la sezione';
+    b.setAttribute('aria-expanded', 'false');
+  }
 }
 
 function initCollapsibleSections(){
   // sezioni con il titolo dentro (1, 2, 3): si comprime il contenuto, il titolo resta
   document.querySelectorAll('main > section.card').forEach(sec=>{
     const h2 = sec.querySelector(':scope > h2');
-    if (h2) makeSectionToggle(h2, (c)=>sec.classList.toggle('collapsed', c));
+    if (h2) makeSectionToggle(h2, (c)=>sec.classList.toggle('collapsed', c), sec.dataset.collapsed === '1');
   });
   // Log live: il titolo sta fuori dalla sezione, quindi si nasconde la sezione intera
   document.querySelectorAll('main > h2.secttl').forEach(h2=>{
     const sec = h2.nextElementSibling;
-    if (sec && sec.matches('section.card')) makeSectionToggle(h2, (c)=>{ sec.hidden = c; });
+    if (sec && sec.matches('section.card')){
+      makeSectionToggle(h2, (c)=>{ sec.hidden = c; }, h2.dataset.collapsed === '1');
+    }
   });
 }
 
+decorateSections();
 initCollapsibleSections();
-decorateInfo();
+
+/* ---- info: ancoraggio del pannello senza uscire dallo schermo ---- */
+(function placeInfoPanels(){
+  document.addEventListener('toggle', (ev)=>{
+    const p = ev.target;
+    if (!p || !p.classList || !p.classList.contains('sectinfo') || !p.open) return;
+    if (window.matchMedia && window.matchMedia('(max-width:560px)').matches) return; // mobile: foglio fisso
+    requestAnimationFrame(()=>{
+      const body = p.querySelector('.ibody');
+      if (!body) return;
+      body.style.left = '0'; body.style.right = 'auto';
+      const r = p.getBoundingClientRect();
+      const w = body.getBoundingClientRect().width;
+      const vw = document.documentElement.clientWidth;
+      if (r.left + w > vw - 12){ body.style.left = 'auto'; body.style.right = '0'; }
+    });
+  }, true);
+
+  // un solo pannello aperto alla volta
+  document.addEventListener('toggle', (ev)=>{
+    const p = ev.target;
+    if (!p || !p.classList || !p.classList.contains('sectinfo') || !p.open) return;
+    document.querySelectorAll('details.sectinfo[open]').forEach(d=>{ if (d !== p) d.open = false; });
+  }, true);
+})();
+
+/* ---- info: chiusura al tocco fuori dal pannello o con Esc ---- */
+(function closeInfoPanels(){
+  const closeAll = ()=>{ document.querySelectorAll('details.sectinfo[open]').forEach(d=>{ d.open = false; }); };
+  document.addEventListener('pointerdown', (ev)=>{
+    document.querySelectorAll('details.sectinfo[open]').forEach(d=>{
+      if (!d.contains(ev.target)) d.open = false;
+    });
+  }, true);
+  document.addEventListener('keydown', (ev)=>{ if (ev.key === 'Escape') closeAll(); });
+})();
 
 /* ---- tastiera: i pulsanti flottanti non devono galleggiare sopra i tasti ---- */
 (function watchKeyboard(){

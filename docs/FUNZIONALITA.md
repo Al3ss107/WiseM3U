@@ -99,17 +99,27 @@ polling 1,5 s; stesse righe in `docker logs -f`.
 **Menu laterale liste** — navigazione rapida e riordino delle liste.
 
 **Info e sezioni comprimibili** — ogni spiegazione (le vecchie note sotto i campi
-e i blocchi "ℹ️ …") è racchiusa in un'icona **i** rotonda che si apre e si chiude
-al tocco; l'etichetta resta nel DOM come `aria-label`/tooltip. Tutte le sezioni
-hanno un pulsante **▾/▸** accanto al titolo (Log live compreso), le schede delle
-liste si comprimono toccando il nome, e le impostazioni per lista restano nei
-`<details>` già presenti. Lo stato di compressione delle liste si conserva tra un
-refresh dell'elenco e l'altro.
+e i blocchi "ℹ️ …") è raccolta in un'icona **i** rotonda **accanto al titolo**
+della sezione o della scheda a cui si riferisce: il pannello si apre al tocco,
+mostra le note con l'etichetta del campo e si chiude toccando fuori o con `Esc`
+(su desktop si allinea all'icona per non uscire dallo schermo, su mobile è un
+foglio in basso). L'etichetta resta nel DOM come `aria-label`/tooltip. Ogni
+sezione ha un pulsante **▾/▸** sulla stessa riga del titolo (Log live compreso)
+e all'apertura del sito restano aperte solo **1 Aggiungi una lista** e
+**3 Collega Nuvio, Stremio o un'app IPTV**; impostazioni generali, log e schede
+delle liste partono compressi. Le schede delle liste si aprono toccando il nome,
+le playlist hanno il loro pulsante di compressione con le rispettive info nel
+titolo, e le impostazioni per lista restano nei `<details>` già presenti. Lo
+stato di apertura delle liste si conserva tra un refresh dell'elenco e l'altro.
+L'interfaccia segue il design **Material 3** (token di colore, card, pulsanti
+tonali, campi con bordo e focus visibile).
 
-**Su smartphone (≤ 560 px)** — testata compatta (non fissa), azioni della lista
-in griglia 2×2, righe di playlist e canali disposte su più linee (nome a tutta
-larghezza, conteggi e pulsanti sotto), aree di tocco da 40 px, campi a 16 px per
-evitare lo zoom automatico di iOS e nessuno scorrimento orizzontale. Il footer
+**Su smartphone (≤ 560 px)** — testata compatta (non fissa) con logo ridotto,
+azioni della lista in griglia 2×2, righe di playlist e canali disposte su più
+linee (nome a tutta larghezza, conteggi e pulsanti sotto), aree di tocco da
+40 px, campi a 16 px per evitare lo zoom automatico di iOS e nessuno scorrimento
+orizzontale. Numero, titolo della sezione, icona **i** e pulsante **▾/▸**
+restano sempre sulla stessa riga anche sui telefoni stretti. Il footer
 non è più fisso: **Salva** e **Ricarica** sono due pulsanti flottanti sulla stessa
 riga in basso a destra (insieme a "☰ Liste" a sinistra), mentre numero di liste e
 versione restano in fondo alla pagina e scorrono col contenuto. I flottanti si
