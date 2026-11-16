@@ -104,7 +104,8 @@ della sezione o della scheda a cui si riferisce: il pannello si apre al tocco,
 mostra le note con l'etichetta del campo e si chiude toccando fuori o con `Esc`
 (su desktop si allinea all'icona per non uscire dallo schermo, su mobile è un
 foglio in basso). L'etichetta resta nel DOM come `aria-label`/tooltip. Ogni
-sezione ha un pulsante **▾/▸** sulla stessa riga del titolo (Log live compreso)
+sezione si apre e si chiude **toccando il titolo** (la freccia **▾/▸** sulla
+stessa riga è solo un indicatore, non un pulsante separato; Log live compreso)
 e all'apertura del sito restano aperte solo **1 Aggiungi una lista** e
 **3 Collega Nuvio, Stremio o un'app IPTV**; impostazioni generali, log e schede
 delle liste partono compressi. Le schede delle liste si aprono toccando il nome,
@@ -125,6 +126,9 @@ riga in basso a destra (insieme a "☰ Liste" a sinistra), mentre numero di list
 versione restano in fondo alla pagina e scorrono col contenuto. I flottanti si
 nascondono quando la tastiera è aperta (misurato su `visualViewport`), così non
 rubano spazio durante la scrittura.
+Su mobile c'è anche una freccia **↑** sempre flottante sopra **Salva/Ricarica**
+che riporta in cima alla pagina con scorrimento fluido (rispetta
+`prefers-reduced-motion` e si nasconde quando la tastiera è aperta).
 Il riordino dei rami resta affidato al drag & drop, che i browser touch non
 supportano: su telefono si riordinano le liste dal menu laterale, non i rami.
 

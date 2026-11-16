@@ -153,10 +153,14 @@
   h2>.sectinfo{order:2}
   h2>.sectgl{order:3}
   h2>.badge{order:4}
-  .sectgl{margin-left:4px;flex:0 0 auto;width:36px;height:36px;min-height:36px;padding:0;
+  .sectgl{margin-left:4px;flex:0 0 auto;width:32px;height:32px;min-height:32px;padding:0;
     display:inline-grid;place-items:center;border-radius:50%;border:0;
-    background:transparent;color:var(--md-on-surface-variant);font-size:13px;line-height:1;box-shadow:none}
-  .sectgl:hover{background:rgba(173,198,255,.12);color:var(--md-primary);filter:none}
+    background:transparent;color:var(--md-on-surface-variant);font-size:13px;line-height:1;box-shadow:none;
+    pointer-events:none}
+  /* il titolo intero apre/chiude la sezione: la freccia e' solo un indicatore */
+  h2[role=button]{cursor:pointer;user-select:none;-webkit-user-select:none;border-radius:12px}
+  h2[role=button]:hover .ttl{color:var(--md-primary)}
+  h2[role=button]:focus-visible{outline:2px solid var(--md-primary);outline-offset:4px}
   .card.collapsed>*:not(h2):not(.listhead){display:none}
   /* riga del titolo delle schede lista: nome + icona info */
   .listtitle{display:flex;align-items:center;gap:8px;flex:1 1 auto;min-width:0}
@@ -168,6 +172,7 @@
   .listcard.collapsed .listhead .name[data-ltgl]::before{transform:rotate(-90deg)}
   /* ---------- pulsanti flottanti (solo mobile) ---------- */
   .fabbar{display:none}
+  #toTop{display:none}
 
   /* log live */
   .logbox{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.7;
@@ -315,7 +320,7 @@
     button.small{min-height:40px;padding:8px 12px}
     .expbtn{min-height:38px;padding:7px 12px}
     .bhandle{padding:10px 5px;font-size:17px}
-    .sectgl{width:40px;height:40px;min-height:40px;font-size:14px;margin-left:2px}
+    .sectgl{width:32px;height:32px;min-height:32px;font-size:13px;margin-left:2px}
     h2{gap:8px}
     h2 .n{width:26px;height:26px;min-width:26px}
     .sectinfo>.ibody{position:fixed;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom));
@@ -421,8 +426,14 @@
               width:auto;height:54px;padding:0 18px;border-radius:16px;font-size:14px;z-index:61;
               background:var(--md-surface-3);color:var(--md-on-surface);border:0;
               box-shadow:0 6px 16px rgba(0,0,0,.45);transition:opacity .18s,transform .18s}
+    /* torna in alto: sempre flottante sopra i pulsanti Salva/Ricarica */
+    #toTop{display:grid;place-items:center;position:fixed;right:12px;
+           bottom:calc(78px + env(safe-area-inset-bottom));z-index:61;
+           width:48px;height:48px;padding:0;border-radius:16px;font-size:20px;line-height:1;
+           background:var(--md-secondary-container);color:var(--md-on-secondary-container);
+           box-shadow:0 6px 16px rgba(0,0,0,.45);transition:opacity .18s,transform .18s}
     /* tastiera aperta: i pulsanti flottanti si nascondono e non coprono nulla */
-    body.kbd .fabbar,body.kbd #sdToggle{opacity:0;pointer-events:none;transform:translateY(10px)}
+    body.kbd .fabbar,body.kbd #sdToggle,body.kbd #toTop{opacity:0;pointer-events:none;transform:translateY(10px)}
 
     /* --- menu liste: bottom sheet sopra i pulsanti flottanti --- */
     #sidemenu{left:8px;right:8px;top:auto;bottom:calc(80px + env(safe-area-inset-bottom));
@@ -672,6 +683,8 @@
   <button id="fabSave" title="Salva la configurazione">💾 Salva</button>
   <button class="ghost" id="fabReload" title="Ricarica la configurazione" aria-label="Ricarica la configurazione">↻</button>
 </div>
+<!-- su smartphone: torna in alto, sempre flottante -->
+<button id="toTop" type="button" title="Torna in alto" aria-label="Torna in alto">↑</button>
 
 <div class="toast" id="toast"></div>
 
@@ -800,10 +813,10 @@ function renderBranches(list){
   const plOpen = PLAYLISTS_OPEN.has(list.id);
   return `<div class="plwrap${plOpen ? '' : ' collapsed'}">
   <div class="plhead">
-    <h2><span class="ttl">Playlist della lista</span> <span class="badge">${active}/${bs.length} attive</span>${
+    <h2 data-ptgl="${esc(list.id)}" role="button" tabindex="0" aria-expanded="${plOpen}"
+      title="${plOpen ? 'Comprimi le playlist' : 'Espandi le playlist'}"><span class="ttl">Playlist della lista</span> <span class="badge">${active}/${bs.length} attive</span>${
       visible.length !== bs.length ? ` <span class="badge" title="Playlist mostrate con i filtri attivi">${visible.length} in vista</span>` : ''
-    }<button class="sectgl" type="button" data-ptgl="${esc(list.id)}" aria-expanded="${plOpen}"
-      title="${plOpen ? 'Comprimi le playlist' : 'Espandi le playlist'}">${plOpen ? '\u25be' : '\u25b8'}</button></h2>
+    }<span class="sectgl" aria-hidden="true">${plOpen ? '\u25be' : '\u25b8'}</span></h2>
     <div class="pltools">
       <button class="ghost small ${onlyActive?'on':''}" data-act="onlyactive"
         title="Mostra solo le playlist attive (e, se c'e' una ricerca, solo quelle che corrispondono)">👁 Visualizza attive</button>
@@ -1491,8 +1504,8 @@ function bindListEvents(){
     });
 
     card.addEventListener('keydown', ev=>{
-      const ltl = ev.target.closest('[data-ltgl]');
-      if (ltl && (ev.key === 'Enter' || ev.key === ' ')){ ev.preventDefault(); ltl.click(); }
+      const tgl = ev.target.closest('[data-ltgl], [data-ptgl]');
+      if (tgl && (ev.key === 'Enter' || ev.key === ' ' || ev.key === 'Spacebar')){ ev.preventDefault(); tgl.click(); }
     });
 
     card.addEventListener('input', ev=>{
@@ -1532,14 +1545,17 @@ function bindListEvents(){
         ltl.title = `${open ? 'Comprimi' : 'Espandi'} la lista`;
         return;
       }
-      const ptgl = ev.target.closest('button[data-ptgl]');
+      const ptgl = ev.target.closest('[data-ptgl]');
       if (ptgl){
+        // le note info stanno dentro il titolo ma non devono comprimere la sezione
+        if (ev.target.closest('details.info, a, button, input, select, label, summary')) return;
         const lid = ptgl.dataset.ptgl;
         if (PLAYLISTS_OPEN.has(lid)) PLAYLISTS_OPEN.delete(lid); else PLAYLISTS_OPEN.add(lid);
         const wrap = card.querySelector('.plwrap');
         if (wrap){
           const open = !wrap.classList.toggle('collapsed');
-          ptgl.textContent = open ? '\u25be' : '\u25b8';
+          const arrow = ptgl.querySelector('.sectgl');
+          if (arrow) arrow.textContent = open ? '\u25be' : '\u25b8';
           ptgl.setAttribute('aria-expanded', String(open));
           ptgl.title = open ? 'Comprimi le playlist' : 'Espandi le playlist';
         }
@@ -2361,31 +2377,34 @@ function decorateCards(root=document){
   });
 }
 
-/** Aggiunge il pulsante ▾/▸ accanto al titolo di una sezione. */
+/** Rende il titolo della sezione cliccabile (▾/▸ e' solo un indicatore). */
 function makeSectionToggle(h2, apply, initiallyCollapsed=false){
   if (!h2 || h2.querySelector('.sectgl')) return;
   let collapsed = false;
-  const b = document.createElement('button');
-  b.type = 'button';
+  const b = document.createElement('span');
   b.className = 'sectgl';
-  b.textContent = '\u25be';
-  b.title = 'Comprimi la sezione';
-  b.setAttribute('aria-expanded', 'true');
-  b.addEventListener('click', ()=>{
-    collapsed = !collapsed;
+  b.setAttribute('aria-hidden', 'true');
+  const sync = ()=>{
     apply(collapsed);
     b.textContent = collapsed ? '\u25b8' : '\u25be';
-    b.title = collapsed ? 'Espandi la sezione' : 'Comprimi la sezione';
-    b.setAttribute('aria-expanded', String(!collapsed));
+    h2.setAttribute('aria-expanded', String(!collapsed));
+    h2.title = collapsed ? 'Espandi la sezione' : 'Comprimi la sezione';
+  };
+  const toggle = ()=>{ collapsed = !collapsed; sync(); };
+  h2.setAttribute('role', 'button');
+  h2.tabIndex = 0;
+  h2.addEventListener('click', ev=>{
+    // l'icona info e gli eventuali comandi dentro il titolo non comprimono la sezione
+    if (ev.target.closest('details.info, a, button, input, select, label, summary')) return;
+    toggle();
+  });
+  h2.addEventListener('keydown', ev=>{
+    if (ev.target.closest('details.info')) return;
+    if (ev.key === 'Enter' || ev.key === ' ' || ev.key === 'Spacebar'){ ev.preventDefault(); toggle(); }
   });
   h2.appendChild(b);
-  if (initiallyCollapsed){
-    collapsed = true;
-    apply(true);
-    b.textContent = '\u25b8';
-    b.title = 'Espandi la sezione';
-    b.setAttribute('aria-expanded', 'false');
-  }
+  collapsed = !!initiallyCollapsed;
+  sync();
 }
 
 function initCollapsibleSections(){
@@ -2460,6 +2479,13 @@ initCollapsibleSections();
 
 $('#fabSave').addEventListener('click', saveConfig);
 $('#fabReload').addEventListener('click', loadConfig);
+
+/* torna in alto: sempre flottante su mobile, scroll fluido salvo preferenza utente */
+$('#toTop').addEventListener('click', ()=>{
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  try { window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' }); }
+  catch (_) { window.scrollTo(0, 0); }
+});
 
 loadConfig().catch(e=>{
   $('#lists').innerHTML = `<section class="card"><div class="err">Impossibile caricare la configurazione: ${esc(e.message)}</div></section>`;
