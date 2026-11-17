@@ -8,10 +8,17 @@ files on disk (with "hot" trees kept in RAM).
 
 ```
 src/
-  server.js            Express app composition and non-modular routes
+  server.js            Express app composition, public media routes and bootstrap
   routes/
+    lists.js           lists API: CRUD, state, refresh, channels, preview, Xtream
     history.js         configuration history: list, restore, checkpoint, undo
     trash.js           trash: delete, list, restore, empty
+  http/
+    request.js         token/admin middleware, base URL and request helpers
+  services/
+    refresher.js       background downloads, startup reconciliation, auto-refresh
+    listM3u.js         M3U export for preview and personal lists
+  easyproxy.js         EasyProxy client (IP/DNS resolution, test requests)
   config.js            atomic config read/write, normalization, revisioning
   history.js           on-disk snapshots, per-category diff, retention, checkpoints
   cache.js             gzip tree snapshots + in-RAM LRU
@@ -40,16 +47,21 @@ tests/                 regression suites run by `npm test`
 1. `src/server.js` mounts `express.json` (4 MB limit), compression and the
    static files in `public/`.
 2. Public routes (`/manifest.json`, `/catalog`, `/playlist.m3u`, streams,
-   images) use `requireToken`; `/api/*` routes use `requireAdmin`.
-3. History and trash routes are `express.Router()` modules in `src/routes/`,
-   mounted on `/api/history` and `/api/lists`. They receive only the `admin`
-   middleware; dependencies (config, cache, history, playlist) are imported
-   directly, so the modules stay testable.
-4. `/configure` is served by `configPageHtml()`: the server replaces the only
+   images) use `requireToken`; `/api/*` routes use `requireAdmin`. Both
+   middlewares and the URL/token helpers live in `src/http/request.js`.
+3. API routes are `express.Router()` modules under `src/routes/`, mounted on
+   `/api/history` and `/api/lists`. The lists router receives the `admin`
+   middleware and the shared `refresher`; dependencies (config, cache, history,
+   playlist) are imported directly, so the modules stay testable.
+4. Downloads are owned by `src/services/refresher.js`: HTTP routes only start a
+   background job and return, the UI polls list state, and the scheduler
+   re-downloads enabled lists after their per-list TTL. The same module resumes
+   downloads interrupted by a restart.
+5. `/configure` is served by `configPageHtml()`: the server replaces the only
    `__WM_UI_VERSION__` placeholder in the `wm-ui-version` meta tag. CSS and JS
    are separate static files and `configure.js` reads the version from the meta
    tag (no hardcoded versions).
-5. Every stable configuration change goes through `config.saveConfig`, which
+6. Every stable configuration change goes through `config.saveConfig`, which
    bumps `rev` and records a snapshot in `history` (runtime list state is
    excluded from the comparison). A `PUT /api/config` with an old `baseRev`
    receives **409** and the current state.
@@ -71,6 +83,6 @@ tests/                 regression suites run by `npm test`
 ## Test
 
 `npm test` runs the Node suites in sequence (logs, diagnostics, Xtream,
-WisePlay, imgfit, history/API). The suites start a real server on a local port
-and a temporary data volume, so they also verify routes and configuration page
-assets.
+WisePlay, imgfit, history/API, lists API). The suites start a real server on a
+local port and a temporary data volume, so they also verify routes and
+configuration page assets.
