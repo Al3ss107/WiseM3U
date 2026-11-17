@@ -42,7 +42,7 @@ Admin APIs used by the page (also useful for automation): `/api/config`
 | **Huge lists** | **streaming** parsing line by line: no MB cap (tested with 581 MB), safety cap of 150,000 channels (configurable), download stopped as soon as the cap is reached, UI warning |
 | **Input formats** | raw gzip (even `application/octet-stream`), UTF-8/UTF-16 with and without BOM; magic-number sniffing with explicit messages for ZIP/RAR/7Z, MP4/MKV/AVI/FLV, MPEG-TS/PS |
 | **Network recovery** | automatic `https→http`, self-signed certificates, public DNS (1.1.1.1/8.8.8.8) + connection by IP, one retry on transient errors; diagnostic 4xx errors (403/404 explained) |
-| **User-Agent** | customizable **per list** (downloads, branches, Xtream panel and logos of that list); default: Chrome 126 + `WiseM3U/x.y`, logos with a "clean" UA |
+| **User-Agent** | customizable **per list** (downloads, branches, Xtream panel and logos of that list) with recommended presets (Chrome, Safari, Firefox, Edge, VLC, Kodi, okhttp, IPTV Smarters, FFmpeg) plus free text; default: Chrome 126 + `WiseM3U/x.y`, logos with a "clean" UA |
 | **Limits** | branch timeout 20 s, root 60 s, concurrency 32 fetches, 2 GB maximum stream |
 
 ---

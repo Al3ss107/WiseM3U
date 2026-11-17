@@ -10,6 +10,22 @@ let TREES = {};   // id -> { meta, fetchedAt, branches:[{path,name,displayName,s
 
 const PROTO_LABEL = { http:'HTTP/HLS', ace:'AceStream', rtmp:'RTMP', rtsp:'RTSP', other:'altri' };
 
+// Common User-Agent strings suggested per list. The input stays free-form:
+// these are only shortcuts for panels/CDNs that block the WiseM3U UA.
+const UA_PRESETS = [
+  { name: 'Default (WiseM3U)', value: '', note: 'Chrome 126 + WiseM3U/…' },
+  { name: 'Chrome · Windows', value: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36', note: 'Chrome/126 · Windows' },
+  { name: 'Chrome · Android', value: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36', note: 'Chrome/126 · Android 14' },
+  { name: 'Safari · macOS', value: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15', note: 'Safari/17.5 · macOS' },
+  { name: 'Firefox · Windows', value: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:127.0) Gecko/20100101 Firefox/127.0', note: 'Firefox/127 · Windows' },
+  { name: 'Edge · Windows', value: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36 Edg/126.0.0.0', note: 'Edg/126 · Windows' },
+  { name: 'VLC', value: 'VLC/3.0.21 LibVLC/3.0.21', note: 'LibVLC/3.0.21' },
+  { name: 'Kodi', value: 'Kodi/20.5 (Windows NT 10.0; Win64; x64) App_Bitness/64 Version/20.5.0', note: 'Kodi/20.5' },
+  { name: 'okhttp', value: 'okhttp/4.12.0', note: 'OkHttp/4.12' },
+  { name: 'IPTV Smarters', value: 'IPTVSmartersPro', note: 'IPTV Smarters Pro' },
+  { name: 'FFmpeg / Lavf', value: 'Lavf/60.16.100', note: 'Lavf/60.16.100' },
+];
+
 function toast(msg, ms=2600, opts={}){
   const t = $('#toast');
   if (!t) return;
@@ -432,10 +448,20 @@ function renderListCard(l){
     : '';
   const collapsed = !OPEN_LISTS.has(l.id);
   // A personal list has no remote source: the custom UA would do nothing.
+  const uaOptions = UA_PRESETS.map((p) => `<button type="button" class="uaOpt" role="option"
+              data-ua-opt="${esc(p.value)}" title="${esc(p.value || p.note)}">
+              <span class="uan">${esc(p.name)}</span><span class="uav">${esc(p.note)}</span>
+            </button>`).join('');
   const uaField = personal ? '' : `<div>
             <label>Custom User-Agent (opzionale)</label>
-            <input type="text" maxlength="300" spellcheck="false" data-f="options.userAgent"
-              value="${esc(o.userAgent || '')}" placeholder="vuoto = predefinito (Chrome 126 + WiseM3U)">
+            <div class="uaCombo">
+              <input type="text" maxlength="300" spellcheck="false" data-f="options.userAgent" data-ua-input
+                value="${esc(o.userAgent || '')}" placeholder="vuoto = predefinito (Chrome 126 + WiseM3U)"
+                autocomplete="off" aria-haspopup="listbox" aria-expanded="false">
+              <button type="button" class="uaTgl" data-ua-toggle tabindex="-1"
+                aria-label="User-Agent consigliati" aria-expanded="false">▾</button>
+              <div class="uaMenu" role="listbox" aria-label="User-Agent consigliati" hidden>${uaOptions}</div>
+            </div>
             <div class="hint" data-info data-i18n-html="hint.userAgent">Used to <b>download this list</b> and its branches, the
               Xtream panel and channel logos. Useful when a panel or CDN returns
               <code>403</code> because it recognizes WiseM3U: paste the UA of a browser,
@@ -851,6 +877,14 @@ function bindListEvents(){
     const id = card.dataset.id;
     const list = CFG.lists.find(l=>l.id===id);
 
+    // the UA field shows the recommended presets as soon as it gets focus
+    card.addEventListener('focusin', ev=>{
+      if (!ev.target.matches || !ev.target.matches('[data-ua-input]')) return;
+      // selecting a preset focuses the input again: do not reopen the menu
+      if (ev.target.dataset.skipOpen){ delete ev.target.dataset.skipOpen; return; }
+      toggleUaMenu(card, true);
+    });
+
     card.addEventListener('change', async ev=>{
       const el = ev.target;
       if (el.dataset && el.dataset.plsel === 'list'){ await plPopulateBranches(card); return; }
@@ -902,6 +936,10 @@ function bindListEvents(){
     });
 
     card.addEventListener('keydown', ev=>{
+      if (ev.key === 'Escape' && card.querySelector('.uaMenu:not([hidden])')){
+        closeUaMenus();
+        return;
+      }
       const tgl = ev.target.closest('[data-ltgl], [data-ptgl]');
       if (tgl && (ev.key === 'Enter' || ev.key === ' ' || ev.key === 'Spacebar')){ ev.preventDefault(); tgl.click(); }
     });
@@ -931,9 +969,26 @@ function bindListEvents(){
         return;
       }
       if (el.dataset && el.dataset.f && el.type !== 'checkbox') setPath(list, el.dataset.f, el.value);
+      if (el.matches && el.matches('[data-ua-input]')) closeUaMenus();
     });
 
     card.addEventListener('click', async ev=>{
+      const uaTgl = ev.target.closest('[data-ua-toggle]');
+      if (uaTgl){ toggleUaMenu(card); return; }
+      const uaOpt = ev.target.closest('[data-ua-opt]');
+      if (uaOpt){
+        const input = card.querySelector('[data-ua-input]');
+        const value = uaOpt.dataset.uaOpt || '';
+        setPath(list, 'options.userAgent', value);
+        if (input){
+          input.value = value;
+          input.dataset.skipOpen = '1';
+          input.focus();
+        }
+        closeUaMenus();
+        return;
+      }
+      if (ev.target.closest('[data-ua-input]')){ toggleUaMenu(card, true); return; }
       const ltl = ev.target.closest('[data-ltgl]');
       if (ltl){
         const lid = ltl.dataset.ltgl;
@@ -1298,6 +1353,39 @@ function updateBadge(card, list){
   const active = bs.filter(b=>branchEnabled(list, b.path)).length;
   const badge = card.querySelector('h2 .badge');
   if (badge) badge.textContent = `${active}/${bs.length} attive`;
+}
+
+/** Closes the UA suggestion menus (all, or all except `keep`). */
+function closeUaMenus(keep){
+  $$('.uaCombo').forEach((combo) => {
+    const menu = combo.querySelector('.uaMenu');
+    if (!menu || menu === keep) return;
+    menu.hidden = true;
+    combo.classList.remove('open');
+    const input = combo.querySelector('[data-ua-input]');
+    const tgl = combo.querySelector('[data-ua-toggle]');
+    if (input) input.setAttribute('aria-expanded', 'false');
+    if (tgl) tgl.setAttribute('aria-expanded', 'false');
+  });
+}
+
+/** Opens/closes the preset dropdown of a list; the input remains editable. */
+function toggleUaMenu(card, force){
+  const menu = card.querySelector('.uaMenu');
+  if (!menu) return;
+  const open = force === undefined ? menu.hidden : force;
+  closeUaMenus(open ? menu : null);
+  menu.hidden = !open;
+  const combo = menu.closest('.uaCombo');
+  if (combo) combo.classList.toggle('open', open);
+  const input = card.querySelector('[data-ua-input]');
+  const tgl = card.querySelector('[data-ua-toggle]');
+  if (input) input.setAttribute('aria-expanded', String(open));
+  if (tgl) tgl.setAttribute('aria-expanded', String(open));
+  if (open) {
+    const current = input ? input.value.trim() : '';
+    $$('.uaOpt', menu).forEach((opt) => opt.classList.toggle('sel', opt.dataset.uaOpt === current));
+  }
 }
 
 function setPath(obj, pathStr, value){
@@ -2128,6 +2216,11 @@ $('#toTop').addEventListener('click', ()=>{
   const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   try { window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' }); }
   catch (_) { window.scrollTo(0, 0); }
+});
+
+// Close the UA presets when clicking outside the combo.
+document.addEventListener('click', (ev) => {
+  if (!ev.target.closest('.uaCombo')) closeUaMenus();
 });
 
 // Xtream badge: click to re-read the data (no inline handler in the markup)

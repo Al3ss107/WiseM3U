@@ -266,8 +266,9 @@ APIs used by the configuration page (also useful for scripts/automation):
   **catalog name**, **list refresh frequency**, **custom User-Agent** (any
   string used to download that list and its branches, read its Xtream panel and
   fetch its channel logos; empty = default. Useful when a panel or CDN returns
-  `403` because it recognizes WiseM3U: paste the UA of a browser, VLC or the
-  app you normally use).
+  `403` because it recognizes WiseM3U: choose one of the recommended presets
+  (Chrome, Safari, Firefox, Edge, VLC, Kodi, okhttp, IPTV Smarters, FFmpeg) or
+  paste any other UA).
 * **EasyProxy (optional)** — routes the list streams through an
   [EasyProxy](https://github.com/realbestia1/EasyProxy) instance (see below).
 
