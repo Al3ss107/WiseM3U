@@ -1813,7 +1813,24 @@ $('#btnCopyM3u').addEventListener('click', () => {
 $('#btnAdd').addEventListener('click', addList);
 $('#newUrl').addEventListener('keydown', e=>{ if(e.key==='Enter') addList(); });
 $('#btnNewPList').addEventListener('click', createPersonalList);
-$('#sdToggle').addEventListener('click', () => { const el = $('#sidemenu'); el.hidden = !el.hidden; });
+const sdToggle = $('#sdToggle');
+const sidemenu = $('#sidemenu');
+function setSideMenu(open){
+  sidemenu.hidden = !open;
+  sdToggle.setAttribute('aria-expanded', String(!!open));
+}
+sdToggle.addEventListener('click', (ev) => {
+  ev.stopPropagation();
+  setSideMenu(sidemenu.hidden);
+});
+// Tapping outside the floating menu (or pressing Escape) closes it: on phones
+// it is a bottom sheet and must not stay over the page while scrolling.
+document.addEventListener('click', (ev) => {
+  if (!sidemenu.hidden && !ev.target.closest('#sidemenu,#sdToggle')) setSideMenu(false);
+});
+document.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Escape' && !sidemenu.hidden) setSideMenu(false);
+});
 $('#sidemenu').addEventListener('click', async (ev) => {
   const go = ev.target.closest('[data-sdgo]');
   if (go){
@@ -1823,7 +1840,7 @@ $('#sidemenu').addEventListener('click', async (ev) => {
       card.classList.remove('flash'); void card.offsetWidth; card.classList.add('flash');
     }
     // on smartphones the menu is a bottom sheet: close it, otherwise it covers the reached list
-    ev.currentTarget.hidden = true;
+    setSideMenu(false);
     return;
   }
   const up = ev.target.closest('[data-sdup]');
