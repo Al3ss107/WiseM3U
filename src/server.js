@@ -12,6 +12,7 @@ const { buildTree, treeForUi } = require('./wiseplay');
 const createHistoryRouter = require('./routes/history');
 const createTrashRouter = require('./routes/trash');
 const createListsRouter = require('./routes/lists');
+const epg = require('./epg');
 const imgfit = require('./imgfit');
 const live = require('./liveLog');
 const streamdiag = require('./streamdiag');
@@ -143,7 +144,13 @@ app.get('/manifest.json', async (req, res) => {
       // tells Stremio/Nuvio to ask US for meta and streams of these items
       idPrefixes: [playlist.ID_PREFIX],
       catalogs: await playlist.buildCatalogs(cfg),
-      behaviorHints: { configurable: true, configurationRequired: false },
+      behaviorHints: {
+        configurable: true,
+        configurationRequired: false,
+        // opt in only when an XMLTV source is configured: clients without
+        // real startTime/endTime data must not advertise a guide
+        ...(playlist.hasEpg(cfg) ? { epgProvider: true } : {}),
+      },
     });
   } catch (err) {
     console.error('[manifest]', err);
@@ -173,6 +180,7 @@ function fitPosters(result, req, list) {
     if (m.logo && /^https?:/i.test(m.logo)) m.logo = u;
   };
   if (Array.isArray(result.metas)) result.metas.forEach(rewrite);
+  if (Array.isArray(result.metasDetailed)) result.metasDetailed.forEach(rewrite);
   if (result.meta) rewrite(result.meta);
   return result;
 }
@@ -199,6 +207,7 @@ app.get(/^\/catalog\/([^/]+)\/(.+)\.json$/, requireToken, async (req, res) => {
     if (req.query.search && !extras.search) extras.search = String(req.query.search);
     if (req.query.genre && !extras.genre) extras.genre = String(req.query.genre);
     if (req.query.skip && !extras.skip) extras.skip = String(req.query.skip);
+    if (req.query.date && !extras.date) extras.date = String(req.query.date);
     const cfg = store.loadConfig();
     const result = await playlist.buildCatalog(cfg, catId, extras);
     if (!result) return res.status(404).json({ error: 'catalog not found' });
@@ -207,7 +216,7 @@ app.get(/^\/catalog\/([^/]+)\/(.+)\.json$/, requireToken, async (req, res) => {
     live.add(
       'catalog',
       'debug',
-      `catalogo "${listName}" (${catId})${extras.genre ? ` genere: "${extras.genre}"` : ''}${extras.search ? ` ricerca: "${extras.search}"` : ''}${extras.skip ? ` da #${extras.skip}` : ''} → ${(result.metas || []).length} voci`,
+      `catalogo "${listName}" (${catId})${extras.genre ? ` genere: "${extras.genre}"` : ''}${extras.search ? ` ricerca: "${extras.search}"` : ''}${extras.skip ? ` da #${extras.skip}` : ''}${extras.date ? ` del ${extras.date}` : ''} → ${(result.metasDetailed || result.metas || []).length} voci`,
       { list: listName, ...clientInfo(req) }
     );
     res.set('Cache-Control', C.PUBLIC_CACHE_CONTROL);
@@ -393,6 +402,7 @@ app.put('/api/config', requireAdmin, (req, res) => {
       if (l.options.enabled && l.kind !== 'personal') refresher.startRefresh(l.id, true);
     }
 
+    epg.warmGuide(store.loadConfig());
     res.json(publicConfig(store.loadConfig()));
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -441,6 +451,7 @@ app.post('/api/easyproxy/test', requireAdmin, async (req, res) => {
 
 app.post('/api/cache/clear', requireAdmin, (req, res) => {
   cache.invalidateAll();
+  epg.invalidate();
   imgfit.purge();
   live.add('system', 'info', 'cache cleared from the configuration page', clientInfo(req));
   res.json({ ok: true });
@@ -552,6 +563,8 @@ if (require.main === module) {
 
     // leftover "fetching" states from a previous restart: resume downloads
     refresher.reconcileAll();
+    // Warm the XMLTV guide in the background: channel details then open instantly
+    playlist.warmEpg(cfg);
 
     const minutes = Number(cfg.settings.autoRefreshMinutes || 0);
     if (minutes > 0) {

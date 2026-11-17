@@ -86,6 +86,9 @@ async function api(pathname, options = {}) {
   ok(up, 'server started');
   if (!up) { app.kill(); source.close(); process.exit(1); }
 
+  const noEpg = await api('/manifest.json');
+  ok(!noEpg.body.behaviorHints || noEpg.body.behaviorHints.epgProvider === undefined, 'no EPG source: manifest does not opt in');
+
   try {
     const added = await api('/api/lists', {
       method: 'POST',

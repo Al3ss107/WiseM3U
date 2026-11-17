@@ -276,7 +276,9 @@ image size.
 
 - **it does not host or transcode** content: no video passes through it, except
   the short diagnostic error videos (optional);
-- it is not a player and does not provide an EPG (it only declares one);
+- it is not a player; it declares the EPG in the M3U and exposes XMLTV
+  programmes as addon metadata (Now/Next and Native EPG), but it does not
+  record or play channels;
 - it has no database and no multi-user support;
 - it does not bypass DNS blocks by itself: EasyProxy or the client DNS is
   required for that.

@@ -640,11 +640,16 @@ async function importM3uStream(chunks, rootUrl, opts = {}) {
     }
     if (!g.seen.has(line)) {
       g.seen.add(line);
-      g.stations.push({
+      const station = {
         name: ((meta.title || '') + '').trim() || line,
         image: ((meta['tvg-logo'] || meta.logo || '') + '').trim(),
         url: line,
-      });
+      };
+      const tvgId = ((meta['tvg-id'] || '') + '').trim();
+      const tvgName = ((meta['tvg-name'] || '') + '').trim();
+      if (tvgId) station.tvgId = tvgId;
+      if (tvgName) station.tvgName = tvgName;
+      g.stations.push(station);
       stations++;
       if (stations % 50000 === 0) onEvent({ type: 'progress', stations, bytes });
     }
@@ -999,12 +1004,17 @@ async function buildTree(rootUrl, options = {}) {
     target._seen.add(key);
     // only essential fields go into the snapshot: fewer bytes to
     // scrivere, comprimere e riparsare (su hardware lento cambia tanto)
-    target.stations.push({
+    const station = {
       name: (s.name || 'Stream').toString().trim(),
       // only the channel's own logo: the group icon stays on the group
       image: (s.image || '').toString().trim(),
       url,
-    });
+    };
+    const tvgId = (s.tvgId || '').toString().trim();
+    const tvgName = (s.tvgName || '').toString().trim();
+    if (tvgId) station.tvgId = tvgId;
+    if (tvgName) station.tvgName = tvgName;
+    target.stations.push(station);
     stats.stations++;
   }
 
@@ -1170,6 +1180,8 @@ function flattenStations(tree, isSelected, opts = {}) {
       name: (channelRenames && channelRenames[ckey]) || s.name,
       origName: s.name,
       url: s.url,
+      tvgId: s.tvgId || '',
+      tvgName: s.tvgName || '',
       // the group icon is used only when explicitly requested
       logo: s.image || (opts.emitLogo ? child.image || '' : ''),
       // destination group icon: catalogs use it as a fallback poster

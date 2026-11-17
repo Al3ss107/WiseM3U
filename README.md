@@ -133,7 +133,9 @@ http://SERVER-IP:7300/playlist.m3u
 * **integrated EPG**: if an m3u_plus/Xtream source declares the guide
   (`x-tvg-url`/`url-tvg`) or you set an **EPG URL** in the general settings, the
   generated playlist carries it in the `#EXTM3U` header — IPTV apps load the
-  program guide by themselves
+  program guide by themselves. The addon also matches the XMLTV channels and
+  exposes **Now/Next** in channel details, plus native EPG programme rows for
+  clients that support the Stremio guide (Nuvio, Stremio)
 * an `.m3u8` version is available at the same path with the `.m3u8` extension
 
 > **Typical Xtream errors** — `invalid list` is almost always a URL copied from

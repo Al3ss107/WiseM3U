@@ -24,6 +24,7 @@ src/
   cache.js             gzip tree snapshots + in-RAM LRU
   wiseplay.js          WisePlay, M3U and M3U_PLUS download/parsing
   playlist.js          flattening, Stremio/Nuvio catalogs, final M3U, personal lists
+  epg.js               XMLTV download/parsing, channel matching, Now/Next and Native EPG videos
   m3u.js               M3U parser and builder
   selection.js         branch selection (exclusions, keywords)
   protocols.js         protocol and URL detection
@@ -65,6 +66,10 @@ tests/                 regression suites run by `npm test`
    bumps `rev` and records a snapshot in `history` (runtime list state is
    excluded from the comparison). A `PUT /api/config` with an old `baseRev`
    receives **409** and the current state.
+7. When an XMLTV URL is configured (manually or inherited from an M3U), the
+   addon downloads and caches the guide in `src/epg.js`: channels are matched
+   by `tvg-id`, `tvg-name` or normalized name, `/meta` exposes Now/Next and
+   programme videos, and the catalog `date` extra returns `metasDetailed`.
 
 ## Conventions
 
@@ -83,6 +88,6 @@ tests/                 regression suites run by `npm test`
 ## Test
 
 `npm test` runs the Node suites in sequence (logs, diagnostics, Xtream,
-WisePlay, imgfit, history/API, lists API). The suites start a real server on a
+WisePlay, imgfit, history/API, EPG, lists API). The suites start a real server on a
 local port and a temporary data volume, so they also verify routes and
 configuration page assets.

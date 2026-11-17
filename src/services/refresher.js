@@ -4,6 +4,7 @@ const store = require('../config');
 const cache = require('../cache');
 const playlist = require('../playlist');
 const live = require('../liveLog');
+const epg = require('../epg');
 
 /**
  * Coordinates background downloads so that HTTP endpoints never hang on
@@ -70,6 +71,9 @@ function createRefresher() {
           saved.options.name = entry.tree.meta.name;
           store.saveConfig(current);
         }
+        // An M3U source may declare an XMLTV URL: prefetch it after the list
+        // (the guide is cached, so this does not run on every request).
+        epg.warmGuide(store.loadConfig());
       })
       .catch((err) => {
         const message = err.message || String(err);

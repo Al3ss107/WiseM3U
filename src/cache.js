@@ -110,7 +110,7 @@ function ensureEntry(id) {
   if (e) return e;
   memory.set(id, {
     gz: null, parsed: null, ui: null, fetchedAt: '', refreshing: false,
-    promise: null, error: '', lastUsed: Date.now(),
+    promise: null, error: '', lastUsed: Date.now(), epgUrls: [],
   });
   const snap = loadSnapshot(id);
   if (snap) {
@@ -120,6 +120,7 @@ function ensureEntry(id) {
     e.gz = zlib.gzipSync(Buffer.from(raw, 'utf8'), { level: 1 });
     e.parsed = { tree: snap.tree };
     e.fetchedAt = snap.fetchedAt || '';
+    e.epgUrls = (snap.tree.meta && snap.tree.meta.epgUrls) || [];
     evictParsedIfNeeded(id); // at boot: at most the last list stays parsed
   }
   return memory.get(id);
@@ -174,6 +175,7 @@ async function getTree(req) {
     e.refreshing = false;
     e.promise = null;
     e.error = '';
+    e.epgUrls = (tree.meta && tree.meta.epgUrls) || [];
     touch(id);
     evictParsedIfNeeded(id);
     return { tree, ui: treeForUi(tree), fetchedAt: e.fetchedAt, refreshing: false, promise: null, error: '' };
@@ -208,6 +210,7 @@ async function getTree(req) {
     e.refreshing = false;
     e.promise = null;
     e.error = '';
+    e.epgUrls = (tree.meta && tree.meta.epgUrls) || [];
     touch(id);
     evictParsedIfNeeded(id);
     persistAsync(id, { gz });
@@ -276,6 +279,12 @@ async function refreshAll(lists, defaults) {
   return Promise.all(jobs);
 }
 
+/** XMLTV URLs inherited by a list (memory only: no snapshot parsing). */
+function epgUrls(id) {
+  const e = memory.get(id);
+  return e && Array.isArray(e.epgUrls) ? e.epgUrls : [];
+}
+
 /** Diagnostica memoria (debug/test): quante entry e quante parseate. */
 function stats() {
   let parsed = 0, gzBytes = 0;
@@ -286,4 +295,4 @@ function stats() {
   return { entries: memory.size, parsedEntries: parsed, gzBytes, maxParsed: MAX_PARSED };
 }
 
-module.exports = { getTree, getEntry, invalidate, invalidateAll, refreshAll, ageMinutes, saveSnapshot, setEvictHook, stats };
+module.exports = { getTree, getEntry, invalidate, invalidateAll, refreshAll, ageMinutes, saveSnapshot, setEvictHook, stats, epgUrls };

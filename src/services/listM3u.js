@@ -44,6 +44,7 @@ async function buildListM3U(cfg, list, onlyPath = '') {
     .map((channel) => ({
       name: channel.name,
       url: channel.url,
+      tvgId: channel.tvgId || '',
       logo: channel.logo,
       group: channel.group || prefix,
     }));

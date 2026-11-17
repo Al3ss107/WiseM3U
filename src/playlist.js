@@ -10,6 +10,7 @@ const { makeBranchSelector, matchesKeywords } = require('./selection');
 const { normalizeStreamUrl, protocolBadge } = require('./protocols');
 const { buildM3U } = require('./m3u');
 const cache = require('./cache');
+const epg = require('./epg');
 
 /**
  * If the list has EasyProxy configured, rewrites the stream URL as
@@ -89,6 +90,8 @@ async function collectChannels(config, opts = {}) {
       channels.push({
         name: ch.name,
         url: ch.url,
+        tvgId: ch.tvgId || '',
+        tvgName: ch.tvgName || '',
         logo: ch.logo || '',
         group: ch.group || listPrefix(list),
         listId: list.id,
@@ -267,11 +270,12 @@ async function entryFor(config, list, force = false, chain = []) {
  *  (x-tvg-url for Kodi/Xtream, url-tvg for TiviMate and IPTV apps). */
 function epgHeader(config, inherited = []) {
   const all = [];
-  const manual = String(config.settings.epgUrl || '').trim();
-  if (manual) all.push(manual);
-  for (const u of inherited) {
-    if (/^https?:\/\//i.test(u) && !all.includes(u)) all.push(u);
-  }
+  const add = (value) => {
+    const url = epg.cleanUrl(value);
+    if (url && !all.includes(url)) all.push(url);
+  };
+  add(config.settings.epgUrl);
+  for (const u of inherited) add(u);
   if (!all.length) return {};
   const joined = all.join(',');
   return { 'x-tvg-url': joined, 'url-tvg': joined };
@@ -319,6 +323,10 @@ function metaId(listId, path, stationIdx) {
 
 function parseMetaId(id) {
   let s = String(id);
+  // Native EPG programme ids are `<channel id>:epg:<iso>`; playback and
+  // detail always belong to the channel, never to the single programme.
+  const epgSuffix = s.indexOf(':epg:');
+  if (epgSuffix >= 0) s = s.slice(0, epgSuffix);
   if (s.startsWith(ID_PREFIX)) s = s.slice(ID_PREFIX.length);
   const idx = s.indexOf(':');
   if (idx < 0) return null;
@@ -570,6 +578,7 @@ function buildBranches(entry, list) {
 /** Catalogs to expose in the manifest: cached data only, never network. */
 async function buildCatalogs(config) {
   const out = [];
+  const withEpg = epg.hasEpg(config);
   for (const l of config.lists.filter((x) => x.options.enabled && x.options.inCatalog)) {
     let entry = cache.getEntry(l.id);
     if (!entry && l.kind === 'personal') {
@@ -589,6 +598,7 @@ async function buildCatalogs(config) {
         { name: 'genre', isRequired: false, options, optionsLimit: 300 },
         { name: 'search', isRequired: false },
         { name: 'skip', isRequired: false },
+        ...(withEpg ? [{ name: 'date', isRequired: false }] : []),
       ],
     });
   }
@@ -614,8 +624,19 @@ async function buildCatalog(config, catId, extras = {}) {
   const skip = Math.max(0, Number(extras.skip) || 0);
   const page = filtered.slice(skip, skip + PAGE_SIZE);
 
-  return {
-    metas: page.map((r) => ({
+  const hasEpg = epg.hasEpg(config);
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(extras.date || '')) ? String(extras.date) : '';
+  // The channel list must stay fast: use only a warm guide. A dated guide
+  // request or a search (where the user expects Now/Next) may wait for it.
+  let guide = hasEpg ? epg.peekGuide(config) : null;
+  if (hasEpg && !guide) {
+    if (date || extras.search) guide = await epg.getGuide(config);
+    else epg.warmGuide(config);
+  }
+
+  const metaOf = (r) => {
+    const epgLine = guide ? epg.descriptionLine(guide, r) : '';
+    return {
       id: metaId(list.id, r.path, r.idx),
       type: TYPE,
       name: r.name,
@@ -626,9 +647,31 @@ async function buildCatalog(config, catId, extras = {}) {
       // the card geometry from posterShape
       posterShape: 'landscape',
       genre: [r.genre],
-      description: r.group,
-    })),
+      description: [epgLine, r.group].filter(Boolean).join('\n'),
+      // Nuvio/Stremio use this to keep the channel itself as playback target
+      behaviorHints: { isLive: true },
+    };
   };
+
+  if (date) {
+    const start = Date.parse(`${date}T00:00:00.000Z`);
+    const end = start + 24 * 60 * 60 * 1000;
+    const metasDetailed = page.map((r) => {
+      const meta = metaOf(r);
+      const videos = guide
+        ? epg.programmesBetween(guide, r, start, end).slice(0, 60)
+            .map((p) => epg.toVideo(meta.id, p))
+        : [];
+      if (videos.length) {
+        meta.videos = videos;
+        meta.behaviorHints = { isLive: true, hasScheduledVideos: true };
+      }
+      return meta;
+    });
+    return { metasDetailed };
+  }
+
+  return { metas: page.map(metaOf) };
 }
 
 async function buildMeta(config, id) {
@@ -652,6 +695,14 @@ async function buildMeta(config, id) {
     const names = pathNames(entry.tree, parsed.path);
     const genre = (list.options.renames || {})[parsed.path] || node.name;
     const url = normalizeStreamUrl(st.url, list.options);
+    const guide = await epg.getGuide(config);
+    const now = Date.now();
+    const epgLine = guide ? epg.descriptionLine(guide, st, now) : '';
+    const videos = guide
+      ? epg.programmesBetween(guide, st, now - 2 * 60 * 60 * 1000, now + 12 * 60 * 60 * 1000)
+          .slice(0, 20)
+          .map((p) => epg.toVideo(id, p, now))
+      : [];
     return {
       meta: {
         id,
@@ -663,10 +714,16 @@ async function buildMeta(config, id) {
         posterShape: 'landscape',
         genre: [genre],
         description: [
+          epgLine,
           names.join(' › '),
           url ? `Protocol: ${protocolBadge(url)}` : 'Stream excluded by protocol filters',
           `List: ${listPrefix(list)}`,
         ].filter(Boolean).join('\n'),
+        behaviorHints: {
+          isLive: true,
+          ...(videos.length ? { hasScheduledVideos: true } : {}),
+        },
+        videos: videos.length ? videos : undefined,
       },
     };
   }
@@ -751,6 +808,8 @@ module.exports = {
   buildPlaylist,
   buildCatalogs,
   buildBranches,
+  hasEpg: (config) => epg.hasEpg(config),
+  warmEpg: (config) => epg.warmGuide(config),
   buildCatalog,
   buildMeta,
   buildStreams,
