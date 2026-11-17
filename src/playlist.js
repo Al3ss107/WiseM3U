@@ -649,8 +649,6 @@ async function buildMeta(config, id) {
     if ((list.options.disabledChannels || []).includes(ckey)) return null; // excluded channel
     if ((list.options.deletedChannels || []).includes(ckey)) return null; // channel deleted
     if ((list.options.deletedBranches || []).includes(parsed.path)) return null; // branch deleted from the configuration
-    if ((list.options.deletedChannels || []).includes(ckey)) return null; // channel deleted
-    if ((list.options.deletedBranches || []).includes(parsed.path)) return null; // branch deleted
     const names = pathNames(entry.tree, parsed.path);
     const genre = (list.options.renames || {})[parsed.path] || node.name;
     const url = normalizeStreamUrl(st.url, list.options);
