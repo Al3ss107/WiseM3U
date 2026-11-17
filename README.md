@@ -258,11 +258,13 @@ APIs used by the configuration page (also useful for scripts/automation):
 
 * **group-title prefix** — list name, none, or custom.
 * **Levels in group-title** — 1 to 6 (`List › Group › Subgroup`).
-* **Allowed protocols** — HTTP/HLS, AceStream, RTMP, RTSP, others.
-* **AceStream** — keep `acestream://`, rewrite it to HTTP via AceStream Engine
-  (`http://IP:6878`), or exclude it entirely.
+* **Allowed protocols** — HTTP/HLS, AceStream, RTMP, RTSP, others. AceStream
+  is **off by default** and must be enabled per list.
+* **AceStream mode** — keep `acestream://`, rewrite it to HTTP via AceStream
+  Engine (`http://IP:6878`), or exclude it entirely.
 * **Words to exclude** — filter channels by name/group (e.g. `test`, `backup`).
-* **Remove duplicates**, **group icon as logo**, **catalog in Stremio/Nuvio**,
+* **Remove duplicates** (off by default), **group icon as logo**,
+  **catalog in Stremio/Nuvio**,
   **catalog name**, **list refresh frequency**, **custom User-Agent** (any
   string used to download that list and its branches, read its Xtream panel and
   fetch its channel logos; empty = default. Useful when a panel or CDN returns
@@ -281,8 +283,8 @@ APIs used by the configuration page (also useful for scripts/automation):
   channel count — not the file size — that weighs on RAM;
 * addon name and ID, **list auto-refresh** (default: **1440 minutes = once a
   day**; 0 = disabled), cache lifetime, maximum parse depth, global
-  deduplication, **proportional logos in catalogs** (channel posters go through
-  `/imgfit`: contain on a dark canvas already at the card proportions — 16:9
+  deduplication (off by default), **proportional logos in catalogs** (channel
+  posters go through `/imgfit`: contain on a dark canvas already at the card proportions — 16:9
   landscape — so clients that crop "cover" do not cut them. Decoding via
   **libvips/sharp**: PNG, JPEG, **WebP, SVG, GIF and ICO** (channel CDNs often
   serve modern formats), 302 fallback to the original; can be disabled),
@@ -319,9 +321,10 @@ Two solutions:
 
 On the configuration page, for each list:
 
-* **EasyProxy URL** — **one field**, enter **IP or domain** and it works as
-  written: e.g. `http://192.168.10.10:7860` or `https://proxy.mydomain.com`
-  (empty = disabled). If the domain is not visible from the container DNS,
+* **EasyProxy IP/DNS** — **one field**, enter **IP or DNS** and it works as
+  written: e.g. `192.168.10.10:7860` or `proxy.mydomain.com` (empty =
+  disabled). `http://` is assumed when the scheme is omitted; a full
+  `https://…` URL is also accepted. If the domain is not visible from the container DNS,
   WiseM3U resolves it automatically with public DNS (1.1.1.1/8.8.8.8) and
   connects to the IP presenting the domain in SNI/Host, so the nginx vhost
   answers correctly. Only **local-only** domains (home AdGuard/DNS, not

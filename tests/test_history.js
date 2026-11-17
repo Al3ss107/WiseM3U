@@ -9,7 +9,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const REPO = path.resolve(__dirname, '..');
-const { defaultListOptions } = require(path.join(REPO, 'src', 'config.js'));
+const { defaultListOptions, defaultConfig, normalizeConfig, normalizeList } = require(path.join(REPO, 'src', 'config.js'));
 
 const PORT = 7393;
 const TOKEN = 'tok';
@@ -33,6 +33,32 @@ const mkList = (id, name, opts={}) => ({
 });
 
 (async ()=>{
+
+  // defaults and one-time migration for existing configurations
+  ok(defaultListOptions().userAgent === '', 'new list: custom User-Agent empty by default');
+  ok(defaultListOptions().dedupe === false, 'new list: duplicate removal off by default');
+  ok(defaultListOptions().protocols.ace === false, 'new list: AceStream off by default');
+  ok(defaultConfig().settings.dedupeGlobal === false, 'global duplicate removal off by default');
+
+  const legacy = normalizeConfig({
+    version: 1,
+    settings: { dedupeGlobal: true, userAgent: 'OldUA/1' },
+    lists: [{ id: 'legacy', url: 'http://127.0.0.1:9/x.m3u', options: { dedupe: true, userAgent: 'OldUA/1', protocols: { http: true, ace: true } } }],
+  });
+  ok(legacy.lists[0].options.userAgent === '', 'migration: auto-copied User-Agent cleared');
+  ok(legacy.lists[0].options.dedupe === false && legacy.settings.dedupeGlobal === false, 'migration: duplicate removal defaults off');
+  ok(legacy.lists[0].options.protocols.ace === false && legacy.lists[0].options.protocols.http === true, 'migration: only AceStream disabled');
+
+  const keptCfg = normalizeConfig({
+    version: 2,
+    settings: { dedupeGlobal: true },
+    lists: [{ id: 'kept', url: 'http://127.0.0.1:9/x.m3u', options: { dedupe: true, userAgent: 'Mine/1', protocols: { http: true, ace: true } } }],
+  });
+  ok(keptCfg.lists[0].options.userAgent === 'Mine/1' && keptCfg.lists[0].options.dedupe === true && keptCfg.lists[0].options.protocols.ace === true, 'version 2: explicit user choices preserved');
+
+  const bareProxy = normalizeList({ id: 'proxy', url: 'http://127.0.0.1:9/x.m3u', options: { easyProxy: '192.168.1.5:7860' } });
+  ok(bareProxy.options.easyProxy === 'http://192.168.1.5:7860', 'EasyProxy: bare IP/DNS gets http://');
+
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wm-hist-'));
   const app = spawn('node', [path.join(REPO, 'src', 'server.js')], {
     env: { ...process.env, PORT: String(PORT), HOST: '127.0.0.1',

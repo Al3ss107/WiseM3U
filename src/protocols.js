@@ -10,7 +10,7 @@
  *   rtmp / rtsp / mms / udp / rtp                        -> legacy
  */
 
-const DEFAULT_ENABLED = { http: true, ace: true, rtmp: false, rtsp: false, other: false };
+const DEFAULT_ENABLED = { http: true, ace: false, rtmp: false, rtsp: false, other: false };
 
 function schemeOf(url) {
   if (typeof url !== 'string') return '';

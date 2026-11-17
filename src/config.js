@@ -24,7 +24,7 @@ function defaultListOptions() {
     protocols: { ...DEFAULT_ENABLED },
     aceMode: 'keep', // 'keep' | 'engine' | 'off'
     aceEngineHost: 'http://127.0.0.1:6878',
-    dedupe: true,
+    dedupe: false,
     excludeKeywords: [],
     disabledPaths: [], // branches (groups with channels) disabled from the configuration page
     renames: {}, // path -> custom branch name
@@ -37,7 +37,7 @@ function defaultListOptions() {
     catalogName: '',
     refreshMinutes: 1440, // list refresh: daily by default
     userAgent: '', // custom UA used to download this list (empty = default)
-    easyProxy: '', // EasyProxy URL: IP or domain (e.g. http://192.168.10.10:7860 or https://proxy.mydomain.com); empty = disabled
+    easyProxy: '', // EasyProxy IP/DNS (e.g. 192.168.10.10:7860 or proxy.mydomain.com); empty = disabled
     easyProxyPassword: '', // EasyProxy API_PASSWORD (if set)
     easyProxyParams: '', // extra parameters appended to the proxy request (e.g. "warp=off")
   };
@@ -45,7 +45,7 @@ function defaultListOptions() {
 
 function defaultConfig() {
   return {
-    version: 1,
+    version: 2,
     rev: 0,
     settings: {
       addonName: 'WiseM3U',
@@ -53,7 +53,7 @@ function defaultConfig() {
       cacheTtlMinutes: 1440,
       autoRefreshMinutes: 1440, // default: daily refresh
       maxDepth: 8,
-      dedupeGlobal: true,
+      dedupeGlobal: false,
       fitLogos: true, // rescale channel logos into "contain" posters (endpoint /imgfit)
       streamDiag: false, // stream diagnostics: on-screen error (video) instead of silent buffering
       personalLists: [], // personal lists: channels pulled from all lists [{id,name,includeInMain,channels:["listId::path::name"]}]
@@ -155,8 +155,13 @@ function normalizeList(list) {
     ? [...new Set(options.customGroups.map((g) => String(g || '').trim()).filter(Boolean))]
     : [];
   options.groupDepth = Math.max(1, Math.min(6, Number(options.groupDepth) || 1));
-  options.easyProxy = String(options.easyProxy || '').trim().replace(/\/+$/, '');
-  if (options.easyProxy && !/^https?:\/\//i.test(options.easyProxy)) options.easyProxy = '';
+  // accepts a bare IP/DNS (the UI placeholder suggests it) or a full URL;
+  // when the scheme is missing we assume http, like EasyProxy itself
+  let easyProxy = String(options.easyProxy || '').trim().replace(/\/+$/, '');
+  if (easyProxy && !/^https?:\/\//i.test(easyProxy)) {
+    easyProxy = /^[a-z][a-z0-9+.-]*:\/\//i.test(easyProxy) ? '' : `http://${easyProxy}`;
+  }
+  options.easyProxy = easyProxy;
   options.easyProxyPassword = String(options.easyProxyPassword || '').trim();
   options.easyProxyParams = String(options.easyProxyParams || '').trim().replace(/^[?&]+/, '');
   delete options.easyProxyDns; // previous-build option: the URL now accepts IP or domain
@@ -187,12 +192,12 @@ function normalizeList(list) {
 function normalizeConfig(raw) {
   const base = defaultConfig();
   const cfg = raw && typeof raw === 'object' ? raw : {};
+  const fromVersion = Math.max(0, Number(cfg.version) || 0);
   const settings = { ...base.settings, ...(cfg.settings || {}) };
   // removed field (never checked by any route): it must not remain in
   // old configs after saving
   delete settings.configPassword;
-  // migration: the UA used to be global; it now belongs to each list.
-  const legacyUserAgent = sanitizeUserAgent(settings.userAgent);
+  // the UA is per list: the old global field must never be restored
   delete settings.userAgent;
   settings.publicBaseUrl = String(settings.publicBaseUrl || '').trim().replace(/\/+$/, '');
   if (settings.publicBaseUrl && !/^https?:\/\//i.test(settings.publicBaseUrl)) settings.publicBaseUrl = '';
@@ -265,10 +270,15 @@ function normalizeConfig(raw) {
   }
   delete settings.personalLists;
 
-  // Give the legacy global UA to lists that do not have one yet.
-  if (legacyUserAgent) {
+  // Version 2 defaults: no UA copied automatically, AceStream and duplicate
+  // removal are opt-in. Existing configurations are migrated once, so what the
+  // UI shows matches the new defaults instead of old implicit values.
+  if (fromVersion < 2) {
+    settings.dedupeGlobal = false;
     for (const list of lists) {
-      if (!list.options.userAgent) list.options.userAgent = legacyUserAgent;
+      list.options.userAgent = '';
+      list.options.dedupe = false;
+      list.options.protocols.ace = false;
     }
   }
 

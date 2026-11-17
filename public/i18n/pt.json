@@ -501,8 +501,6 @@
  "hint.usage": "Cada linha é uma playlist: marca-a para a incluir, escreve no campo para <b>renomear</b>, arrasta-a pela pega <b>☰</b> para <b>reordenar</b>. Com <b>▸ canais</b> abres a playlist e geres os <b>canais individuais</b>: exclui, renomeia, reordena e — com o <b>campo grupo</b> à direita — <b>move-os para outra playlist ou um grupo personalizado</b>. Depois prime <b>➜</b> para mover o canal para o grupo escrito ou escolhido, ou <b>↺</b> para o devolver à playlist original. A movimentação é <b>guardada automaticamente</b>; para as outras alterações lembra-te de <b>Guardar configuração</b>. Também podes <b>arrastar um canal sobre outra playlist</b> (mesmo entre listas) ou <b>uma playlist para o centro de outra linha</b> para lá mover todos os seus canais. O botão <b>✕</b> elimina o canal ou a playlist; para eliminar muitas de uma vez, marca-as e prime <b>✕ Eliminar selecionadas</b>. Nada se perde: está tudo na <b>🗑 Lixeira</b>.",
  "hint.userAgent": "Usado para <b>descarregar esta lista</b> e os seus ramos, o painel Xtream e os logos dos canais. Útil quando um painel ou CDN devolve <code>403</code> por reconhecer o WiseM3U: cola o UA de um navegador, VLC ou da app que usas normalmente. Uma só linha; vazio = padrão.",
  "history restore": "restauração do histórico",
- "http://192.168.10.10:7860 oppure https://proxy.tuodominio.it": "http://192.168.10.10:7860 ou https://proxy.seudominio.com",
- "http://192.168.10.10:7860 or https://proxy.yourdomain.com": "http://192.168.10.10:7860 ou https://proxy.seudominio.com",
  "https://my.domain": "https://meu.dominio",
  "https://my.domain/guide.xml": "https://meu.dominio/guide.xml",
  "idle": "inativa",

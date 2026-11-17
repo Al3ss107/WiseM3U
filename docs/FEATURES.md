@@ -72,9 +72,10 @@ background download with state and statistics.
   state it had when added: resets renames, exclusions, order, merges, moves and
   trash, then re-downloads it from the URL), delete, personal M3U link;
 - **Xtream account expiry** badge (from `player_api.php`, 30 min cache);
-- settings: group-title prefix/levels, protocols, AceStream, deduplication,
-  excluded words, group icon, catalog yes/no + name, refresh frequency,
-  EasyProxy (URL, password, parameters) + Test;
+- settings: group-title prefix/levels, protocols (AceStream off by default),
+  AceStream mode, deduplication (off by default), excluded words, group icon,
+  catalog yes/no + name, refresh frequency, EasyProxy (IP/DNS, password,
+  parameters) + Test;
 - **List playlists**: check, rename, drag to reorder (the order is kept across
   other drags until you save), filter, **Show enabled**, **All/None** (limited
   to filter results), **Delete selected**, trash; dragging one playlist onto
@@ -88,8 +89,8 @@ background download with state and statistics.
   lists" box, managed exactly like normal lists.
 
 **Global** — addon name/ID, auto-refresh, cache TTL, maximum depth, access
-token, public URL, EPG URL, global deduplication, proportional logos, stream
-diagnostics, clear cache, **interface language**.
+token, public URL, EPG URL, global deduplication (off by default), proportional
+logos, stream diagnostics, clear cache, **interface language**.
 
 **Per list** — name, group-title prefix and depth, catalog name, refresh
 frequency, **custom User-Agent**, allowed protocols, AceStream mode, exclusions,

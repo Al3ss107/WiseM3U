@@ -583,7 +583,7 @@ function renderListCard(l){
         <div class="row" style="margin-top:10px">
           <div style="flex:2 1 260px">
             <label>URL di EasyProxy (vuoto = disattivato)</label>
-            <input type="text" data-f="options.easyProxy" value="${esc(o.easyProxy||'')}" placeholder="http://192.168.10.10:7860 oppure https://proxy.tuodominio.it">
+            <input type="text" data-f="options.easyProxy" value="${esc(o.easyProxy||'')}" placeholder="IP/DNS">
           </div>
           <div style="flex:1 1 160px">
             <label>API_PASSWORD (se impostata)</label>
@@ -1589,9 +1589,17 @@ function renderAll(){
   $('#s_token').value = CFG.settings.token || '';
   $('#s_publicBaseUrl').value = CFG.settings.publicBaseUrl || '';
   $('#s_epgUrl').value = CFG.settings.epgUrl || '';
-  $('#s_dedupeGlobal').checked = !!CFG.settings.dedupeGlobal;
-  $('#s_fitLogos').checked = CFG.settings.fitLogos !== false;
-  $('#s_streamDiag').checked = !!CFG.settings.streamDiag;
+  const globalChecks = [
+    ['#s_dedupeGlobal', !!CFG.settings.dedupeGlobal],
+    ['#s_fitLogos', CFG.settings.fitLogos !== false],
+    ['#s_streamDiag', !!CFG.settings.streamDiag],
+  ];
+  for (const [sel, on] of globalChecks){
+    const el = $(sel);
+    el.checked = on;
+    const box = el.closest('.chk');
+    if (box) box.classList.toggle('on', on);
+  }
   const base = (CFG.settings.publicBaseUrl || location.origin).replace(/\/+$/, '');
   const m = base + '/manifest.json' + tokenQs();
   $('#manifestUrl').textContent = m;
@@ -2216,6 +2224,12 @@ $('#toTop').addEventListener('click', ()=>{
   const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   try { window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' }); }
   catch (_) { window.scrollTo(0, 0); }
+});
+
+// Keep the Material 3 "on" style in sync for every checkbox card.
+document.addEventListener('change', (ev) => {
+  const box = ev.target.closest && ev.target.closest('.chk');
+  if (box && ev.target.type === 'checkbox') box.classList.toggle('on', ev.target.checked);
 });
 
 // Close the UA presets when clicking outside the combo.
