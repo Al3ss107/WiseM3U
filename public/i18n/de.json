@@ -499,7 +499,7 @@
  "hint.streamDiag": "<b>Stream-Diagnose</b>: aktivieren, um zu verstehen, WARUM ein Sender nicht läuft. Playlists und Kataloge liefern „Diagnose“-URLs: Antwortet der Stream, wird der Player zur Quelle umgeleitet (das Video läuft NICHT über den Container); lehnt das Panel ab oder antwortet nicht, erscheint ein <b>Video mit der Fehlererklärung</b> (403, Verbindungslimit, Server down…) und die genaue Ursache steht in den <a href=\"#logCard\" style=\"color:inherit\">Live-Protokollen</a>. Praktisch beim Einrichten; danach abschaltbar.",
  "hint.token": "Mit einem <b>Token</b> verlangen Manifest/Playlist/Kataloge <code>?token=...</code>: Die Seite zeigt bereits die vollständigen URLs für Nuvio und Stremio.",
  "hint.usage": "Jede Zeile ist eine Playlist: anhaken zum Einbeziehen, im Feld umbenennen, am Griff <b>☰</b> ziehen zum <b>Sortieren</b>. Mit <b>▸ Sender</b> öffnest du die Playlist und verwaltest <b>einzelne Sender</b>: ausschließen, umbenennen, sortieren und — mit dem <b>Gruppenfeld</b> rechts — <b>in eine andere Playlist oder eine eigene Gruppe verschieben</b>. Dann <b>➜</b> drücken, um den Sender in die eingegebene/gewählte Gruppe zu verschieben, oder <b>↺</b>, um ihn zurückzuholen. Verschieben wird <b>automatisch gespeichert</b>; für andere Änderungen <b>Konfiguration speichern</b>. Du kannst auch <b>einen Sender auf eine andere Playlist ziehen</b> (auch zwischen Listen) oder <b>eine Playlist in die Mitte einer anderen Zeile</b>, um alle ihre Sender zu verschieben. <b>✕</b> löscht Sender oder Playlist; für viele auf einmal anhaken und <b>✕ Ausgewählte löschen</b> drücken. Nichts geht verloren: alles im <b>🗑 Papierkorb</b>.",
- "hint.userAgent": "Wird für <b>alle ausgehenden Anfragen</b> verwendet (Listen, Zweige, Xtream-Panel, Logos). Nützlich, wenn ein Panel oder CDN <code>403</code> zurückgibt, weil es WiseM3U erkennt: UA eines Browsers, VLC oder der gewohnten App einfügen. Nur eine Zeile; leer = Standard.",
+ "hint.userAgent": "Wird zum <b>Herunterladen dieser Liste</b> und ihrer Zweige, des Xtream-Panels und der Senderlogos verwendet. Nützlich, wenn ein Panel oder CDN <code>403</code> zurückgibt, weil es WiseM3U erkennt: UA eines Browsers, VLC oder der gewohnten App einfügen. Nur eine Zeile; leer = Standard.",
  "history restore": "Verlauf wiederhergestellt",
  "http://192.168.10.10:7860 oppure https://proxy.tuodominio.it": "http://192.168.10.10:7860 oder https://proxy.deinedomain.de",
  "http://192.168.10.10:7860 or https://proxy.yourdomain.com": "http://192.168.10.10:7860 oder https://proxy.deinedomain.de",
@@ -655,5 +655,6 @@
  "🗑 Trash": "🗑 Papierkorb",
  "🗑 Trash ({n})": "🗑 Papierkorb ({n})",
  "🧪 Protocolli, AceStream ed esclusioni": "🧪 Protokolle, AceStream und Ausschlüsse",
- "🧪 Protocols, AceStream and exclusions": "🧪 Protokolle, AceStream und Ausschlüsse"
+ "🧪 Protocols, AceStream and exclusions": "🧪 Protokolle, AceStream und Ausschlüsse",
+ "Custom User-Agent (opzionale)": "Benutzerdefinierter User-Agent (optional)"
 }

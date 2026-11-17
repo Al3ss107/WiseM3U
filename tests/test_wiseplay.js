@@ -271,16 +271,14 @@ const ROUTES = {
   await buildTree(`${BASE}/ua.m3u`, { userAgent: customUa });
   assert(lastUa === customUa, `per-request UA sent to the panel: ${lastUa}`);
 
-  UA.setCustomUserAgent('GlobalUA/9.9');
   await buildTree(`${BASE}/ua.m3u`);
-  assert(lastUa === 'GlobalUA/9.9', `global UA from settings: ${lastUa}`);
-  UA.setCustomUserAgent('');
-  await buildTree(`${BASE}/ua.m3u`);
-  assert(/WiseM3U\//.test(lastUa), `default UA restored: ${lastUa}`);
+  assert(/WiseM3U\//.test(lastUa), `default UA when the list has none: ${lastUa}`);
 
-  const dirty = UA.setCustomUserAgent('Evil\r\nX-Injected: 1');
+  const dirty = UA.sanitizeUserAgent('Evil\r\nX-Injected: 1');
   assert(!/[\r\n]/.test(dirty) && !dirty.includes(': 1\n'), `UA stripped of CR/LF (header injection): "${dirty}"`);
-  UA.setCustomUserAgent('');
+  assert(UA.getUserAgent('') === UA.USER_AGENT, 'empty list UA falls back to the default');
+  await buildTree(`${BASE}/ua.m3u`, { userAgent: 'Evil\r\nX-Injected: 1' });
+  assert(!/[\r\n]/.test(lastUa), `per-list UA sanitized on the wire: ${JSON.stringify(lastUa)}`);
 
   // --- v1.5.2: huge / non-playlist responses -------------------------------
   const t0 = Date.now();

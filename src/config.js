@@ -8,6 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { DEFAULT_ENABLED } = require('./protocols');
+const { sanitizeUserAgent } = require('./constants');
 const history = require('./history');
 
 const CONFIG_FILE = process.env.CONFIG_FILE || path.join(__dirname, '..', 'data', 'config.json');
@@ -35,6 +36,7 @@ function defaultListOptions() {
     inCatalog: true,
     catalogName: '',
     refreshMinutes: 1440, // list refresh: daily by default
+    userAgent: '', // custom UA used to download this list (empty = default)
     easyProxy: '', // EasyProxy URL: IP or domain (e.g. http://192.168.10.10:7860 or https://proxy.mydomain.com); empty = disabled
     easyProxyPassword: '', // EasyProxy API_PASSWORD (if set)
     easyProxyParams: '', // extra parameters appended to the proxy request (e.g. "warp=off")
@@ -53,7 +55,6 @@ function defaultConfig() {
       maxDepth: 8,
       dedupeGlobal: true,
       fitLogos: true, // rescale channel logos into "contain" posters (endpoint /imgfit)
-      userAgent: '', // custom UA for outgoing requests (empty = default)
       streamDiag: false, // stream diagnostics: on-screen error (video) instead of silent buffering
       personalLists: [], // personal lists: channels pulled from all lists [{id,name,includeInMain,channels:["listId::path::name"]}]
       token: '',
@@ -84,6 +85,7 @@ function normalizeList(list) {
   const def = defaultListOptions();
   const options = { ...def, ...(list.options || {}) };
   options.protocols = { ...def.protocols, ...(list.options && list.options.protocols) };
+  options.userAgent = sanitizeUserAgent(options.userAgent);
   // migration: previous builds used excludePaths for tree selection
   const legacyExcluded = Array.isArray(options.excludePaths) ? options.excludePaths.map(String) : [];
   delete options.excludePaths;
@@ -189,12 +191,9 @@ function normalizeConfig(raw) {
   // removed field (never checked by any route): it must not remain in
   // old configs after saving
   delete settings.configPassword;
-  // custom UA: a single line, no CR/LF (header injection)
-  settings.userAgent = String(settings.userAgent || '')
-    .replace(/[\r\n\t]+/g, ' ')
-    .replace(/\s{2,}/g, ' ')
-    .trim()
-    .slice(0, 300);
+  // migration: the UA used to be global; it now belongs to each list.
+  const legacyUserAgent = sanitizeUserAgent(settings.userAgent);
+  delete settings.userAgent;
   settings.publicBaseUrl = String(settings.publicBaseUrl || '').trim().replace(/\/+$/, '');
   if (settings.publicBaseUrl && !/^https?:\/\//i.test(settings.publicBaseUrl)) settings.publicBaseUrl = '';
   // manual EPG: like the public URL, accepts only http(s), otherwise it is cleared
@@ -265,6 +264,13 @@ function normalizeConfig(raw) {
     lists.push(l);
   }
   delete settings.personalLists;
+
+  // Give the legacy global UA to lists that do not have one yet.
+  if (legacyUserAgent) {
+    for (const list of lists) {
+      if (!list.options.userAgent) list.options.userAgent = legacyUserAgent;
+    }
+  }
 
   return {
     version: base.version,

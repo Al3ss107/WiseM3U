@@ -263,7 +263,11 @@ APIs used by the configuration page (also useful for scripts/automation):
   (`http://IP:6878`), or exclude it entirely.
 * **Words to exclude** — filter channels by name/group (e.g. `test`, `backup`).
 * **Remove duplicates**, **group icon as logo**, **catalog in Stremio/Nuvio**,
-  **catalog name**, **list refresh frequency**.
+  **catalog name**, **list refresh frequency**, **custom User-Agent** (any
+  string used to download that list and its branches, read its Xtream panel and
+  fetch its channel logos; empty = default. Useful when a panel or CDN returns
+  `403` because it recognizes WiseM3U: paste the UA of a browser, VLC or the
+  app you normally use).
 * **EasyProxy (optional)** — routes the list streams through an
   [EasyProxy](https://github.com/realbestia1/EasyProxy) instance (see below).
 
@@ -281,12 +285,9 @@ APIs used by the configuration page (also useful for scripts/automation):
   landscape — so clients that crop "cover" do not cut them. Decoding via
   **libvips/sharp**: PNG, JPEG, **WebP, SVG, GIF and ICO** (channel CDNs often
   serve modern formats), 302 fallback to the original; can be disabled),
-  **access token** (if set, manifest/playlist/catalogs require `?token=...`),
-  **custom User-Agent** (any string used for all outgoing requests: lists,
-  branches, Xtream panel, logos. Useful when a panel or CDN returns `403`
-  because it recognizes WiseM3U: paste the UA of a browser, VLC or the app you
-  use; empty = default). Automatic refresh downloads only expired lists, in
-  the background, without blocking anything.
+  **access token** (if set, manifest/playlist/catalogs require `?token=...`).
+  Automatic refresh downloads only expired lists, in the background, without
+  blocking anything.
 
 > **AceStream:** `acestream://` requires a compatible client (Ace Player,
 > TiviMate with plugin, Kodi + pvr.acestream). If the server has an **AceStream
@@ -514,7 +515,7 @@ complete feature inventory is in [`docs/FEATURES.md`](docs/FEATURES.md).
 | The response is an *HTML web page* | You pasted a preview/share link (Google, Mega…) instead of the file | Copy the **direct link** to the playlist, i.e. the one ending in `.m3u` / `get.php?...&type=m3u_plus...` |
 | `Response too large (… MB)` | The URL is not a playlist: it points to a **video/audio file** (`.mp4/.mkv` movie, channel stream), an **archive** (zip/rar) or a binary. The message now reports content-type and **first bytes** | No need to press **Refresh** (the error is definitive and flagged as such): copy the **list** link from the panel — for Xtream it is `.../get.php?username=…&password=…&type=m3u_plus&output=ts`. If the message says "ZIP ARCHIVE", extract the `.m3u` file and upload it from file. **m3u** files no longer have an MB limit: they are read in streaming |
 | Playlist served as **gzip** (`.m3u.gz`, even with content-type `application/octet-stream`) | Many panels compress the list and do not declare `Content-Encoding` | Handled **automatically** since 1.5.3: gzip is decompressed (with an output cap) and the list imported. **UTF-16** with/without BOM is also decoded |
-| `HTTP 403` | The panel refuses access: wrong credentials, expired account, connection limit or country/user-agent block | Check the credentials by copying the URL from the panel, check the expiry with the provider, or try `output=ts`. If the block is on the **User-Agent**, set a custom one in *General settings* (e.g. `VLC/3.0.20 LibVLC/3.0.20`) |
+| `HTTP 403` | The panel refuses access: wrong credentials, expired account, connection limit or country/user-agent block | Check the credentials by copying the URL from the panel, check the expiry with the provider, or try `output=ts`. If the block is on the **User-Agent**, set a custom one in the list settings (e.g. `VLC/3.0.20 LibVLC/3.0.20`) |
 
 With the current build both cases fix themselves **on restart**: you do not need
 to touch the volume. If you stay on an old build, the two commands above fix it

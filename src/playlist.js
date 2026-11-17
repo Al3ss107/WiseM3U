@@ -245,6 +245,7 @@ async function entryFor(config, list, force = false, chain = []) {
     url: list.url,
     ttlMinutes: list.options.refreshMinutes,
     maxDepth: config.settings.maxDepth,
+    userAgent: list.options.userAgent || '',
     force,
   });
   const pe = list.options.personalEntries || [];

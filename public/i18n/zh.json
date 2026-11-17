@@ -499,7 +499,7 @@
  "hint.streamDiag": "<b>流诊断</b>：启用以了解频道无法播放的原因。播放列表和目录会提供“诊断”URL：如果流正常响应，播放器会重定向到源（视频不经过容器）；如果面板拒绝或无响应，会显示<b>解释错误的视频</b>（403、连接数限制、服务器宕机…），确切原因写入<a href=\"#logCard\" style=\"color:inherit\">实时日志</a>。配置时很有用，一切正常后可关闭。",
  "hint.token": "如果设置了 <b>token</b>，manifest/播放列表/目录将需要 <code>?token=...</code>：页面已显示可粘贴到 Nuvio 和 Stremio 的完整 URL。",
  "hint.usage": "每行是一个播放列表：勾选以包含，在字段中输入以<b>重命名</b>，拖动 <b>☰</b> 手柄以<b>排序</b>。用 <b>▸ 频道</b> 打开播放列表并管理<b>单个频道</b>：排除、重命名、排序，并用右侧<b>分组字段</b><b>移动到其他播放列表或自定义分组</b>。按 <b>➜</b> 将频道移到输入或选择的分组，或按 <b>↺</b> 将其移回原播放列表。移动会<b>自动保存</b>；其他修改请记得<b>保存配置</b>。也可以<b>将频道拖到其他播放列表</b>（甚至跨列表），或<b>将播放列表拖到另一行中间</b>以移动其所有频道。<b>✕</b> 删除频道或播放列表；要批量删除，请勾选后按 <b>✕ 删除所选</b>。不会丢失：都在 <b>🗑 回收站</b>。",
- "hint.userAgent": "用于<b>所有传出请求</b>（列表、分支、Xtream 面板、徽标）。当面板或 CDN 因识别 WiseM3U 而返回 <code>403</code> 时很有用：粘贴浏览器、VLC 或常用应用的 UA。仅一行；留空 = 默认。",
+ "hint.userAgent": "用于<b>下载此列表</b>及其分支、Xtream 面板和频道徽标。当面板或 CDN 因识别 WiseM3U 而返回 <code>403</code> 时很有用：粘贴浏览器、VLC 或常用应用的 UA。仅一行；留空 = 默认。",
  "history restore": "历史记录恢复",
  "http://192.168.10.10:7860 oppure https://proxy.tuodominio.it": "http://192.168.10.10:7860 或 https://proxy.yourdomain.com",
  "http://192.168.10.10:7860 or https://proxy.yourdomain.com": "http://192.168.10.10:7860 或 https://proxy.yourdomain.com",
@@ -655,5 +655,6 @@
  "🗑 Trash": "🗑 回收站",
  "🗑 Trash ({n})": "🗑 回收站（{n}）",
  "🧪 Protocolli, AceStream ed esclusioni": "🧪 协议、AceStream 和排除项",
- "🧪 Protocols, AceStream and exclusions": "🧪 协议、AceStream 和排除项"
+ "🧪 Protocols, AceStream and exclusions": "🧪 协议、AceStream 和排除项",
+ "Custom User-Agent (opzionale)": "自定义 User-Agent（可选）"
 }

@@ -24,10 +24,6 @@ const history = require('./history');
 const xtream = require('./xtream');
 const C = require('./constants');
 
-// Custom UA from settings: applies immediately to downloads too
-// background downloads started at boot
-C.setCustomUserAgent(store.loadConfig().settings.userAgent);
-
 // RAM diet: when the cache evicts a list's parsed tree, free the memoized
 // flatten rows too (strings shared with the tree, otherwise they are not freed)
 cache.setEvictHook((listId) => playlist.clearRows(listId));
@@ -220,14 +216,15 @@ app.get('/manifest.json', async (req, res) => {
 app.get('/imgfit', requireToken, (req, res) => { imgfit.handle(req, res); });
 
 /** Rewrites remote meta posters with the /imgfit endpoint, when enabled. */
-function fitPosters(result, req) {
+function fitPosters(result, req, list) {
   const cfg = store.loadConfig();
   if (!result || !cfg.settings.fitLogos) return result;
   const base = (cfg.settings.publicBaseUrl || baseUrl(req)).replace(/\/+$/, '');
   const rewrite = (m) => {
     if (!m || !m.poster || !/^https?:/i.test(m.poster)) return;
     const shape = m.posterShape === 'landscape' ? 'landscape' : 'square';
-    const u = withToken(`${base}/imgfit?shape=${shape}&url=${encodeURIComponent(m.poster)}`, req);
+    const listParam = list ? `&list=${encodeURIComponent(list.id)}` : '';
+    const u = withToken(`${base}/imgfit?shape=${shape}${listParam}&url=${encodeURIComponent(m.poster)}`, req);
     m.poster = u;
     if (m.background && /^https?:/i.test(m.background)) m.background = u;
     if (m.logo && /^https?:/i.test(m.logo)) m.logo = u;
@@ -271,7 +268,7 @@ app.get(/^\/catalog\/([^/]+)\/(.+)\.json$/, requireToken, async (req, res) => {
       { list: listName, ...clientInfo(req) }
     );
     res.set('Cache-Control', C.PUBLIC_CACHE_CONTROL);
-    res.json(fitPosters(result, req));
+    res.json(fitPosters(result, req, list));
   } catch (err) {
     live.add('catalog', 'error', `catalog error: ${err.message}`, clientInfo(req));
     console.error('[catalog]', err);
@@ -284,7 +281,9 @@ app.get('/meta/:type/:id.json', requireToken, async (req, res) => {
     const cfg = store.loadConfig();
     const result = await playlist.buildMeta(cfg, req.params.id);
     if (!result) return res.status(404).json({ error: 'meta not found' });
-    res.json(fitPosters(result, req));
+    const parsed = playlist.parseMetaId(req.params.id);
+    const list = parsed ? cfg.lists.find((l) => l.id === parsed.listId) : null;
+    res.json(fitPosters(result, req, list));
   } catch (err) {
     console.error('[meta]', err);
     res.status(500).json({ error: err.message });
@@ -483,15 +482,21 @@ app.put('/api/config', requireAdmin, (req, res) => {
       { settings: nextSettings, lists: nextLists },
       { reason: String(incoming.reason || 'configuration saved').slice(0, 160) }
     );
-    // the custom UA takes effect immediately (subsequent downloads)
-    C.setCustomUserAgent(saved.settings.userAgent);
-
     // keeps the runtime state of existing lists
     for (const l of saved.lists) {
       const before = current.lists.find((x) => x.id === l.id);
       if (before) l.state = before.state;
     }
     store.saveConfig(saved);
+
+    // A custom UA belongs to the list: when it changes, the old snapshot was
+    // downloaded with another identity, so invalidate it and fetch again.
+    for (const l of saved.lists) {
+      const before = current.lists.find((x) => x.id === l.id);
+      if (!before || (before.options.userAgent || '') === (l.options.userAgent || '')) continue;
+      cache.invalidate(l.id);
+      if (l.options.enabled && l.kind !== 'personal') startRefresh(l.id, true);
+    }
 
     res.json(publicConfig(store.loadConfig()));
   } catch (err) {
@@ -528,6 +533,7 @@ function startRefresh(listId, force = true) {
       url: list.url,
       ttlMinutes: 0,
       maxDepth: cfg0.settings.maxDepth,
+      userAgent: list.options.userAgent || '',
       force,
       builder,
     })
@@ -633,7 +639,7 @@ app.get('/api/lists/:id/xtream', requireAdmin, async (req, res) => {
     if (ageMs >= 0 && ageMs < 30 * 60 * 1000) return res.json({ ok: true, ...cached, cached: true });
   }
 
-  const r = await xtream.fetchPanelInfo(url);
+  const r = await xtream.fetchPanelInfo(url, list.options.userAgent || '');
   if (!r.ok) {
     // no fresh data: keep the old ones (better old than nothing)
     if (cached) return res.json({ ok: true, ...cached, cached: true, stale: true, fetchError: r.reason });

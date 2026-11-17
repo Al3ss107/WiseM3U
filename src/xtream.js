@@ -7,6 +7,7 @@
  */
 
 const { nodeFetchText, resolveViaPublicDns } = require('./wiseplay');
+const { getUserAgent } = require('./constants');
 
 const PANEL_TIMEOUT_MS = 8000;
 
@@ -31,26 +32,26 @@ function xtreamInfo(url) {
  * (http on an https port, self-signed TLS, public DNS). Never throws:
  * returns {ok:false, reason} on problems.
  */
-async function fetchPanelInfo(url) {
+async function fetchPanelInfo(url, userAgent = '') {
   const info = xtreamInfo(url);
   if (!info) return { ok: false, reason: 'not an Xtream URL (username/password missing in get.php)' };
 
   // targeted retry claims (like fetchRoot in wiseplay)
   async function tryFetch(target) {
     try {
-      return await fetchText(target);
+      return await fetchText(target, userAgent);
     } catch (err) {
       const causeRef = (err && err.causeRef) || {};
       const causeStr = `${causeRef.code || ''} ${causeRef.message || ''} ${(err && err.message) || ''}`;
       if (/ERR_SSL_WRONG_VERSION_NUMBER/i.test(causeStr)) {
         const down = target.replace(/^https:\/\//i, 'http://');
-        if (down !== target) return fetchText(down);
+        if (down !== target) return fetchText(down, userAgent);
       }
-      if (err && err.certError) return nodeFetchText(target, { insecure: true, timeout: PANEL_TIMEOUT_MS });
+      if (err && err.certError) return nodeFetchText(target, { insecure: true, timeout: PANEL_TIMEOUT_MS, userAgent });
       if (/ENOTFOUND|EAI_AGAIN/i.test(causeRef.code || '')) {
         let ip = null;
         try { ip = await resolveViaPublicDns(new URL(target).hostname); } catch (_) { ip = null; }
-        if (ip) return nodeFetchText(target, { ip, timeout: PANEL_TIMEOUT_MS });
+        if (ip) return nodeFetchText(target, { ip, timeout: PANEL_TIMEOUT_MS, userAgent });
       }
       throw err;
     }
@@ -88,13 +89,13 @@ async function fetchPanelInfo(url) {
 }
 
 // textual micro-fetch with undici (like wiseplay.fetchText but with no content limits)
-async function fetchText(url) {
+async function fetchText(url, userAgent = '') {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), PANEL_TIMEOUT_MS);
   try {
     const res = await fetch(url, {
       signal: ctrl.signal,
-      headers: { 'User-Agent': require('./constants').getUserAgent(), Accept: 'application/json' },
+      headers: { 'User-Agent': getUserAgent(userAgent), Accept: 'application/json' },
     });
     if (!res.ok) {
       const e = new Error(`HTTP ${res.status} from the Xtream panel`);

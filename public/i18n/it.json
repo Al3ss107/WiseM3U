@@ -499,7 +499,7 @@
  "hint.streamDiag": "<b>Diagnostica stream</b>: attivala per capire PERCHÉ un canale non si riproduce. Playlist e cataloghi consegneranno URL “diagnostici”: se lo stream risponde correttamente il player viene rediretto alla sorgente (il video NON passa dal container); se il pannello rifiuta o non risponde appare un <b>video che spiega l’errore</b> (403, limite connessioni, server giù…) e la causa esatta viene scritta nei <a href=\"#logCard\" style=\"color:inherit\">Log live</a>. Utile in configurazione; puoi disattivarla quando tutto funziona.",
  "hint.token": "Se imposti un <b>token</b>, manifest/playlist/cataloghi richiederanno <code>?token=...</code>: la pagina mostra già gli URL completi da incollare in Nuvio e Stremio.",
  "hint.usage": "Ogni riga è una playlist: spuntala per includerla, scrivi nel campo per <b>rinominarla</b>, trascinala dalla maniglia <b>☰</b> per <b>riordinare</b>. Con <b>▸ canali</b> apri la playlist e gestisci i <b>singoli canali</b>: escludi, rinomina, riordina e — col <b>campo gruppo</b> a destra — <b>spostali in un’altra playlist o in un gruppo personale</b>. Poi premi <b>➜</b> per spostare il canale nel gruppo scritto o scelto, oppure <b>↺</b> per riportarlo alla playlist originale. Lo spostamento si <b>salva automaticamente</b>; per le altre modifiche ricorda <b>Salva configurazione</b>. Puoi anche <b>trascinare un canale sopra un’altra playlist</b> (anche tra liste diverse) o <b>una playlist al centro di un’altra riga</b> per spostarci tutti i suoi canali. Il pulsante <b>✕</b> elimina il canale o la playlist; per eliminarne tante insieme, spuntale e premi <b>✕ Cancella selezionate</b>. Nulla è perduto: trovi tutto nel <b>🗑 Cestino</b>.",
- "hint.userAgent": "Usato per <b>tutte le richieste in uscita</b> (liste, rami, pannello Xtream, loghi). Utile quando un pannello o una CDN restituisce <code>403</code> perché riconosce WiseM3U: incolla lo UA di un browser, di VLC o dell’app che usi normalmente. Una sola riga; vuoto = comportamento predefinito.",
+ "hint.userAgent": "Usato per <b>scaricare questa lista</b> e i suoi rami, il pannello Xtream e i loghi dei canali. Utile quando un pannello o una CDN restituisce <code>403</code> perché riconosce WiseM3U: incolla lo UA di un browser, di VLC o dell’app che usi normalmente. Una sola riga; vuoto = comportamento predefinito.",
  "history restore": "ripristino cronologia",
  "http://192.168.10.10:7860 oppure https://proxy.tuodominio.it": "http://192.168.10.10:7860 oppure https://proxy.tuodominio.it",
  "http://192.168.10.10:7860 or https://proxy.yourdomain.com": "http://192.168.10.10:7860 oppure https://proxy.tuodominio.it",
@@ -655,5 +655,6 @@
  "🗑 Trash": "🗑 Cestino",
  "🗑 Trash ({n})": "🗑 Cestino ({n})",
  "🧪 Protocolli, AceStream ed esclusioni": "🧪 Protocolli, AceStream ed esclusioni",
- "🧪 Protocols, AceStream and exclusions": "🧪 Protocolli, AceStream ed esclusioni"
+ "🧪 Protocols, AceStream and exclusions": "🧪 Protocolli, AceStream ed esclusioni",
+ "Custom User-Agent (opzionale)": "Custom User-Agent (opzionale)"
 }

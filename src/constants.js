@@ -4,9 +4,9 @@
  * Shared addon constants: a single place for version, user-agent, limits and
  * timeouts used by multiple modules (no scattered hardcoding).
  *
- * Custom User-Agent: some panels/CDNs block the WiseM3U string (403). From
- * settings the user can paste any UA (browser, VLC, the app they usually use):
- * it applies to ALL outgoing requests (lists, branches, Xtream JSON, logos).
+ * Custom User-Agent: some panels/CDNs block the WiseM3U string (403). Each
+ * list can carry its own UA (browser, VLC, the app the user usually uses):
+ * it applies to that list's downloads, Xtream panel and logos.
  * Empty = default.
  */
 
@@ -33,22 +33,14 @@ function sanitizeUserAgent(ua) {
   return s.slice(0, 300);
 }
 
-let customUserAgent = '';
-
-/** Sets the global override (empty string = back to defaults). */
-function setCustomUserAgent(ua) {
-  customUserAgent = sanitizeUserAgent(ua);
-  return customUserAgent;
+/** UA for lists/JSON/Xtream: the list-specific UA when set. */
+function getUserAgent(custom = '') {
+  return sanitizeUserAgent(custom) || DEFAULT_USER_AGENT;
 }
 
-/** UA for lists/JSON/Xtream: custom when set. */
-function getUserAgent() {
-  return customUserAgent || DEFAULT_USER_AGENT;
-}
-
-/** UA for logos: custom when set, otherwise the "clean" one. */
-function getImgUserAgent() {
-  return customUserAgent || DEFAULT_IMG_USER_AGENT;
+/** UA for logos: the list-specific UA when set, otherwise the "clean" one. */
+function getImgUserAgent(custom = '') {
+  return sanitizeUserAgent(custom) || DEFAULT_IMG_USER_AGENT;
 }
 
 module.exports = {
@@ -61,7 +53,6 @@ module.exports = {
   IMG_USER_AGENT: DEFAULT_IMG_USER_AGENT,
 
   sanitizeUserAgent,
-  setCustomUserAgent,
   getUserAgent,
   getImgUserAgent,
 

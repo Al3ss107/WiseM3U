@@ -286,5 +286,7 @@
  "🗑 Cestino": "🗑 Trash",
  "🗑 Cestino ({n})": "🗑 Trash ({n})",
  "🗑 Svuota cestino": "🗑 Empty trash",
- "🧪 Protocolli, AceStream ed esclusioni": "🧪 Protocols, AceStream and exclusions"
+ "🧪 Protocolli, AceStream ed esclusioni": "🧪 Protocols, AceStream and exclusions",
+ "hint.userAgent": "Used to <b>download this list</b> and its branches, the Xtream panel and channel logos. Useful when a panel or CDN returns <code>403</code> because it recognizes WiseM3U: paste the UA of a browser, VLC or the app you normally use. One line only; empty = default behavior.",
+ "Custom User-Agent (opzionale)": "Custom User-Agent (optional)"
 }

@@ -397,7 +397,7 @@ async function fetchText(url, opts = {}) {
       redirect: 'follow',
       signal: ctrl.signal,
       headers: {
-        'User-Agent': (opts && opts.userAgent) || getUserAgent(),
+        'User-Agent': getUserAgent(opts && opts.userAgent),
         Accept: 'application/json, text/plain, application/x-mpegurl, */*',
       },
     });
@@ -428,7 +428,7 @@ function nodeFetchText(url, opts = {}, redirectsLeft = 5) {
     const lib = isHttps ? https : http;
     const connectHost = opts.ip || u.hostname;
     const headers = {
-      'User-Agent': (opts && opts.userAgent) || getUserAgent(),
+      'User-Agent': getUserAgent(opts && opts.userAgent),
       Accept: 'application/json, text/plain, application/x-mpegurl, */*',
       'Accept-Encoding': 'identity', // niente compressione: qui non viene decompressa
     };
@@ -567,7 +567,7 @@ async function openStream(url, opts = {}) {
       redirect: 'follow',
       signal: ctrl.signal,
       headers: {
-        'User-Agent': (opts && opts.userAgent) || getUserAgent(),
+        'User-Agent': getUserAgent(opts && opts.userAgent),
         Accept: 'application/json, text/plain, application/x-mpegurl, */*',
       },
     });

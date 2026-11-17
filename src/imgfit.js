@@ -49,7 +49,7 @@ function cachePath(key) {
   return path.join(CACHE_DIR, `${key}.jpg`);
 }
 
-async function fetchBuf(url) {
+async function fetchBuf(url, userAgent = '') {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
   try {
@@ -59,7 +59,7 @@ async function fetchBuf(url) {
       headers: {
         // niente suffisso WiseM3U (vedi getImgUserAgent) + Accept da browser:
         // diversi CDN di loghi rispondono 403/i-frame challenge altrimenti
-        'User-Agent': getImgUserAgent(),
+        'User-Agent': getImgUserAgent(userAgent),
         Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
         'Accept-Language': 'it-IT,it;q=0.9,en;q=0.8',
       },
@@ -99,9 +99,9 @@ function icoToPng(buf) {
   return best ? best.data : null;
 }
 
-async function produce(url, shape) {
+async function produce(url, shape, userAgent = '') {
   const [W, H] = SHAPES[shape] || SHAPES.landscape;
-  let buf = await fetchBuf(url);
+  let buf = await fetchBuf(url, userAgent);
   const png = icoToPng(buf);
   if (png) buf = png;
   // padding ~10%: logo contained in a (W-2p)x(H-2p) canvas, then extended to
@@ -153,9 +153,20 @@ function warnFailed(key, url, err) {
 async function handle(req, res) {
   const url = String(req.query.url || '');
   const shape = String(req.query.shape || 'landscape');
+  const listId = String(req.query.list || '');
   if (!/^https?:\/\//i.test(url)) return res.status(400).end();
 
-  const key = crypto.createHash('sha1').update(`${shape}|${url}`).digest('hex');
+  // The logo belongs to a list: use that list's custom UA (empty = default).
+  let userAgent = '';
+  if (listId) {
+    try {
+      const cfg = require('./config').loadConfig();
+      const list = (cfg.lists || []).find((l) => l.id === listId);
+      if (list) userAgent = list.options.userAgent || '';
+    } catch (_) { /* config unreadable: default UA */ }
+  }
+
+  const key = crypto.createHash('sha1').update(`${shape}|${url}|${userAgent}`).digest('hex');
   const file = cachePath(key);
 
   try {
@@ -170,7 +181,7 @@ async function handle(req, res) {
   try {
     let p = inflight.get(key);
     if (!p) {
-      p = runQueued(() => produce(url, shape).catch((err) => {
+      p = runQueued(() => produce(url, shape, userAgent).catch((err) => {
         warnFailed(key, url, err);
         return null;
       }));

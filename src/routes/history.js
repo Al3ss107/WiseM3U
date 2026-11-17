@@ -12,7 +12,6 @@ const express = require('express');
 const store = require('../config');
 const cache = require('../cache');
 const history = require('../history');
-const C = require('../constants');
 
 /** Restores the current list name/URL/kind from the snapshot. */
 function applyListIdentity(current, saved) {
@@ -93,12 +92,11 @@ module.exports = function createHistoryRouter({ admin }) {
       }
 
       const list = targetList ? cfg.lists.find((l) => l.id === targetList) : null;
-      const savedCfg = store.saveConfig(cfg, {
+      store.saveConfig(cfg, {
         reason: 'history restore',
         listId: targetList,
         listName: list ? list.name || list.url : '',
       });
-      if (restored.settings) C.setCustomUserAgent(savedCfg.settings.userAgent);
       res.json({ ok: true, restored });
     } catch (err) {
       res.status(400).json({ error: err.message });

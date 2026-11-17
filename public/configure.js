@@ -492,6 +492,15 @@ function renderListCard(l){
             <div class="hint" data-info>1440 = giornaliero</div>
           </div>
           <div>
+            <label>Custom User-Agent (opzionale)</label>
+            <input type="text" maxlength="300" spellcheck="false" data-f="options.userAgent"
+              value="${esc(o.userAgent || '')}" placeholder="vuoto = predefinito (Chrome 126 + WiseM3U)">
+            <div class="hint" data-info data-i18n-html="hint.userAgent">Used to <b>download this list</b> and its branches, the
+              Xtream panel and channel logos. Useful when a panel or CDN returns
+              <code>403</code> because it recognizes WiseM3U: paste the UA of a browser,
+              VLC or the app you normally use. One line only; empty = default behavior.</div>
+          </div>
+          <div>
             <label>Nome catalogo</label>
             <input type="text" data-f="options.catalogName" value="${esc(o.catalogName||'')}">
           </div>
@@ -1296,6 +1305,9 @@ function setPath(obj, pathStr, value){
   const key = parts[parts.length-1];
   if (key === 'excludeKeywords'){
     cur[key] = String(value).split('\n').map(s=>s.trim()).filter(Boolean);
+  } else if (key === 'userAgent'){
+    // one line only (header injection); the server sanitizes again on save
+    cur[key] = String(value).replace(/[\r\n\t]+/g, ' ').replace(/\s{2,}/g, ' ').trim().slice(0, 300);
   } else if (key === 'groupDepth' || key === 'refreshMinutes' || key === 'maxDepth' || key === 'cacheTtlMinutes' || key === 'autoRefreshMinutes'){
     cur[key] = Number(value) || 0;
   } else {
@@ -1484,7 +1496,6 @@ function renderAll(){
   $('#s_cacheTtlMinutes').value = CFG.settings.cacheTtlMinutes;
   $('#s_autoRefreshMinutes').value = CFG.settings.autoRefreshMinutes;
   $('#s_maxDepth').value = CFG.settings.maxDepth;
-  $('#s_userAgent').value = CFG.settings.userAgent || '';
   $('#s_token').value = CFG.settings.token || '';
   $('#s_publicBaseUrl').value = CFG.settings.publicBaseUrl || '';
   $('#s_epgUrl').value = CFG.settings.epgUrl || '';
@@ -1515,8 +1526,6 @@ function readSettings(){
   CFG.settings.cacheTtlMinutes = Number($('#s_cacheTtlMinutes').value) || 1440;
   CFG.settings.autoRefreshMinutes = Number($('#s_autoRefreshMinutes').value) || 0;
   CFG.settings.maxDepth = Number($('#s_maxDepth').value) || 8;
-  // single line: the server still strips CR/LF (header injection)
-  CFG.settings.userAgent = $('#s_userAgent').value.replace(/[\r\n\t]+/g, ' ').trim().slice(0, 300);
   CFG.settings.token = $('#s_token').value.trim();
   CFG.settings.publicBaseUrl = $('#s_publicBaseUrl').value.trim();
   CFG.settings.epgUrl = $('#s_epgUrl').value.trim();

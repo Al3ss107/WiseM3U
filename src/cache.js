@@ -156,7 +156,7 @@ function ageMinutes(entry) {
 
 /**
  * Returns a list's tree, downloading it when needed.
- * @param {{id:string,url:string,ttlMinutes?:number,maxDepth?:number,force?:boolean}} req
+ * @param {{id:string,url:string,ttlMinutes?:number,maxDepth?:number,force?:boolean,userAgent?:string}} req
  */
 async function getTree(req) {
   const { id, url } = req;
@@ -196,7 +196,7 @@ async function getTree(req) {
   meta.refreshing = true;
 
   const promise = (async () => {
-    const tree = await buildTree(url, { maxDepth: req.maxDepth || 8 });
+    const tree = await buildTree(url, { maxDepth: req.maxDepth || 8, userAgent: req.userAgent || '' });
     const fetchedAt = new Date().toISOString();
     // compress once: same gzip in RAM and on disk
     const gz = zlib.gzipSync(Buffer.from(JSON.stringify({ fetchedAt, tree }), 'utf8'), { level: 1 });
@@ -265,6 +265,7 @@ async function refreshAll(lists, defaults) {
           url: l.url,
           ttlMinutes: 0,
           maxDepth: defaults.maxDepth,
+          userAgent: l.options.userAgent || '',
           force: false,
         });
         return { id: l.id, ok: true };
