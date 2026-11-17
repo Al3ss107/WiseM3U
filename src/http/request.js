@@ -2,6 +2,7 @@
 
 const store = require('../config');
 const streamdiag = require('../streamdiag');
+const { normalizeSourceUrl } = require('../urls');
 
 /** Token from query string or headers. */
 function tokenOf(req) {
@@ -67,10 +68,7 @@ function diagStreamUrl(cfg, req, url, name, listName) {
  * (or `&#38;`) and Xtream receives wrong parameters. Always normalize on input.
  */
 function sanitizeListUrl(url) {
-  return String(url || '')
-    .trim()
-    .replace(/&amp;/gi, '&')
-    .replace(/&#0?38;/gi, '&');
+  return normalizeSourceUrl(url);
 }
 
 module.exports = {

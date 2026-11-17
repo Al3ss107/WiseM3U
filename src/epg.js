@@ -17,6 +17,7 @@
 const cache = require('./cache');
 const { fetchText } = require('./wiseplay');
 const { getUserAgent } = require('./constants');
+const { normalizeSourceUrl } = require('./urls');
 
 const TTL_MS = 15 * 60 * 1000;
 const MAX_URLS = 4;
@@ -31,12 +32,8 @@ function cleanUrl(value) {
   const raw = String(value == null ? '' : value).trim();
   if (!raw) return '';
   try {
-    const u = new URL(raw);
+    const u = new URL(normalizeSourceUrl(raw));
     if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
-    const gh = u.pathname.match(/^\/([^/]+)\/([^/]+)\/blob\/(.+)$/);
-    if (u.hostname === 'github.com' && gh) {
-      return `https://raw.githubusercontent.com/${gh[1]}/${gh[2]}/${gh[3]}${u.search || ''}`;
-    }
     return u.toString();
   } catch (_) {
     return '';

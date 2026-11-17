@@ -9,6 +9,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { DEFAULT_ENABLED } = require('./protocols');
 const { sanitizeUserAgent } = require('./constants');
+const { normalizeSourceUrl } = require('./urls');
 const history = require('./history');
 
 const CONFIG_FILE = process.env.CONFIG_FILE || path.join(__dirname, '..', 'data', 'config.json');
@@ -169,7 +170,7 @@ function normalizeList(list) {
 
   return {
     id: list.id || `l_${crypto.randomBytes(5).toString('hex')}`,
-    url: (list.url || '').trim(),
+    url: normalizeSourceUrl(list.url),
     name: (list.name || '').trim(),
     kind: list.kind === 'personal' ? 'personal' : 'normal',
     createdAt: list.createdAt || new Date().toISOString(),

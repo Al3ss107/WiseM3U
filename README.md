@@ -115,6 +115,9 @@ Every enabled list with *"Show as catalog"* becomes its own catalog:
   follows the new name), **reorder** them and **disable** them individually;
 * catalogs are **paginated** (`skip`) and support **search** (`search`);
 * opening a channel shows its streams.
+* **GitHub links**: paste the normal file URL (`.../blob/.../list.m3u`): it is
+  converted to the raw file automatically. Repository or folder pages are HTML
+  and are rejected with a clear message; add each `.m3u` file separately.
 
 ---
 

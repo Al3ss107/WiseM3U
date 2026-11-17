@@ -24,6 +24,7 @@ const { parseM3U, epgUrlsFromHeader, parseAttrs, parseExtInf } = require('./m3u'
 const { familyOf } = require('./protocols');
 
 const { getUserAgent } = require('./constants');
+const { normalizeSourceUrl } = require('./urls');
 
 const MAX_DEPTH = 8;
 const MAX_NODES = 6000;
@@ -506,9 +507,18 @@ function isM3uText(text) {
   return /^\uFEFF?\s*#EXTM3U/im.test(text) || /#EXTINF\s*:/i.test(text);
 }
 
+/** HTML page (GitHub blob/tree, file preview, login page...) instead of a file. */
+function looksLikeHtml(text) {
+  const head = String(text || '').replace(/^\uFEFF/, '').trimStart().slice(0, 4096);
+  return /^<!doctype\s+html\b/i.test(head) || /<html[\s>]/i.test(head) || /<head[\s>]/i.test(head) || /<body[\s>]/i.test(head);
+}
+
 function guessKind(url, text) {
   if (isM3uText(text)) return 'm3u';
+  // keep the tolerant JSON path first: some public lists wrap the object in
+  // an HTML shell; only pure HTML is rejected
   if (looksLikeJson(text)) return 'json';
+  if (looksLikeHtml(text)) return 'html';
   if (/\.m3u8?(\?|$)/i.test(url)) return 'm3u';
   if (/\.json(\?|$)/i.test(url)) return 'json';
   return 'unknown';
@@ -739,6 +749,16 @@ function newCounters() {
  * @returns {Promise<{meta:object, children:Array, stats:object, errors:Array}>}
  */
 async function buildTree(rootUrl, options = {}) {
+  rootUrl = normalizeSourceUrl(rootUrl);
+  // A GitHub /tree/ URL is a repository folder page, never a playlist.
+  if (/^https?:\/\/(?:www\.)?github\.com\/[^/]+\/[^/]+\/tree\//i.test(rootUrl)) {
+    const bad = new FetchError(
+      'The URL is a GitHub FOLDER page, not a playlist: open the .m3u file, click "Raw" and paste that file link',
+      0
+    );
+    bad.fatal = true;
+    throw bad;
+  }
   const maxDepth = options.maxDepth || MAX_DEPTH;
   const onEvent = typeof options.onEvent === 'function' ? options.onEvent : () => {};
   const stats = newCounters();
@@ -904,6 +924,17 @@ async function buildTree(rootUrl, options = {}) {
       );
     }
     rootKind = guessKind(rootUrl, rootText);
+    if (rootKind === 'html') {
+      const githubPage = /^https?:\/\/(?:www\.)?github\.com\/[^/]+\/[^/]+\/(?:blob|tree)\//i.test(rootUrl);
+      const bad = new FetchError(
+        githubPage
+          ? 'The URL is a GitHub WEB PAGE, not a playlist: open the .m3u file, click "Raw" and paste the raw link (raw.githubusercontent.com/...)'
+          : 'The response is an HTML WEB PAGE, not a playlist: paste the direct link to the file (or the Raw/download link), not a preview page',
+        0
+      );
+      bad.fatal = true;
+      throw bad;
+    }
     if (rootKind === 'm3u') {
       rootJson = m3uToWisePlay(rootText, rootUrl);
       stats.m3u += 1;
