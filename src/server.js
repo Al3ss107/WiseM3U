@@ -1305,7 +1305,8 @@ if (require.main === module) {
         const c = store.loadConfig();
         for (const l of c.lists) {
           if (!l.options.enabled || !l.url) continue;
-          const age = cache.ageMinutes(l.id);
+          // persisted state survives restarts (no need to parse the snapshot)
+          const age = cache.ageMinutes({ fetchedAt: (l.state && l.state.fetchedAt) || '' });
           const ttl = l.options.refreshMinutes || c.settings.cacheTtlMinutes || 1440;
           if (age !== null && age <= ttl) continue;
           console.log(`[auto-refresh] refreshing "${l.name || l.id}"`);
