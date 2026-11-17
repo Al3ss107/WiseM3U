@@ -27,7 +27,7 @@ const DEFAULT_IMG_USER_AGENT =
  *  injection), reasonable length. */
 function sanitizeUserAgent(ua) {
   const s = String(ua == null ? '' : ua)
-    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/[\x00-\x1F\x7F]+/g, ' ')
     .replace(/\s{2,}/g, ' ')
     .trim();
   return s.slice(0, 300);
