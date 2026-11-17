@@ -431,6 +431,16 @@ function renderListCard(l){
     ? (CFG.settings.publicBaseUrl || location.origin).replace(/\/+$/, '') + '/personal/' + l.id + '.m3u' + tokenQs()
     : '';
   const collapsed = !OPEN_LISTS.has(l.id);
+  // A personal list has no remote source: the custom UA would do nothing.
+  const uaField = personal ? '' : `<div>
+            <label>Custom User-Agent (opzionale)</label>
+            <input type="text" maxlength="300" spellcheck="false" data-f="options.userAgent"
+              value="${esc(o.userAgent || '')}" placeholder="vuoto = predefinito (Chrome 126 + WiseM3U)">
+            <div class="hint" data-info data-i18n-html="hint.userAgent">Used to <b>download this list</b> and its branches, the
+              Xtream panel and channel logos. Useful when a panel or CDN returns
+              <code>403</code> because it recognizes WiseM3U: paste the UA of a browser,
+              VLC or the app you normally use. One line only; empty = default behavior.</div>
+          </div>`;
   return `<section class="card listcard${collapsed ? ' collapsed' : ''}" data-id="${esc(l.id)}" ${personal ? 'data-kind="personal"' : ''}>
     <div class="listhead">
       <div class="listtitle">
@@ -491,15 +501,7 @@ function renderListCard(l){
             <input type="number" min="5" data-f="options.refreshMinutes" value="${o.refreshMinutes}">
             <div class="hint" data-info>1440 = giornaliero</div>
           </div>
-          <div>
-            <label>Custom User-Agent (opzionale)</label>
-            <input type="text" maxlength="300" spellcheck="false" data-f="options.userAgent"
-              value="${esc(o.userAgent || '')}" placeholder="vuoto = predefinito (Chrome 126 + WiseM3U)">
-            <div class="hint" data-info data-i18n-html="hint.userAgent">Used to <b>download this list</b> and its branches, the
-              Xtream panel and channel logos. Useful when a panel or CDN returns
-              <code>403</code> because it recognizes WiseM3U: paste the UA of a browser,
-              VLC or the app you normally use. One line only; empty = default behavior.</div>
-          </div>
+          ${uaField}
           <div>
             <label>Nome catalogo</label>
             <input type="text" data-f="options.catalogName" value="${esc(o.catalogName||'')}">
