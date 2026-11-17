@@ -180,6 +180,7 @@ with the selected locale.
 | Feature | Details |
 | --- | --- |
 | **Stremio/Nuvio catalogs** | an enabled list with "show as catalog" becomes a catalog; playlists are the **genres**; `skip` pagination, `search` |
+| **Native EPG** | XMLTV URL set manually or inherited from `x-tvg-url`/`url-tvg`; matches `tvg-id`/`tvg-name`/normalized name, shows **Now/Next** in details and search, exposes programme `videos` and a dated `metasDetailed` catalog for Stremio Native EPG; guide cached in RAM |
 | **M3U playlist** | multi-level `group-title`, logos, EPG, deduplication, protocol filter; `.m3u8` alias |
 | **Logos** | `/imgfit` with **sharp/libvips** (PNG, JPEG, WebP, SVG, GIF, ICO), 640×360 landscape or 512×512 square canvas, 10% padding, `#101418` background, JPEG disk cache, 302 fallback |
 | **EasyProxy** | stream rewriting to an external instance (HLS/DASH proxy with WARP), with public DNS resolution + connection by IP |
