@@ -596,7 +596,7 @@ function renderListCard(l){
         <span class="name" data-ltgl="${esc(l.id)}" role="button" tabindex="0"
               aria-expanded="${collapsed ? 'false' : 'true'}"
               title="${collapsed ? 'Espandi' : 'Comprimi'} la lista"><i class="listdot ${o.enabled ? 'on' : 'off'}" role="img" title="${o.enabled ? 'Lista attiva' : 'Lista disattivata'}" aria-label="${o.enabled ? 'Lista attiva' : 'Lista disattivata'}"></i>${personal ? '⭐ ' : ''}${esc(l.name || l.url)}</span>
-        <button type="button" class="activeCount" data-act="activecount" aria-haspopup="dialog"
+        <button type="button" class="activeCount" data-act="activecount" data-active-count aria-haspopup="dialog"
           title="Mostra un'anteprima delle playlist attive">${activeLabel}</button>
         <div class="linfo"></div>
       </div>
@@ -1149,8 +1149,8 @@ function bindListEvents(){
       }
       if (ev.target.closest('[data-ua-input]')){ toggleUaMenu(card, true); return; }
       const copyurl = ev.target.closest('[data-copyurl]');
-      if (copyurl){
-        if (ev.target.closest('button, a')) return; // the copy button has its own handler
+      if (copyurl && !ev.target.closest('button, a')){
+        // a click on the URL text copies it; the inner copy button keeps its own handler
         copyListLink(copyurl.dataset.copyurl, list.kind === 'personal' ? 'Link M3U copiato ✔' : 'Link della lista copiato ✔');
         return;
       }
