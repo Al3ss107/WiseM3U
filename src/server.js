@@ -112,10 +112,7 @@ function publicConfig(cfg) {
   return {
     version: C.VERSION,
     rev: cfg.rev || 0,
-    // The effective token is sent to the page so the displayed/copied URLs
-    // always contain it; an ACCESS_TOKEN env value is never written to disk.
-    settings: { ...cfg.settings, token: store.accessToken(cfg.settings) },
-    accessTokenFromEnv: store.hasEnvAccessToken(),
+    settings: { ...cfg.settings },
     lists: cfg.lists,
   };
 }
@@ -383,8 +380,6 @@ app.put('/api/config', requireAdmin, (req, res) => {
     }
     const nextSettings = { ...current.settings, ...(incoming.settings || {}) };
     if (typeof nextSettings.token !== 'string') nextSettings.token = '';
-    // ACCESS_TOKEN is authoritative and must not be copied into config.json.
-    if (store.hasEnvAccessToken()) nextSettings.token = current.settings.token || '';
 
     const nextLists = Array.isArray(incoming.lists) ? incoming.lists : current.lists;
     const saved = store.saveConfig(

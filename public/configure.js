@@ -1807,11 +1807,7 @@ function renderAll(){
   }
   refreshSel.value = String(globalMinutes);
   $('#s_maxDepth').value = CFG.settings.maxDepth;
-  const tokenInput = $('#s_token');
-  tokenInput.value = CFG.settings.token || '';
-  tokenInput.disabled = !!CFG.accessTokenFromEnv;
-  const tokenEnvNote = $('#tokenEnvNote');
-  if (tokenEnvNote) tokenEnvNote.hidden = !CFG.accessTokenFromEnv;
+  $('#s_token').value = CFG.settings.token || '';
   $('#s_publicBaseUrl').value = CFG.settings.publicBaseUrl || '';
   $('#s_epgUrl').value = CFG.settings.epgUrl || '';
   const globalChecks = [

@@ -300,9 +300,6 @@ APIs used by the configuration page (also useful for scripts/automation):
   **libvips/sharp**: PNG, JPEG, **WebP, SVG, GIF and ICO** (channel CDNs often
   serve modern formats), 302 fallback to the original; can be disabled),
   **access token** (if set, manifest/playlist/catalogs require `?token=...`).
-  Set it from the page or, for a fully hands-off setup, with the
-  **`ACCESS_TOKEN`** environment variable: the value is applied automatically,
-  survives container recreation and is never written into `config.json`.
   The scheduler checks every minute and downloads only the lists whose
   interval has elapsed, in the background, without blocking playback. Failed
   downloads use an exponential backoff (5 minutes up to 6 hours).
@@ -494,7 +491,6 @@ Robustness and performance (measured on the two sample lists):
 | `HISTORY_MAX` | `60` | maximum number of automatic states kept (named checkpoints stay, up to 50) |
 | `HISTORY_DAYS` | `30` | maximum age (days) of automatic states (named checkpoints do not expire) |
 | `ADMIN_TOKEN` | *(empty)* | if set, protects `/configure` and `/api/*` |
-| `ACCESS_TOKEN` | *(empty)* | client-facing token for manifest/playlist/catalogs; overrides the token saved in the page and is not written to `config.json` |
 | `LIVE_LOG_BUFFER` | `1000` | number of events kept in the **live logs** buffer |
 | `WM_HOT_TREES` | `1` | how many lists stay **parsed in RAM** together (LRU): raise it if clients often switch between large lists, lower it if RAM is scarce |
 | `STREAM_DIAG_UA` | VLC/3.0.20 | user-agent used by `/proxy/play` probes (some panels accept only certain UAs) |
@@ -546,5 +542,5 @@ immediately.
 * The addon does not host content: it converts public lists provided by the
   user. Make sure you have the rights to use the lists you import.
 * If you expose the port on the Internet, set `ADMIN_TOKEN` and/or the *access
-  token* (or the `ACCESS_TOKEN` environment variable).
+  token* on the configuration page.
 * WisePlay lists change often: if a group disappears, use *Refresh* on its card.

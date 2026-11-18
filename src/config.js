@@ -13,9 +13,6 @@ const { normalizeSourceUrl } = require('./urls');
 const history = require('./history');
 
 const CONFIG_FILE = process.env.CONFIG_FILE || path.join(__dirname, '..', 'data', 'config.json');
-// Optional client-facing token managed by the container. When set it overrides
-// settings.token: the UI does not need to store or repeat it.
-const ENV_ACCESS_TOKEN = String(process.env.ACCESS_TOKEN || '').trim();
 
 // Refresh policy: one user-facing interval per list (or a global default).
 // The scheduler itself checks every minute; MIN_REFRESH_MINUTES protects
@@ -23,16 +20,6 @@ const ENV_ACCESS_TOKEN = String(process.env.ACCESS_TOKEN || '').trim();
 const MIN_REFRESH_MINUTES = 5;
 const DEFAULT_REFRESH_MINUTES = 360;
 const MAX_REFRESH_MINUTES = 525600;
-
-/** Effective client-facing token: ACCESS_TOKEN (container) or the saved setting. */
-function accessToken(settings) {
-  const configured = settings && typeof settings.token === 'string' ? settings.token.trim() : '';
-  return ENV_ACCESS_TOKEN || configured;
-}
-
-function hasEnvAccessToken() {
-  return !!ENV_ACCESS_TOKEN;
-}
 
 function defaultListOptions() {
   return {
@@ -446,8 +433,6 @@ function findList(id) {
 
 module.exports = {
   CONFIG_FILE,
-  accessToken,
-  hasEnvAccessToken,
   defaultConfig,
   defaultListOptions,
   effectiveRefreshMinutes,

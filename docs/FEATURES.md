@@ -91,9 +91,7 @@ background download with state and statistics.
 **Global** — addon name/ID, default list refresh interval (6 hours by
 default; 0 = manual), maximum depth, access token, public URL, EPG URL, global
 deduplication (off by default), proportional logos, stream diagnostics, clear
-cache, **interface language**. The access token can also come from the
-`ACCESS_TOKEN` environment variable: when set it overrides the field and is
-never written into the configuration file.
+cache, **interface language**.
 
 **Per list** — name, group-title prefix and depth, catalog name, refresh
 policy (global / custom / manual), **custom User-Agent**, allowed protocols,
@@ -190,7 +188,7 @@ with the selected locale.
 | **EasyProxy** | stream rewriting to an external instance (HLS/DASH proxy with WARP), with public DNS resolution + connection by IP |
 | **Stream diagnostics** | "diagnostic" URLs: if the stream responds → direct 302 (no container transit); if it fails → explanatory video generated with **FFmpeg** + `⛔` line in the logs |
 | **Xtream** | reads `/player_api.php` for expiry/connection limit (30 min cache) |
-| **Token** | `?token=` on manifest/playlist/catalogs (page or `ACCESS_TOKEN` env); `ADMIN_TOKEN` for configuration and APIs |
+| **Token** | `?token=` on manifest/playlist/catalogs; `ADMIN_TOKEN` for configuration and APIs |
 | **Compression** | compressed m3u responses (bandwidth saving) |
 
 ---
@@ -221,7 +219,6 @@ with the selected locale.
 | `CACHE_DIR` | `/data/cache` | tree snapshots + error videos |
 | `IMGFIT_DIR` | `/data/imgcache` | poster cache |
 | `ADMIN_TOKEN` | empty | protects `/configure` and `/api/*` |
-| `ACCESS_TOKEN` | empty | client-facing token; overrides the saved setting and is never written to `config.json` |
 | `LIVE_LOG_BUFFER` | `1000` | events kept in the live logs |
 | `WM_HOT_TREES` | `1` | how many trees to keep in RAM |
 | `WISEM3U_MAX_STATIONS` | `150000` | channel cap per list |

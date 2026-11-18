@@ -19,9 +19,6 @@ services:
       # Token protecting the configuration page (optional but recommended
       # se la porta 7300 e' raggiungibile da internet)
       - ADMIN_TOKEN=
-      # Client-facing token (optional): applied automatically to the
-      # manifest/playlist links; it is not saved in config.json
-      - ACCESS_TOKEN=
       - TZ=Europe/Rome
     volumes:
       - ./data:/data
