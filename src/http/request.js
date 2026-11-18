@@ -20,7 +20,7 @@ function clientInfo(req) {
 
 /** Middleware protecting client-facing endpoints with the configured token. */
 function requireToken(req, res, next) {
-  const expected = store.loadConfig().settings.token;
+  const expected = store.accessToken(store.loadConfig().settings);
   if (!expected) return next();
   if (tokenOf(req) === expected) return next();
   return res.status(401).json({ error: 'missing or invalid token' });
@@ -37,7 +37,7 @@ function createRequireAdmin(adminToken) {
 
 /** Appends the configured token to an absolute URL. */
 function withToken(url, req) {
-  const token = store.loadConfig().settings.token;
+  const token = store.accessToken(store.loadConfig().settings);
   if (!token) return url;
   return url.includes('?')
     ? `${url}&token=${encodeURIComponent(token)}`
@@ -60,7 +60,7 @@ function publicBase(req, cfg) {
 /** Rewrites a stream URL through the diagnostic proxy when enabled. */
 function diagStreamUrl(cfg, req, url, name, listName) {
   if (!cfg.settings.streamDiag) return url;
-  return streamdiag.diagUrl(publicBase(req, cfg), cfg.settings.token || '', url, name, listName);
+  return streamdiag.diagUrl(publicBase(req, cfg), store.accessToken(cfg.settings), url, name, listName);
 }
 
 /**

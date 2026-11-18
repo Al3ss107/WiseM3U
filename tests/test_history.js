@@ -87,6 +87,7 @@ const mkList = (id, name, opts={}) => ({
   ok(!pageHtml.includes('>healthz<'), 'healthz link removed from the header');
   ok(!pageHtml.includes('⏸') && !pageHtml.includes('⭳') && !pageHtml.includes('🔎'), 'log controls use text labels without glyphs');
   ok(pageHtml.includes('id="activeModal"'), 'active playlists modal is present');
+  ok(pageHtml.includes('id="tokenEnvNote"'), 'general settings explain the ACCESS_TOKEN override');
   ok(pageHtml.includes('<h2 class="secttl" data-collapsed="0"><span class="n">3</span> Your lists</h2>'), 'lists section is collapsible');
   ok(!pageHtml.includes('btnCopyManifest') && !pageHtml.includes('btnCopyM3u'), 'old copy buttons removed with section 3');
   ok(!pageHtml.includes('Connect Nuvio, Stremio'), 'connect section removed');
@@ -102,6 +103,7 @@ const mkList = (id, name, opts={}) => ({
   ok(jsText.includes('Copiato manifest') && jsText.includes('Copiato m3u'), 'header links copy their URL');
   ok(jsText.includes('data-active-count') && jsText.includes('openActiveModal'), 'active playlist count opens a preview modal');
   ok(jsText.includes('data-copyurl'), 'list URL lines copy their link');
+  ok(jsText.includes('accessTokenFromEnv'), 'UI reflects the ACCESS_TOKEN environment override');
   ok(jsText.includes('wm-ui-version') && !jsText.includes('__WM_UI_VERSION__'), 'JS reads the version from meta');
 
   // v1: list A with order [X,Y], list B
