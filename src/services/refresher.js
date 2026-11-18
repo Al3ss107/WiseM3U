@@ -213,7 +213,8 @@ function createRefresher() {
       if (interval <= 0) continue; // manual only
       const age = cache.ageMinutes({ fetchedAt: state.fetchedAt || '' });
       if (age !== null && age <= interval) continue;
-      console.log(`[auto-refresh] refreshing "${list.name || list.id}" (age ${age === null ? 'unknown' : `${Math.round(age)} min`}, interval ${interval} min)`);
+      const ageText = Number.isFinite(age) ? `${Math.round(age)} min` : 'unknown';
+      console.log(`[auto-refresh] refreshing "${list.name || list.id}" (age ${ageText}, interval ${interval} min)`);
       startRefresh(list.id, true);
     }
   }
