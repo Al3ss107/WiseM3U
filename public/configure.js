@@ -183,7 +183,6 @@ function renderBranches(list){
     return html;
   }).join('');
 
-  const active = bs.filter(b=>branchEnabled(list, b.path)).length;
   const purgedCh = new Set(list.options.purgedChannels || []);
   const purgedBr = new Set(list.options.purgedBranches || []);
   const nTrash = (list.options.deletedChannels || []).filter((k)=>!purgedCh.has(k)).length
@@ -192,7 +191,7 @@ function renderBranches(list){
   return `<div class="plwrap${plOpen ? '' : ' collapsed'}">
   <div class="plhead">
     <h2 data-ptgl="${esc(list.id)}" role="button" tabindex="0" aria-expanded="${plOpen}"
-      title="${plOpen ? 'Comprimi le playlist' : 'Espandi le playlist'}"><span class="ttl">Playlist della lista</span> <span class="badge">${active}/${bs.length} attive</span>${
+      title="${plOpen ? 'Comprimi le playlist' : 'Espandi le playlist'}"><span class="ttl">Playlist della lista</span>${
       visible.length !== bs.length ? ` <span class="badge" title="Playlist mostrate con i filtri attivi">${visible.length} in vista</span>` : ''
     }<span class="sectgl" aria-hidden="true">${plOpen ? '\u25be' : '\u25b8'}</span></h2>
     <div class="pltools">
@@ -437,12 +436,6 @@ async function pollListStates(){
       const s = await api(`/api/lists/${l.id}/state`);
       if (s && typeof s === 'object') l.state = s;
     } catch (_) { /* list removed or temporary error: keep the last state */ }
-    const badge = [...document.querySelectorAll('[data-statebadge]')].find(b => b.dataset.statebadge === l.id);
-    if (badge && l.state){
-      const status = l.state.status || 'idle';
-      badge.className = `badge ${status}`;
-      badge.textContent = status;
-    }
   }));
   updateRefreshMeta();
 }
@@ -568,8 +561,10 @@ async function createPersonalList(){
 
 function renderListCard(l){
   const o = l.options, s = l.state || {};
-  const st = s.status || 'idle';
   const stats = s.stats || null;
+  const bs = branchesOf(l.id);
+  const activeN = bs ? bs.filter((b) => branchEnabled(l, b.path)).length : null;
+  const activeLabel = bs ? `${activeN}/${bs.length} attive` : 'playlist…';
   const personal = l.kind === 'personal';
   const purl = personal
     ? (CFG.settings.publicBaseUrl || location.origin).replace(/\/+$/, '') + '/personal/' + l.id + '.m3u' + tokenQs()
@@ -600,12 +595,11 @@ function renderListCard(l){
       <div class="listtitle">
         <span class="name" data-ltgl="${esc(l.id)}" role="button" tabindex="0"
               aria-expanded="${collapsed ? 'false' : 'true'}"
-              title="${collapsed ? 'Espandi' : 'Comprimi'} la lista">${personal ? '⭐ ' : ''}${esc(l.name || l.url)}</span>
+              title="${collapsed ? 'Espandi' : 'Comprimi'} la lista"><i class="listdot ${o.enabled ? 'on' : 'off'}" role="img" title="${o.enabled ? 'Lista attiva' : 'Lista disattivata'}" aria-label="${o.enabled ? 'Lista attiva' : 'Lista disattivata'}"></i>${personal ? '⭐ ' : ''}${esc(l.name || l.url)}</span>
+        <button type="button" class="activeCount" data-act="activecount" aria-haspopup="dialog"
+          title="Mostra un'anteprima delle playlist attive">${activeLabel}</button>
         <div class="linfo"></div>
       </div>
-      ${personal ? '<span class="badge ready" title="Lista personale: composta da canali e playlist delle tue liste">personale</span>' : ''}
-      ${s.kind === 'm3u' ? '<span class="badge ready" title="Sorgente playlist M3U">m3u</span>' : ''}
-      <span class="badge ${st}" data-statebadge="${esc(l.id)}">${st}</span>
       <span class="xtbadge" id="xt_${esc(l.id)}"></span>
       <div class="spacer" style="flex:1"></div>
       <div class="acts">
@@ -616,9 +610,10 @@ function renderListCard(l){
       </div>
     </div>
     ${personal
-      ? `<div class="url">Lista personale (senza URL remoto): il contenuto lo scegli tu qui sotto.
+      ? `<div class="url copyurl" data-copyurl="${esc(purl)}" role="button" tabindex="0" title="Clicca per copiare il link M3U">
+         Lista personale (senza URL remoto): il contenuto lo scegli tu qui sotto.
          Link M3U: <code>${esc(purl)}</code> <button class="ghost small" data-act="copypl" style="margin-left:6px">⧉ copia</button></div>`
-      : `<div class="url">${esc(l.url)}</div>`}
+      : `<div class="url copyurl" data-copyurl="${esc(l.url)}" role="button" tabindex="0" title="Clicca per copiare il link della lista">${esc(l.url)}</div>`}
     <div class="kv" style="margin-top:6px">
       <span data-refreshmeta="${esc(l.id)}">${refreshMeta(l)}</span>
       ${stats ? ` · nodi <b>${stats.nodes}</b> · rami esterni <b>${stats.external}</b> · m3u importate <b>${stats.m3u}</b> · stream <b>${stats.stations}</b>${stats.failed?` · errori <b>${stats.failed}</b>`:''}` : ''}
@@ -1093,6 +1088,12 @@ function bindListEvents(){
         closeUaMenus();
         return;
       }
+      const copyurl = ev.target.closest('[data-copyurl]');
+      if (copyurl && (ev.key === 'Enter' || ev.key === ' ' || ev.key === 'Spacebar')){
+        ev.preventDefault();
+        copyListLink(copyurl.dataset.copyurl, list.kind === 'personal' ? 'Link M3U copiato ✔' : 'Link della lista copiato ✔');
+        return;
+      }
       const tgl = ev.target.closest('[data-ltgl], [data-ptgl]');
       if (tgl && (ev.key === 'Enter' || ev.key === ' ' || ev.key === 'Spacebar')){ ev.preventDefault(); tgl.click(); }
     });
@@ -1147,6 +1148,12 @@ function bindListEvents(){
         return;
       }
       if (ev.target.closest('[data-ua-input]')){ toggleUaMenu(card, true); return; }
+      const copyurl = ev.target.closest('[data-copyurl]');
+      if (copyurl){
+        if (ev.target.closest('button, a')) return; // the copy button has its own handler
+        copyListLink(copyurl.dataset.copyurl, list.kind === 'personal' ? 'Link M3U copiato ✔' : 'Link della lista copiato ✔');
+        return;
+      }
       const ltl = ev.target.closest('[data-ltgl]');
       if (ltl){
         const lid = ltl.dataset.ltgl;
@@ -1288,6 +1295,7 @@ function bindListEvents(){
       const btn = ev.target.closest('button[data-act]');
       if (!btn) return;
       const act = btn.dataset.act;
+      if (act === 'activecount'){ openActiveModal(list); return; }
       if (act === 'trash'){
         if (TRASHOPEN.has(id)){ TRASHOPEN.delete(id); renderLists(); return; }
         TRASHOPEN.add(id);
@@ -1509,8 +1517,55 @@ function bindListEvents(){
 function updateBadge(card, list){
   const bs = branchesOf(list.id) || [];
   const active = bs.filter(b=>branchEnabled(list, b.path)).length;
-  const badge = card.querySelector('h2 .badge');
+  const badge = card.querySelector('[data-active-count]');
   if (badge) badge.textContent = `${active}/${bs.length} attive`;
+}
+
+/* ---------- active playlists preview ---------- */
+
+let MODAL_PREV_FOCUS = null;
+
+function closeActiveModal(){
+  const modal = $('#activeModal');
+  if (!modal || modal.hidden) return;
+  modal.hidden = true;
+  document.body.classList.remove('modal-open');
+  if (MODAL_PREV_FOCUS && document.contains(MODAL_PREV_FOCUS)) MODAL_PREV_FOCUS.focus();
+  MODAL_PREV_FOCUS = null;
+}
+
+function openActiveModal(list){
+  const modal = $('#activeModal');
+  const body = $('#activeModalBody');
+  const title = $('#activeModalTitle');
+  if (!modal || !body || !title) return;
+  const bs = branchesOf(list.id);
+  const active = (bs || []).filter((b) => branchEnabled(list, b.path));
+  title.textContent = `Playlist attive · ${list.name || list.url || list.id}`;
+  if (!bs){
+    body.innerHTML = '<div class="hint">Playlist non ancora caricate: attendi il download della lista oppure premi <b>Aggiorna</b>.</div>';
+  } else if (!active.length){
+    body.innerHTML = '<div class="hint">Nessuna playlist attiva in questa lista.</div>';
+  } else {
+    body.innerHTML = `<div class="hint" style="margin:0 0 8px">${active.length} di ${bs.length} playlist attive</div>`
+      + active.map((b) => `<div class="activePrevRow"><b>${esc(branchDisplayName(list, b))}</b>`
+        + `<span class="cnt">${Number(b.stations) || 0} canali${b.hidden ? ` · ${b.hidden} esclusi` : ''}</span></div>`).join('');
+  }
+  MODAL_PREV_FOCUS = document.activeElement;
+  modal.hidden = false;
+  document.body.classList.add('modal-open');
+  requestAnimationFrame(() => {
+    const close = modal.querySelector('.modal-close');
+    if (close) close.focus();
+  });
+}
+
+function copyListLink(value, message){
+  if (!value) return;
+  copyText(value).then(
+    () => toast(message),
+    (e) => toast('Copia non riuscita: ' + e.message, 4000)
+  );
 }
 
 /** Closes the UA suggestion menus (all, or all except `keep`). */
@@ -1643,7 +1698,7 @@ function exportLogs(){
 
 $('#logPause').addEventListener('click', () => {
   LOG.pause = !LOG.pause;
-  $('#logPause').textContent = LOG.pause ? '▶ Riprendi' : '⏸ Pausa';
+  $('#logPause').textContent = LOG.pause ? 'Riprendi' : 'Pausa';
   $('#logPause').classList.toggle('on', LOG.pause);
 });
 $('#logClear').addEventListener('click', async () => {
@@ -1769,7 +1824,6 @@ function renderAll(){
   const base = (CFG.settings.publicBaseUrl || location.origin).replace(/\/+$/, '');
   $('#manifestLink').href = base + '/manifest.json' + tokenQs();
   $('#m3uLink').href = base + '/playlist.m3u' + tokenQs();
-  $('#channelsLink').href = base + '/channels.json' + tokenQs();
   renderLists();
   $('#status').textContent = `${CFG.lists.length} liste · ${CFG.lists.filter(l=>l.options.enabled).length} attive`;
   if (CFG.version && String(CFG.version) !== WM_UI_VERSION){
@@ -1975,6 +2029,14 @@ $('#m3uLink').addEventListener('click', (ev) => {
     () => toast('Copiato m3u ✔'),
     (e) => toast('Copia non riuscita: ' + e.message, 4000)
   );
+});
+
+$('#activeModal').addEventListener('click', (ev) => {
+  if (ev.target.closest('[data-modal-close]')) closeActiveModal();
+});
+document.addEventListener('keydown', (ev) => {
+  const modal = $('#activeModal');
+  if (ev.key === 'Escape' && modal && !modal.hidden) closeActiveModal();
 });
 $('#btnAdd').addEventListener('click', addList);
 $('#newUrl').addEventListener('keydown', e=>{ if(e.key==='Enter') addList(); });
@@ -2417,12 +2479,11 @@ function initCollapsibleSections(){
     const h2 = sec.querySelector(':scope > h2');
     if (h2) makeSectionToggle(h2, (c)=>sec.classList.toggle('collapsed', c), sec.dataset.collapsed === '1');
   });
-  // Live log: the title is outside the section, so the whole section is hidden
+  // Section titles outside a card (3 Your lists, 4 history, 5 logs): the
+  // whole following block is hidden. This also closes every list card inside.
   document.querySelectorAll('main > h2.secttl').forEach(h2=>{
     const sec = h2.nextElementSibling;
-    if (sec && sec.matches('section.card')){
-      makeSectionToggle(h2, (c)=>{ sec.hidden = c; }, h2.dataset.collapsed === '1');
-    }
+    if (sec) makeSectionToggle(h2, (c)=>{ sec.hidden = c; }, h2.dataset.collapsed === '1');
   });
 }
 

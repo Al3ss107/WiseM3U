@@ -146,26 +146,28 @@ only **1 Add a list** and **3 Your lists** are open; general settings, history,
 logs and list cards start collapsed. List cards open by
 tapping the name, playlists have their own collapse button with the respective
 info in the title, and per-list settings stay in the existing `<details>`. The
-open state of lists is preserved across list refreshes. The interface follows
+open state of lists is preserved across list refreshes. A colored dot next to
+each list name shows whether the list is enabled (green) or off (red); the
+active-playlist counter stays visible when the card is collapsed and opens a
+preview modal, and clicking the source URL copies it. The interface follows
 the **Material 3** design (color tokens, cards, tonal buttons, bordered fields
 with visible focus). The theme is the dark Dracula palette (deep grey-purple
 background with purple accents).
 
-**On phones (≤ 560 px)** — compact (not sticky) header with a smaller logo,
-list actions in a 2×2 grid, playlist and channel rows on multiple lines (name
-full width, counts and buttons below), 40 px touch targets, 16 px fields to
-avoid iOS auto-zoom and no horizontal scrolling. Section number, title, **i**
-icon and **▾/▸** button always stay on the same row even on narrow phones. The
-footer is no longer fixed: **Save** is a floating button at the bottom right
-(together with "☰ Lists" on the left), while the list count and version stay at
-the bottom of the page and scroll with the content. Floating buttons hide when
-the keyboard is open (measured on `visualViewport`) so they do not steal space
-while typing. On mobile there is also an always-floating **↑** arrow above
-**Save** that scrolls back to the top smoothly (respects
-`prefers-reduced-motion` and hides when the keyboard is open). Branch reordering
+**On phones (≤ 560 px)** — compact (not sticky) header with the logo, title,
+language selector and links all on one row; list actions in a 2×2 grid, playlist
+and channel rows on multiple lines (name full width, counts and buttons below),
+40 px touch targets, 16 px fields to avoid iOS auto-zoom and no horizontal
+scrolling. Section number, title, **i** icon and **▾/▸** button always stay on
+the same row even on narrow phones. The footer is no longer fixed: **☰ Lists**
+floats on the left, **Save** in the center and **↑** on the right, while the
+list count and version stay at the bottom of the page and scroll with the
+content. Floating buttons hide when the keyboard is open (measured on
+`visualViewport`) so they do not steal space while typing. Branch reordering
 remains drag-and-drop, which touch browsers do not support; list reordering in
-the side menu uses a drag handle and also works with touch. The save/refresh button shows a plain `on`/`off` label (no glyph
-that Android renders as a missing-character box).
+the side menu uses a drag handle and also works with touch. The save/refresh
+button shows a plain `on`/`off` label (no glyph that Android renders as a
+missing-character box).
 
 **Languages** — the header has a language selector with English, Italian,
 Spanish, French, German, Portuguese (Brazil), Russian and Simplified Chinese.

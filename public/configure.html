@@ -11,7 +11,7 @@
 
 <header>
   <img src="/logo.svg" alt="logo">
-  <div>
+  <div class="brand">
     <h1>WiseM3U <span class="sub">Stremio &amp; Nuvio addon</span></h1>
     <div class="sub">WisePlay, M3U and M3U_PLUS lists → M3U playlist + catalogs</div>
   </div>
@@ -20,7 +20,6 @@
     <select id="langSelect" class="langselect" aria-label="Language" title="Language"></select>
     <a class="lnk" id="manifestLink" href="/manifest.json" target="_blank" title="Copy the manifest URL">manifest.json</a>
     <a class="lnk" id="m3uLink" href="/playlist.m3u" target="_blank" title="Copy the M3U URL">playlist.m3u</a>
-    <a class="lnk" id="channelsLink" href="/channels.json" target="_blank" title="Copy the channels overview URL">channels.json</a>
   </div>
 </header>
 
@@ -138,7 +137,7 @@
   </section>
 
   <!-- ============ LISTS ============ -->
-  <h2 class="secttl"><span class="n">3</span> Your lists</h2>
+  <h2 class="secttl" data-collapsed="0"><span class="n">3</span> Your lists</h2>
   <section id="lists"></section>
 
   <!-- ============ CONFIGURATION HISTORY ============ -->
@@ -174,10 +173,10 @@
         <option value="catalog">catalog</option>
         <option value="system">system</option>
       </select>
-      <input id="logFilter" type="text" placeholder="🔎 filter… (channel, list, url, error)">
+      <input id="logFilter" type="text" placeholder="filter… (channel, list, url, error)">
       <span class="spacer"></span>
-      <button class="ghost small" id="logPause" title="Pause or resume automatic refresh">⏸ Pause</button>
-      <button class="ghost small" id="logDownload" title="Download the current logs as a text file">⭳ Download</button>
+      <button class="ghost small" id="logPause" title="Pause or resume automatic refresh">Pause</button>
+      <button class="ghost small" id="logDownload" title="Download the current logs as a text file">Download</button>
       <button class="danger small" id="logClear" title="Clear the logs">Clear</button>
     </div>
     <div id="logBox" class="logbox">
@@ -212,6 +211,17 @@
 <button id="toTop" type="button" title="Back to top" aria-label="Back to top">↑</button>
 
 <div class="toast" id="toast"></div>
+
+<div class="modal" id="activeModal" hidden>
+  <div class="modal-backdrop" data-modal-close></div>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="activeModalTitle">
+    <div class="modal-head">
+      <h3 id="activeModalTitle"></h3>
+      <button type="button" class="modal-close" data-modal-close aria-label="Close">✕</button>
+    </div>
+    <div class="modal-body" id="activeModalBody"></div>
+  </div>
+</div>
 
 <script src="/i18n.js"></script>
 <script src="/configure.js" defer></script>

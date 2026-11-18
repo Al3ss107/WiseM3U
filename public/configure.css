@@ -225,6 +225,16 @@
   .listcard{scroll-margin-top:84px;background:var(--md-surface-2)}
   .listhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
   .listhead .name{font-weight:500;font-size:17px;letter-spacing:.1px}
+  .listhead .listdot{display:inline-block;width:9px;height:9px;border-radius:50%;flex:0 0 auto;
+    background:var(--md-error);box-shadow:0 0 0 3px rgba(255,85,85,.12)}
+  .listhead .listdot.on{background:var(--md-success);box-shadow:0 0 0 3px rgba(80,250,123,.12)}
+  .activeCount{display:inline-flex;align-items:center;flex:0 0 auto;min-height:0;
+    padding:4px 9px;border-radius:10px;background:var(--md-surface-3);color:var(--md-on-surface-variant);
+    font:inherit;font-size:11.5px;font-weight:600;line-height:1.2;box-shadow:none;cursor:pointer}
+  .activeCount:hover{background:var(--md-surface-4);color:var(--md-on-surface);filter:none}
+  .url.copyurl{cursor:pointer;border-radius:8px;padding:4px 6px;margin-left:-6px;transition:background .15s}
+  .url.copyurl:hover{background:rgba(189,147,249,.12)}
+  .url.copyurl:focus-visible{outline:2px solid var(--md-primary);outline-offset:2px}
   .acts{display:flex;gap:8px;flex-wrap:wrap}
   /* ---------- intestazione playlist ---------- */
   .plhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:18px}
@@ -331,6 +341,25 @@
              background:#44475a;color:#f8f8f2;font:inherit;font-weight:700;cursor:pointer}
   .toast-act:hover{background:#525568}
   .toast-act:active{background:#3b3d4d}
+  /* ---------- active playlists modal ---------- */
+  body.modal-open{overflow:hidden}
+  .modal{position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:16px}
+  .modal[hidden]{display:none}
+  .modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.62);backdrop-filter:blur(2px);
+                  -webkit-backdrop-filter:blur(2px)}
+  .modal-card{position:relative;display:flex;flex-direction:column;width:min(560px,100%);
+              max-height:min(72vh,620px);background:var(--md-surface-2);border:1px solid var(--md-outline);
+              border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.65);overflow:hidden}
+  .modal-head{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+  .modal-head h3{margin:0;min-width:0;font-size:16px;font-weight:500;overflow-wrap:anywhere}
+  .modal-close{margin-left:auto;flex:0 0 auto;min-height:0;width:36px;height:36px;padding:0;border-radius:50%;
+    background:transparent;color:var(--md-on-surface-variant);font-size:16px;line-height:1;box-shadow:none}
+  .modal-close:hover{background:var(--md-surface-4);color:var(--md-on-surface);filter:none}
+  .modal-body{padding:10px 16px 16px;overflow:auto}
+  .activePrevRow{display:flex;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+  .activePrevRow:last-child{border-bottom:0}
+  .activePrevRow b{min-width:0;font-weight:500;overflow-wrap:anywhere}
+  .activePrevRow .cnt{flex:0 0 auto;color:var(--mut);font-size:11.5px;white-space:nowrap}
   /* open dropdowns use the system light background: force contrast */
   select option, datalist option{background:#343746;color:#f8f8f2}
   /* ---------- tablet ---------- */
@@ -347,16 +376,17 @@
     input[type=text],input[type=url],input[type=number],input[type=password],select,textarea,
     .crow .cname,.crow .cmove,.chead .cfilter{font-size:16px}
 
-    /* --- header: title on one line, links in a scrolling strip --- */
-    /* not sticky: on a phone a 90px fixed bar takes space away from the list */
-    header{position:static;padding:8px 12px;gap:8px}
-    header img{width:30px;height:30px;border-radius:8px}
-    header h1{font-size:16px;font-weight:500;line-height:1.25}
+    /* --- header: logo, title and links on a single row --- */
+    /* not sticky: on a phone a fixed bar takes space away from the list */
+    header{position:static;padding:7px 9px;gap:6px;flex-wrap:nowrap;overflow:hidden}
+    header img{width:28px;height:28px;border-radius:7px;flex:0 0 auto}
+    header .brand{flex:1 1 auto;min-width:0;overflow:hidden}
+    header h1{font-size:15px;font-weight:500;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     header h1 .sub,header .sub,header .spacer{display:none}
-    /* all links stay visible: wrapping is clearer than a hidden horizontal strip */
-    header .links{flex-wrap:wrap;overflow:visible;width:100%;gap:5px;padding:2px 0}
-    a.lnk{padding:5px 9px;font-size:11px;white-space:nowrap;flex:1 1 auto;text-align:center;min-width:0}
-    select.langselect{height:26px;max-width:118px;font-size:11px;flex:0 0 auto}
+    header .links{width:auto;flex:0 0 auto;flex-wrap:nowrap;overflow:visible;gap:4px;padding:0}
+    a.lnk{padding:4px 6px;font-size:10px;line-height:1.2;white-space:nowrap;flex:0 0 auto;text-align:center}
+    select.langselect{height:24px;max-width:62px;font-size:10px;padding:0 17px 0 7px;flex:0 0 auto;
+      background-position:calc(100% - 9px) 10px,calc(100% - 6px) 10px}
 
     /* --- containers and controls --- */
     main{padding:10px}
@@ -461,6 +491,13 @@
     .logbar .spacer{display:none}
     .logbox{height:42vh;font-size:11.5px}
 
+    /* --- active playlists modal --- */
+    .modal{padding:10px}
+    .modal-card{max-height:80vh;border-radius:16px}
+    .modal-head{padding:12px 14px}
+    .modal-body{padding:8px 14px 14px}
+    .activePrevRow{align-items:flex-start;flex-direction:column;gap:2px}
+
     /* --- static footer at the bottom of the page --- */
     /* used to be fixed: with the keyboard open it floated above the keys,
        rubando spazio. Ora numero liste e versione scorrono con la pagina. */
@@ -474,23 +511,23 @@
     footer #appVersion{font-size:10.5px}
     footer #status{margin-left:0}
 
-    /* --- floating buttons --- */
-    .fabbar{display:flex;position:fixed;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));
-            gap:10px;z-index:61;transition:opacity .18s,transform .18s}
+    /* --- floating buttons: Lists left, Save centered, top right --- */
+    .fabbar{display:flex;position:fixed;left:50%;right:auto;bottom:calc(12px + env(safe-area-inset-bottom));
+            gap:10px;z-index:61;transform:translateX(-50%);transition:opacity .18s,transform .18s}
     .fabbar button{box-shadow:0 6px 16px rgba(0,0,0,.45);border-radius:16px}
     #fabSave{min-height:54px;padding:0 20px;font-size:15px}
     #sdToggle{top:auto;left:12px;right:auto;bottom:calc(12px + env(safe-area-inset-bottom));
               width:auto;height:54px;padding:0 18px;border-radius:16px;font-size:14px;z-index:61;
               background:var(--md-surface-3);color:var(--md-on-surface);border:0;
               box-shadow:0 6px 16px rgba(0,0,0,.45);transition:opacity .18s,transform .18s}
-    /* back to top: always floating above the Save button */
     #toTop{display:grid;place-items:center;position:fixed;right:12px;
-           bottom:calc(78px + env(safe-area-inset-bottom));z-index:61;
-           width:48px;height:48px;padding:0;border-radius:16px;font-size:20px;line-height:1;
+           bottom:calc(12px + env(safe-area-inset-bottom));z-index:61;
+           width:54px;height:54px;padding:0;border-radius:16px;font-size:20px;line-height:1;
            background:var(--md-secondary-container);color:var(--md-on-secondary-container);
            box-shadow:0 6px 16px rgba(0,0,0,.45);transition:opacity .18s,transform .18s}
     /* keyboard open: floating buttons hide and cover nothing */
-    body.kbd .fabbar,body.kbd #sdToggle,body.kbd #toTop{opacity:0;pointer-events:none;transform:translateY(10px)}
+    body.kbd .fabbar{opacity:0;pointer-events:none;transform:translate(-50%,10px)}
+    body.kbd #sdToggle,body.kbd #toTop{opacity:0;pointer-events:none;transform:translateY(10px)}
 
     /* --- list menu: bottom sheet above the floating buttons --- */
     #sidemenu{left:8px;right:8px;top:auto;bottom:calc(80px + env(safe-area-inset-bottom));
@@ -506,7 +543,11 @@
   @media (max-width:380px){
     main{padding:8px}
     .card{padding:10px}
+    header{padding:6px 7px;gap:4px}
+    header img{width:26px;height:26px}
     header h1{font-size:14px}
+    a.lnk{padding:4px 5px;font-size:9px}
+    select.langselect{max-width:56px;font-size:9px}
     .acts{grid-template-columns:1fr}
     .pltools button{font-size:12px;padding:6px}
     .listhead .name{font-size:15px}
