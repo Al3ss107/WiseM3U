@@ -426,5 +426,13 @@
  "filter… (channel, list, url, error)": "filtern… (Sender, Liste, URL, Fehler)",
  "hint.logWaiting": "Warten auf Ereignisse… die Protokolle starten von selbst, wenn jemand einen Sender ansieht (stream), das Addon eine Liste herunterlädt (download) oder die Playlist angefordert wird. Dieselben Zeilen erscheinen auch mit <code>docker logs -f wisem3u</code>.",
  "Expand the list": "Liste ausklappen",
- "Expand the playlists": "Playlists ausklappen"
+ "Expand the playlists": "Playlists ausklappen",
+ "— the whole playlist —": "— die ganze Playlist —",
+ "M3U link copied ✔": "M3U-Link kopiert ✔",
+ "List link copied ✔": "Listen-Link kopiert ✔",
+ "List deleted": "Liste gelöscht",
+ "manifest copied ✔": "Manifest kopiert ✔",
+ "m3u copied ✔": "m3u kopiert ✔",
+ "manual save": "manuelles Speichern",
+ "channel move": "Sender verschieben"
 }

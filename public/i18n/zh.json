@@ -425,5 +425,13 @@
  "filter… (channel, list, url, error)": "筛选…（频道、列表、url、错误）",
  "hint.logWaiting": "等待事件… 当有人观看频道（stream）、插件下载列表（download）或请求播放列表时，日志会自动开始。相同的行也会出现在 <code>docker logs -f wisem3u</code> 中。",
  "Expand the list": "展开列表",
- "Expand the playlists": "展开播放列表"
+ "Expand the playlists": "展开播放列表",
+ "— the whole playlist —": "— 整个播放列表 —",
+ "M3U link copied ✔": "M3U 链接已复制 ✔",
+ "List link copied ✔": "列表链接已复制 ✔",
+ "List deleted": "列表已删除",
+ "manifest copied ✔": "manifest 已复制 ✔",
+ "m3u copied ✔": "m3u 已复制 ✔",
+ "manual save": "手动保存",
+ "channel move": "移动频道"
 }

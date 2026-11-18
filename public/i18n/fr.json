@@ -424,5 +424,13 @@
  "filter… (channel, list, url, error)": "filtrer… (chaîne, liste, url, erreur)",
  "hint.logWaiting": "En attente d’événements… les journaux démarrent seuls quand quelqu’un regarde une chaîne (stream), que l’addon télécharge une liste (download) ou que la playlist est demandée. Les mêmes lignes apparaissent aussi avec <code>docker logs -f wisem3u</code>.",
  "Expand the list": "Développer la liste",
- "Expand the playlists": "Développer les playlists"
+ "Expand the playlists": "Développer les playlists",
+ "— the whole playlist —": "— toute la playlist —",
+ "M3U link copied ✔": "Lien M3U copié ✔",
+ "List link copied ✔": "Lien de la liste copié ✔",
+ "List deleted": "Liste supprimée",
+ "manifest copied ✔": "manifest copié ✔",
+ "m3u copied ✔": "m3u copié ✔",
+ "manual save": "enregistrement manuel",
+ "channel move": "déplacement de chaîne"
 }

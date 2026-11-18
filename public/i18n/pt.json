@@ -427,5 +427,13 @@
  "filter… (channel, list, url, error)": "filtrar… (canal, lista, url, erro)",
  "hint.logWaiting": "Aguardando eventos… os logs começam sozinhos quando alguém assiste a um canal (stream), o addon baixa uma lista (download) ou a playlist é solicitada. As mesmas linhas também aparecem com <code>docker logs -f wisem3u</code>.",
  "Expand the list": "Expandir a lista",
- "Expand the playlists": "Expandir as playlists"
+ "Expand the playlists": "Expandir as playlists",
+ "— the whole playlist —": "— toda a playlist —",
+ "M3U link copied ✔": "Link M3U copiado ✔",
+ "List link copied ✔": "Link da lista copiado ✔",
+ "List deleted": "Lista excluída",
+ "manifest copied ✔": "manifest copiado ✔",
+ "m3u copied ✔": "m3u copiado ✔",
+ "manual save": "salvamento manual",
+ "channel move": "movimentação de canal"
 }

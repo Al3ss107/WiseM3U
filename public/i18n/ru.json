@@ -427,5 +427,13 @@
  "filter… (channel, list, url, error)": "фильтр… (канал, список, url, ошибка)",
  "hint.logWaiting": "Ожидание событий… журналы запускаются сами, когда кто-то смотрит канал (stream), аддон скачивает список (download) или запрашивается плейлист. Те же строки также появляются с <code>docker logs -f wisem3u</code>.",
  "Expand the list": "Развернуть список",
- "Expand the playlists": "Развернуть плейлисты"
+ "Expand the playlists": "Развернуть плейлисты",
+ "— the whole playlist —": "— весь плейлист —",
+ "M3U link copied ✔": "Ссылка M3U скопирована ✔",
+ "List link copied ✔": "Ссылка на список скопирована ✔",
+ "List deleted": "Список удалён",
+ "manifest copied ✔": "манифест скопирован ✔",
+ "m3u copied ✔": "m3u скопирован ✔",
+ "manual save": "ручное сохранение",
+ "channel move": "перемещение канала"
 }
