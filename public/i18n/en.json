@@ -290,5 +290,6 @@
  "Choose an interval": "Choose an interval",
  "EPG della lista": "List EPG",
  "hint.listEpg": "Empty = EPG from the general settings; if that is empty too, the one detected in the list is used.",
- "hint.epg": "Default EPG for lists without their own EPG. Declared in the generated playlist header (<code>url-tvg</code>/<code>x-tvg-url</code>). Empty = only the EPGs detected in the lists."
+ "hint.epg": "Default EPG for lists without their own EPG. Declared in the generated playlist header (<code>url-tvg</code>/<code>x-tvg-url</code>). Empty = only the EPGs detected in the lists.",
+ "Suggested intervals": "Suggested intervals"
 }

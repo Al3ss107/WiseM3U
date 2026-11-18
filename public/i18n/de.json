@@ -671,5 +671,6 @@
  "Next update: {when}": "Nächste Aktualisierung: {when}",
  "Choose an interval": "Intervall wählen",
  "EPG della lista": "EPG der Liste",
- "hint.listEpg": "Leer = EPG aus den allgemeinen Einstellungen; ist auch dieser leer, wird der in der Liste erkannte EPG verwendet."
+ "hint.listEpg": "Leer = EPG aus den allgemeinen Einstellungen; ist auch dieser leer, wird der in der Liste erkannte EPG verwendet.",
+ "Suggested intervals": "Empfohlene Intervalle"
 }

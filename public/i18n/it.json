@@ -671,5 +671,6 @@
  "Next update: {when}": "Prossimo aggiornamento: {when}",
  "Choose an interval": "Scegli un intervallo",
  "EPG della lista": "EPG della lista",
- "hint.listEpg": "Vuoto = EPG delle impostazioni generali; se anche quello è vuoto, usa quello rilevato nella lista."
+ "hint.listEpg": "Vuoto = EPG delle impostazioni generali; se anche quello è vuoto, usa quello rilevato nella lista.",
+ "Suggested intervals": "Intervalli consigliati"
 }

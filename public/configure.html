@@ -84,16 +84,13 @@
       </div>
       <div>
         <label>Refresh lists every</label>
-        <select id="s_refreshMinutes">
-          <option value="0">Manual only</option>
-          <option value="15">15 minutes</option>
-          <option value="30">30 minutes</option>
-          <option value="60">1 hour</option>
-          <option value="180">3 hours</option>
-          <option value="360">6 hours (recommended)</option>
-          <option value="720">12 hours</option>
-          <option value="1440">24 hours</option>
-        </select>
+        <div class="refreshCombo" id="globalRefreshCombo" data-refresh-scope="global">
+          <input id="s_refreshMinutes" type="number" min="0" max="525600" step="1" autocomplete="off"
+            data-refresh-input aria-haspopup="listbox" aria-expanded="false">
+          <button type="button" class="refreshTgl" data-refresh-toggle tabindex="-1"
+            aria-label="Suggested intervals" aria-expanded="false">▾</button>
+          <div class="refreshMenu" role="listbox" aria-label="Suggested intervals" hidden></div>
+        </div>
         <div class="hint" data-info>The app checks every minute and downloads a list only when it is older than this. 0 = manual only. Lists can override this below.</div>
       </div>
       <div>
@@ -185,17 +182,22 @@
 <aside id="sidemenu" aria-label="Lists navigation" hidden></aside>
 
 <footer>
-  <button id="btnSave">💾 Save configuration</button>
   <span id="status" class="kv"></span>
-  <span id="appVersion" class="kv dim"></span>
+  <div class="footer-center">
+    <span id="appVersion" class="kv dim"></span>
+    <a class="lnk footer-github" id="githubLink" href="https://github.com/Al3ss107/WiseM3U/tree/main"
+      target="_blank" rel="noopener" title="Apri il repository GitHub (branch main)">GitHub</a>
+  </div>
+  <div class="footer-actions">
+    <button id="btnSave">💾 Save configuration</button>
+    <button id="toTop" type="button" title="Back to top" aria-label="Back to top">↑</button>
+  </div>
 </footer>
 
 <!-- on phones: Save floats above the page footer -->
 <div class="fabbar" id="fabbar">
   <button id="fabSave" title="Save the configuration">💾 Save</button>
 </div>
-<!-- on phones: always-visible back-to-top button -->
-<button id="toTop" type="button" title="Back to top" aria-label="Back to top">↑</button>
 
 <div class="toast" id="toast"></div>
 

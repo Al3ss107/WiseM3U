@@ -82,19 +82,22 @@
   input::placeholder,textarea::placeholder{color:#a0a4b8}
   textarea{resize:vertical}
 
-  /* ---------- User-Agent input with recommended presets ---------- */
-  .uaCombo{position:relative}
-  .uaCombo input{padding-right:46px}
-  .uaTgl{position:absolute;right:4px;top:50%;transform:translateY(-50%);
+  /* ---------- editable inputs with recommended presets ---------- */
+  .uaCombo,.refreshCombo{position:relative}
+  .uaCombo input,.refreshCombo input{padding-right:46px}
+  .refreshCombo input[type=number]{-moz-appearance:textfield;appearance:textfield}
+  .refreshCombo input[type=number]::-webkit-outer-spin-button,
+  .refreshCombo input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  .uaTgl,.refreshTgl{position:absolute;right:4px;top:50%;transform:translateY(-50%);
          min-height:0;padding:7px 10px;border-radius:9px;background:transparent;
          color:var(--mut);box-shadow:none;font-size:13px;line-height:1}
-  .uaTgl:hover{background:var(--md-surface-4);filter:none}
-  .uaCombo.open .uaTgl{color:var(--md-primary)}
-  .uaMenu{position:absolute;z-index:40;top:calc(100% + 6px);left:0;right:0;
+  .uaTgl:hover,.refreshTgl:hover{background:var(--md-surface-4);filter:none}
+  .uaCombo.open .uaTgl,.refreshCombo.open .refreshTgl{color:var(--md-primary)}
+  .uaMenu,.refreshMenu{position:absolute;z-index:40;top:calc(100% + 6px);left:0;right:0;
           max-height:270px;overflow:auto;padding:5px;background:var(--md-surface-2);
           border:1px solid var(--md-outline);border-radius:12px;
           box-shadow:0 12px 30px rgba(0,0,0,.45)}
-  .uaMenu[hidden]{display:none}
+  .uaMenu[hidden],.refreshMenu[hidden]{display:none}
   .uaOpt{display:block;width:100%;text-align:left;background:transparent;color:var(--txt);
          border-radius:8px;padding:8px 10px;box-shadow:none;font-weight:400;line-height:1.35}
   .uaOpt:hover,.uaOpt:focus-visible{background:var(--md-surface-4);filter:none}
@@ -328,8 +331,16 @@
   /* ---------- footer and toast ---------- */
   footer{position:fixed;left:0;right:0;bottom:0;background:var(--md-surface-2);
          border-top:1px solid var(--md-outline-variant);padding:10px 16px calc(10px + env(safe-area-inset-bottom));
-         display:flex;gap:10px;align-items:center;flex-wrap:wrap;z-index:30}
-  footer #status{margin-left:auto}
+         display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+         gap:12px;align-items:center;z-index:30}
+  footer #status{justify-self:start;min-width:0;overflow-wrap:anywhere}
+  .footer-center{justify-self:center;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;min-width:0}
+  .footer-actions{justify-self:end;display:flex;align-items:center;gap:8px}
+  footer #toTop{display:grid;place-items:center;width:38px;height:38px;min-height:0;padding:0;
+    border-radius:50%;font-size:17px;line-height:1;background:var(--md-secondary-container);
+    color:var(--md-on-secondary-container);box-shadow:none}
+  footer #toTop:hover{background:var(--md-surface-4);filter:none}
+  .footer-github{white-space:nowrap}
   .toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translate(-50%,8px);
          background:#343746;color:#f8f8f2;border:1px solid #44475a;border-radius:12px;padding:12px 18px;z-index:50;opacity:0;
          transition:.25s;pointer-events:none;max-width:90vw;box-shadow:0 12px 34px rgba(0,0,0,.75);
@@ -502,14 +513,15 @@
     /* used to be fixed: with the keyboard open it floated above the keys,
        rubando spazio. Ora numero liste e versione scorrono con la pagina. */
     body{padding-bottom:0}
-    footer{position:static;left:auto;right:auto;bottom:auto;gap:4px;
-           padding:12px 12px calc(76px + env(safe-area-inset-bottom));
+    footer{position:static;left:auto;right:auto;bottom:auto;display:flex;flex-direction:column;
+           gap:4px;padding:12px 12px calc(76px + env(safe-area-inset-bottom));
            border-top:1px solid var(--line);background:transparent;box-shadow:none;
            backdrop-filter:none;-webkit-backdrop-filter:none}
     footer #btnSave{display:none}
-    footer #status,footer #appVersion{flex:1 1 100%;text-align:center;font-size:11.5px;line-height:1.4}
+    footer #status{width:100%;text-align:center;font-size:11.5px;line-height:1.4}
+    footer .footer-center{width:100%;text-align:center;gap:6px}
     footer #appVersion{font-size:10.5px}
-    footer #status{margin-left:0}
+    footer .footer-actions{display:flex;justify-content:center;width:100%}
 
     /* --- floating buttons: Lists left, Save centered, top right --- */
     .fabbar{display:flex;position:fixed;left:50%;right:auto;bottom:calc(12px + env(safe-area-inset-bottom));
@@ -520,7 +532,7 @@
               width:auto;height:54px;padding:0 18px;border-radius:16px;font-size:14px;z-index:61;
               background:var(--md-surface-3);color:var(--md-on-surface);border:0;
               box-shadow:0 6px 16px rgba(0,0,0,.45);transition:opacity .18s,transform .18s}
-    #toTop{display:grid;place-items:center;position:fixed;right:12px;
+    footer #toTop{display:grid;place-items:center;position:fixed;right:12px;
            bottom:calc(12px + env(safe-area-inset-bottom));z-index:61;
            width:54px;height:54px;padding:0;border-radius:16px;font-size:20px;line-height:1;
            background:var(--md-secondary-container);color:var(--md-on-secondary-container);

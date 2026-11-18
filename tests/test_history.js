@@ -81,7 +81,8 @@ const mkList = (id, name, opts={}) => ({
   ok(/name="wm-ui-version" content="\d+\.\d+\.\d+"/.test(pageHtml), 'version injected into meta');
   ok(!pageHtml.includes('__WM_UI_VERSION__'), 'no residual version placeholder');
   ok(pageHtml.includes('/configure.css') && pageHtml.includes('/configure.js'), 'page linked to external CSS and JS');
-  ok(pageHtml.includes('id="s_refreshMinutes"') && !pageHtml.includes('s_cacheTtlMinutes') && !pageHtml.includes('s_autoRefreshMinutes'), 'settings expose one refresh interval only');
+  ok(pageHtml.includes('id="s_refreshMinutes"') && pageHtml.includes('data-refresh-input') && !pageHtml.includes('s_cacheTtlMinutes') && !pageHtml.includes('s_autoRefreshMinutes'), 'settings expose one editable refresh interval only');
+  ok(pageHtml.includes('footer-actions') && pageHtml.includes('footer-center') && pageHtml.includes('githubLink') && pageHtml.includes('WiseM3U/tree/main'), 'footer has centered version/GitHub and right-side actions');
   ok(pageHtml.includes('id="manifestLink"') && pageHtml.includes('id="m3uLink"'), 'header exposes copyable manifest and m3u links');
   ok(!pageHtml.includes('channelsLink') && !pageHtml.includes('channels.json'), 'channels.json link removed from the header');
   ok(!pageHtml.includes('>healthz<'), 'healthz link removed from the header');
@@ -98,7 +99,7 @@ const mkList = (id, name, opts={}) => ({
   const jsRes = await fetch(`${BASE}/configure.js`);
   const jsText = await jsRes.text();
   ok(jsRes.status === 200 && /javascript/.test(jsRes.headers.get('content-type') || ''), 'configure.js served');
-  ok(jsText.includes('data-refresh-custom-box') && jsText.includes('data-refresh-preset') && jsText.includes('data-sdhandle'), 'custom interval dropdown and list drag handle rendered by the UI');
+  ok(jsText.includes('data-refresh-custom-box') && jsText.includes('data-refresh-input') && jsText.includes('refreshMenu') && jsText.includes('data-sdhandle'), 'editable custom interval dropdown and list drag handle rendered by the UI');
   ok(jsText.includes('options.epgUrl') && !jsText.includes('catalogName'), 'per-list EPG replaces the catalog name field');
   ok(jsText.includes('Copiato manifest') && jsText.includes('Copiato m3u'), 'header links copy their URL');
   ok(jsText.includes('data-active-count') && jsText.includes('openActiveModal'), 'active playlist count opens a preview modal');

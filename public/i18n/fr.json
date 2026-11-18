@@ -671,5 +671,6 @@
  "Next update: {when}": "Prochaine actualisation : {when}",
  "Choose an interval": "Choisir un intervalle",
  "EPG della lista": "EPG de la liste",
- "hint.listEpg": "Vide = EPG des réglages généraux ; si celui-ci est aussi vide, celui détecté dans la liste est utilisé."
+ "hint.listEpg": "Vide = EPG des réglages généraux ; si celui-ci est aussi vide, celui détecté dans la liste est utilisé.",
+ "Suggested intervals": "Intervalles recommandés"
 }

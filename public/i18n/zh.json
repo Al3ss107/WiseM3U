@@ -671,5 +671,6 @@
  "Next update: {when}": "下次更新：{when}",
  "Choose an interval": "选择间隔",
  "EPG della lista": "列表 EPG",
- "hint.listEpg": "留空 = 使用通用设置中的 EPG；若该项也为空，则使用列表中检测到的 EPG。"
+ "hint.listEpg": "留空 = 使用通用设置中的 EPG；若该项也为空，则使用列表中检测到的 EPG。",
+ "Suggested intervals": "建议间隔"
 }

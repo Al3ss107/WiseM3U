@@ -380,20 +380,28 @@ function humanMinutes(min){
   }
 }
 
-const REFRESH_PRESETS = [5, 15, 30, 60, 180, 360, 720, 1440];
+const GLOBAL_REFRESH_PRESETS = [0, 15, 30, 60, 180, 360, 720, 1440];
+const LIST_REFRESH_PRESETS = [5, 15, 30, 60, 180, 360, 720, 1440];
 
-/** Preset values shown in the per-list dropdown: the current custom value is
- *  appended when it is not one of the presets, so the number field can hold
- *  any interval (minimum 5 minutes). */
-function refreshPresetValues(minutes){
-  const n = Math.max(5, Math.round(Number(minutes) || 60));
-  return [...new Set([...REFRESH_PRESETS, n])].sort((a, b) => a - b);
+/** Preset values for the editable interval menu. The typed value is kept in
+ *  the menu even when it is not a preset, so any interval can be entered. */
+function refreshPresetValues(scope, current){
+  const n = Math.round(Number(current));
+  const values = (scope === 'global' ? GLOBAL_REFRESH_PRESETS : LIST_REFRESH_PRESETS).slice();
+  const min = scope === 'global' ? 0 : 5;
+  if (String(current).trim() !== '' && Number.isFinite(n) && n >= min && !values.includes(n)) values.push(n);
+  return values.sort((a, b) => a - b);
 }
 
-function refreshPresetOptions(minutes){
-  const n = Math.max(5, Math.round(Number(minutes) || 60));
-  return refreshPresetValues(n)
-    .map((v) => `<option value="${v}" ${v === n ? 'selected' : ''}>${esc(humanMinutes(v))}</option>`)
+function refreshMenuHtml(scope, current){
+  const n = Math.round(Number(current));
+  return refreshPresetValues(scope, current)
+    .map((v) => {
+      const label = v === 0 ? tr('Manual only') : humanMinutes(v);
+      const selected = n === v ? ' sel' : '';
+      return `<button type="button" class="uaOpt${selected}" role="option" aria-selected="${n === v}"
+        data-refresh-opt="${v}">${esc(label)}</button>`;
+    })
     .join('');
 }
 
@@ -437,6 +445,7 @@ function refreshMeta(l){
 }
 
 function updateRefreshMeta(){
+  if (!CFG || !CFG.lists) return;
   for (const el of $$('[data-refreshmeta]')){
     const l = (CFG.lists || []).find(x => x.id === el.dataset.refreshmeta);
     if (l) el.innerHTML = refreshMeta(l);
@@ -457,6 +466,7 @@ async function pollListStates(){
 }
 
 function updateRefreshHints(){
+  if (!CFG || !CFG.lists) return;
   for (const card of $$('#lists .listcard')){
     const l = (CFG.lists || []).find(x => x.id === card.dataset.id);
     const hint = card.querySelector('[data-refresh-hint]');
@@ -464,16 +474,9 @@ function updateRefreshHints(){
     hint.textContent = `${refreshLabel(l)} · ${tr('minimum 5 minutes')}`;
     const box = card.querySelector('[data-refresh-custom-box]');
     const custom = card.querySelector('[data-refresh-custom]');
-    const preset = card.querySelector('[data-refresh-preset]');
     const wantCustom = l.options && l.options.refreshMode === 'custom';
     if (box) box.hidden = !wantCustom;
     if (custom) custom.disabled = !wantCustom;
-    if (preset) {
-      preset.disabled = !wantCustom;
-      const minutes = Math.max(5, Math.round(Number(l.options.refreshMinutes) || 60));
-      preset.innerHTML = refreshPresetOptions(minutes);
-      preset.value = String(minutes);
-    }
   }
 }
 
@@ -678,20 +681,17 @@ function renderListCard(l){
             <div class="hint" data-info data-refresh-hint>${refreshLabel(l)} · ${tr('minimum 5 minutes')}</div>
           </div>
           <div class="refreshCustom" data-refresh-custom-box ${o.refreshMode==='custom'?'':'hidden'}>
-            <div class="grid2">
-              <div>
-                <label>${tr('Choose an interval')}</label>
-                <select data-refresh-preset ${o.refreshMode==='custom'?'':'disabled'}>
-                  ${refreshPresetOptions(o.refreshMinutes)}
-                </select>
-              </div>
-              <div>
-                <label>${tr('Custom interval (minutes)')}</label>
-                <input type="number" min="5" max="525600" data-f="options.refreshMinutes" data-refresh-custom
-                  value="${esc(o.refreshMinutes)}" ${o.refreshMode==='custom'?'':'disabled'}>
-                <div class="hint">${tr('minimum 5 minutes')}</div>
-              </div>
+            <label>${tr('Custom interval (minutes)')}</label>
+            <div class="refreshCombo" data-refresh-scope="list">
+              <input type="number" min="5" max="525600" step="1" autocomplete="off"
+                data-f="options.refreshMinutes" data-refresh-custom data-refresh-input
+                value="${esc(o.refreshMinutes)}" ${o.refreshMode==='custom'?'':'disabled'}
+                aria-haspopup="listbox" aria-expanded="false">
+              <button type="button" class="refreshTgl" data-refresh-toggle tabindex="-1"
+                aria-label="${esc(tr('Choose an interval'))}" aria-expanded="false">▾</button>
+              <div class="refreshMenu" role="listbox" aria-label="${esc(tr('Choose an interval'))}" hidden></div>
             </div>
+            <div class="hint">${tr('minimum 5 minutes')}</div>
           </div>`}
           ${uaField}
           <div>
@@ -1045,8 +1045,13 @@ function bindListEvents(){
     const id = card.dataset.id;
     const list = CFG.lists.find(l=>l.id===id);
 
-    // the UA field shows the recommended presets as soon as it gets focus
+    // interval and UA fields show their presets as soon as they get focus
     card.addEventListener('focusin', ev=>{
+      if (ev.target.matches && ev.target.matches('[data-refresh-input]')){
+        if (ev.target.dataset.skipOpen){ delete ev.target.dataset.skipOpen; return; }
+        toggleRefreshMenu(ev.target.closest('.refreshCombo'), true);
+        return;
+      }
       if (!ev.target.matches || !ev.target.matches('[data-ua-input]')) return;
       // selecting a preset focuses the input again: do not reopen the menu
       if (ev.target.dataset.skipOpen){ delete ev.target.dataset.skipOpen; return; }
@@ -1095,23 +1100,13 @@ function bindListEvents(){
         el.classList.toggle('renamed', branchDisplayName(list, {path:row.dataset.path, name:row.dataset.name}) !== row.dataset.name);
         return;
       }
-      if (el.dataset && el.dataset.refreshPreset !== undefined){
-        const custom = card.querySelector('[data-refresh-custom]');
-        const n = Math.max(5, Math.min(525600, Math.round(Number(el.value) || 5)));
-        if (custom) custom.value = String(n);
-        setPath(list, 'options.refreshMinutes', n);
-        updateRefreshHints();
-        return;
-      }
       if (el.dataset && el.dataset.f){
         if (el.dataset.f === 'options.refreshMode'){
           const box = card.querySelector('[data-refresh-custom-box]');
           const custom = card.querySelector('[data-refresh-custom]');
-          const preset = card.querySelector('[data-refresh-preset]');
           const wantCustom = el.value === 'custom';
           if (box) box.hidden = !wantCustom;
           if (custom) custom.disabled = !wantCustom;
-          if (preset) preset.disabled = !wantCustom;
           const info = card.querySelector('[data-refresh-hint]');
           if (info) info.textContent = `${refreshLabel({ ...list, options: { ...list.options, refreshMode: el.value } })} · ${tr('minimum 5 minutes')}`;
           if (wantCustom && custom) requestAnimationFrame(()=>custom.focus());
@@ -1129,8 +1124,9 @@ function bindListEvents(){
     });
 
     card.addEventListener('keydown', ev=>{
-      if (ev.key === 'Escape' && card.querySelector('.uaMenu:not([hidden])')){
+      if (ev.key === 'Escape' && (card.querySelector('.uaMenu:not([hidden])') || card.querySelector('.refreshMenu:not([hidden])'))){
         closeUaMenus();
+        closeRefreshMenus();
         return;
       }
       const copyurl = ev.target.closest('[data-copyurl]');
@@ -1161,6 +1157,7 @@ function bindListEvents(){
         return;
       }
       if (el.dataset && el.dataset.refreshCustom !== undefined){
+        closeRefreshMenus();
         setPath(list, 'options.refreshMinutes', el.value);
         updateRefreshHints();
         return;
@@ -1631,6 +1628,7 @@ function closeUaMenus(keep){
 function toggleUaMenu(card, force){
   const menu = card.querySelector('.uaMenu');
   if (!menu) return;
+  closeRefreshMenus();
   const open = force === undefined ? menu.hidden : force;
   closeUaMenus(open ? menu : null);
   menu.hidden = !open;
@@ -1644,6 +1642,61 @@ function toggleUaMenu(card, force){
     const current = input ? input.value.trim() : '';
     $$('.uaOpt', menu).forEach((opt) => opt.classList.toggle('sel', opt.dataset.uaOpt === current));
   }
+}
+
+/** Closes the interval suggestion menus (all, or all except `keep`). */
+function closeRefreshMenus(keep){
+  $$('.refreshCombo').forEach((combo) => {
+    const menu = combo.querySelector('.refreshMenu');
+    if (!menu || menu === keep) return;
+    menu.hidden = true;
+    combo.classList.remove('open');
+    const input = combo.querySelector('[data-refresh-input]');
+    const tgl = combo.querySelector('[data-refresh-toggle]');
+    if (input) input.setAttribute('aria-expanded', 'false');
+    if (tgl) tgl.setAttribute('aria-expanded', 'false');
+  });
+}
+
+/** Opens/closes the interval dropdown; the input stays editable. */
+function toggleRefreshMenu(combo, force){
+  if (!combo) return;
+  const menu = combo.querySelector('.refreshMenu');
+  const input = combo.querySelector('[data-refresh-input]');
+  const tgl = combo.querySelector('[data-refresh-toggle]');
+  if (!menu) return;
+  const open = force === undefined ? menu.hidden : force;
+  closeUaMenus();
+  closeRefreshMenus(open ? menu : null);
+  if (open) menu.innerHTML = refreshMenuHtml(combo.dataset.refreshScope || 'list', input ? input.value : '');
+  menu.hidden = !open;
+  combo.classList.toggle('open', open);
+  if (input) input.setAttribute('aria-expanded', String(open));
+  if (tgl) tgl.setAttribute('aria-expanded', String(open));
+}
+
+/** Applies a preset to the editable interval input. */
+function applyRefreshPreset(btn){
+  const combo = btn.closest('.refreshCombo');
+  const input = combo && combo.querySelector('[data-refresh-input]');
+  if (!combo || !input) return;
+  const n = Math.max(0, Math.min(525600, Math.round(Number(btn.dataset.refreshOpt) || 0)));
+  input.value = String(n);
+  if (combo.dataset.refreshScope === 'global'){
+    CFG.settings.refreshMinutes = n;
+    updateRefreshHints();
+    updateRefreshMeta();
+  } else {
+    const card = combo.closest('.listcard');
+    const list = card && CFG.lists.find((l) => l.id === card.dataset.id);
+    if (list){
+      setPath(list, 'options.refreshMinutes', n);
+      updateRefreshHints();
+    }
+  }
+  closeRefreshMenus();
+  input.dataset.skipOpen = '1';
+  input.focus();
 }
 
 function setPath(obj, pathStr, value){
@@ -1842,15 +1895,8 @@ async function loadConfig(){
 function renderAll(){
   $('#s_addonName').value = CFG.settings.addonName || '';
   $('#s_addonId').value = CFG.settings.addonId || '';
-  const refreshSel = $('#s_refreshMinutes');
   const globalMinutes = Math.max(0, Math.round(Number(CFG.settings.refreshMinutes) || 0));
-  if (![...refreshSel.options].some(o => Number(o.value) === globalMinutes)){
-    const opt = document.createElement('option');
-    opt.value = String(globalMinutes);
-    opt.textContent = globalMinutes > 0 ? humanMinutes(globalMinutes) : 'Manual only';
-    refreshSel.appendChild(opt);
-  }
-  refreshSel.value = String(globalMinutes);
+  $('#s_refreshMinutes').value = String(globalMinutes);
   $('#s_maxDepth').value = CFG.settings.maxDepth;
   $('#s_epgUrl').value = CFG.settings.epgUrl || '';
   const globalChecks = [
@@ -1868,7 +1914,8 @@ function renderAll(){
   $('#manifestLink').href = base + '/manifest.json';
   $('#m3uLink').href = base + '/playlist.m3u';
   renderLists();
-  $('#status').textContent = `${CFG.lists.length} liste · ${CFG.lists.filter(l=>l.options.enabled).length} attive`;
+  const activeLists = CFG.lists.filter(l=>l.options.enabled).length;
+  $('#status').textContent = `${activeLists} attive · ${CFG.lists.length} totali`;
   if (CFG.version && String(CFG.version) !== WM_UI_VERSION){
     // page stale in the browser: UI and server are not aligned (possible "ghost" bugs)
     const el = $('#appVersion');
@@ -2598,9 +2645,35 @@ document.addEventListener('change', (ev) => {
   if (box && ev.target.type === 'checkbox') box.classList.toggle('on', ev.target.checked);
 });
 
-// Close the UA presets when clicking outside the combo.
+// Close the UA/interval presets when clicking outside their combo.
 document.addEventListener('click', (ev) => {
   if (!ev.target.closest('.uaCombo')) closeUaMenus();
+  if (!ev.target.closest('.refreshCombo')) closeRefreshMenus();
+});
+
+// Interval combo: the input remains editable, the arrow/hover opens presets.
+document.addEventListener('click', (ev) => {
+  const tgl = ev.target.closest('[data-refresh-toggle]');
+  if (tgl){ toggleRefreshMenu(tgl.closest('.refreshCombo')); return; }
+  const opt = ev.target.closest('[data-refresh-opt]');
+  if (opt){ applyRefreshPreset(opt); return; }
+  const input = ev.target.closest('[data-refresh-input]');
+  if (input){
+    if (input.dataset.skipOpen){ delete input.dataset.skipOpen; return; }
+    toggleRefreshMenu(input.closest('.refreshCombo'), true);
+  }
+});
+
+document.addEventListener('keydown', (ev) => {
+  if (ev.key !== 'Escape') return;
+  closeUaMenus();
+  closeRefreshMenus();
+});
+
+const globalRefreshInput = $('#s_refreshMinutes');
+globalRefreshInput.addEventListener('focus', () => {
+  if (globalRefreshInput.dataset.skipOpen){ delete globalRefreshInput.dataset.skipOpen; return; }
+  toggleRefreshMenu($('#globalRefreshCombo'), true);
 });
 
 // Xtream badge: click to re-read the data (no inline handler in the markup)
@@ -2609,8 +2682,20 @@ document.addEventListener('click', (ev) => {
   if (badge) refreshXtreamBadge(badge.dataset.xtream);
 });
 
+$('#s_refreshMinutes').addEventListener('input', (ev)=>{
+  closeRefreshMenus();
+  CFG.settings.refreshMinutes = Math.max(0, Math.round(Number(ev.target.value) || 0));
+  updateRefreshHints();
+  updateRefreshMeta();
+});
+
 $('#s_refreshMinutes').addEventListener('change', (ev)=>{
-  CFG.settings.refreshMinutes = Number(ev.target.value) || 0;
+  let n = Math.round(Number(ev.target.value) || 0);
+  if (n < 0) n = 0;
+  if (n > 0 && n < 5) n = 5;
+  n = Math.min(525600, n);
+  ev.target.value = String(n);
+  CFG.settings.refreshMinutes = n;
   updateRefreshHints();
   updateRefreshMeta();
 });

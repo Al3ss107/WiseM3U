@@ -671,5 +671,6 @@
  "Next update: {when}": "Próxima atualização: {when}",
  "Choose an interval": "Escolher um intervalo",
  "EPG della lista": "EPG da lista",
- "hint.listEpg": "Vazio = EPG das definições gerais; se também estiver vazio, usa o detetado na lista."
+ "hint.listEpg": "Vazio = EPG das definições gerais; se também estiver vazio, usa o detetado na lista.",
+ "Suggested intervals": "Intervalos recomendados"
 }
