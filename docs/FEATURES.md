@@ -142,8 +142,8 @@ desktop it aligns to the icon so it does not leave the screen, on mobile it is a
 bottom sheet). The label stays in the DOM as `aria-label`/tooltip. Every section
 opens and closes by **tapping the title** (the **▾/▸** arrow on the same row is
 only an indicator, not a separate button; Live logs included) and on first load
-only **1 Add a list** and **3 Connect Nuvio, Stremio or an IPTV app** are open;
-general settings, logs and list cards start collapsed. List cards open by
+only **1 Add a list** and **3 Your lists** are open; general settings, history,
+logs and list cards start collapsed. List cards open by
 tapping the name, playlists have their own collapse button with the respective
 info in the title, and per-list settings stay in the existing `<details>`. The
 open state of lists is preserved across list refreshes. The interface follows
@@ -156,16 +156,15 @@ list actions in a 2×2 grid, playlist and channel rows on multiple lines (name
 full width, counts and buttons below), 40 px touch targets, 16 px fields to
 avoid iOS auto-zoom and no horizontal scrolling. Section number, title, **i**
 icon and **▾/▸** button always stay on the same row even on narrow phones. The
-footer is no longer fixed: **Save** and **Reload** are two floating buttons on
-the same row at the bottom right (together with "☰ Lists" on the left), while
-the list count and version stay at the bottom of the page and scroll with the
-content. Floating buttons hide when the keyboard is open (measured on
-`visualViewport`) so they do not steal space while typing.
-On mobile there is also an always-floating **↑** arrow above **Save/Reload**
-that scrolls back to the top smoothly (respects `prefers-reduced-motion` and
-hides when the keyboard is open). Branch reordering remains drag-and-drop, which
-touch browsers do not support: on phones you reorder lists from the side menu,
-not branches. The save/refresh button shows a plain `on`/`off` label (no glyph
+footer is no longer fixed: **Save** is a floating button at the bottom right
+(together with "☰ Lists" on the left), while the list count and version stay at
+the bottom of the page and scroll with the content. Floating buttons hide when
+the keyboard is open (measured on `visualViewport`) so they do not steal space
+while typing. On mobile there is also an always-floating **↑** arrow above
+**Save** that scrolls back to the top smoothly (respects
+`prefers-reduced-motion` and hides when the keyboard is open). Branch reordering
+remains drag-and-drop, which touch browsers do not support; list reordering in
+the side menu uses a drag handle and also works with touch. The save/refresh button shows a plain `on`/`off` label (no glyph
 that Android renders as a missing-character box).
 
 **Languages** — the header has a language selector with English, Italian,

@@ -81,9 +81,10 @@ http://SERVER-IP:7300/manifest.json
 * **Nuvio** → *Settings* → *Content & Discovery* → *Add-ons* → *Add Addon* →
   paste the URL → *Install Addon*.
 
-On the `/configure` page you will find the manifest URL with a **⧉ copy**
-button. If the addon sits behind **nginx with a personal domain and
-certificate**, set *"Public URL"* in the general settings (e.g.
+On the `/configure` page, click **manifest.json** (or **playlist.m3u**) in
+the header to copy the complete URL, including any access token. If the addon
+sits behind **nginx with a personal domain and certificate**, set *"Public URL"*
+in the general settings (e.g.
 `https://tv.mydomain.com`): the links shown (manifest and playlist) will use
 that base instead of the address you opened the page with. Minimal nginx config
 (domain + Let's Encrypt):

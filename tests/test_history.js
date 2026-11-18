@@ -82,12 +82,20 @@ const mkList = (id, name, opts={}) => ({
   ok(!pageHtml.includes('__WM_UI_VERSION__'), 'no residual version placeholder');
   ok(pageHtml.includes('/configure.css') && pageHtml.includes('/configure.js'), 'page linked to external CSS and JS');
   ok(pageHtml.includes('id="s_refreshMinutes"') && !pageHtml.includes('s_cacheTtlMinutes') && !pageHtml.includes('s_autoRefreshMinutes'), 'settings expose one refresh interval only');
+  ok(pageHtml.includes('id="manifestLink"') && pageHtml.includes('id="m3uLink"'), 'header exposes copyable manifest and m3u links');
+  ok(!pageHtml.includes('>healthz<'), 'healthz link removed from the header');
+  ok(!pageHtml.includes('btnCopyManifest') && !pageHtml.includes('btnCopyM3u'), 'old copy buttons removed with section 3');
+  ok(!pageHtml.includes('Connect Nuvio, Stremio'), 'connect section removed');
+  ok(pageHtml.includes('<span class="n">3</span> Your lists'), 'sections renumbered after removing section 3');
+  ok(!pageHtml.includes('btnReload') && !pageHtml.includes('fabReload'), 'reload buttons removed');
   ok(!pageHtml.includes('<style>') && !pageHtml.includes('<script>'), 'page without inline CSS/JS');
   const cssRes = await fetch(`${BASE}/configure.css`);
   ok(cssRes.status === 200 && /text\/css/.test(cssRes.headers.get('content-type') || ''), 'configure.css served');
   const jsRes = await fetch(`${BASE}/configure.js`);
   const jsText = await jsRes.text();
   ok(jsRes.status === 200 && /javascript/.test(jsRes.headers.get('content-type') || ''), 'configure.js served');
+  ok(jsText.includes('data-refresh-custom-box') && jsText.includes('data-sdhandle'), 'custom interval and list drag handle rendered by the UI');
+  ok(jsText.includes('Copiato manifest') && jsText.includes('Copiato m3u'), 'header links copy their URL');
   ok(jsText.includes('wm-ui-version') && !jsText.includes('__WM_UI_VERSION__'), 'JS reads the version from meta');
 
   // v1: list A with order [X,Y], list B

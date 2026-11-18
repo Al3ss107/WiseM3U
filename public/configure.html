@@ -18,10 +18,9 @@
   <div class="spacer"></div>
   <div class="links">
     <select id="langSelect" class="langselect" aria-label="Language" title="Language"></select>
-    <a class="lnk" href="/manifest.json" target="_blank">manifest.json</a>
-    <a class="lnk" id="m3uLink" href="/playlist.m3u" target="_blank">playlist.m3u</a>
-    <a class="lnk" href="/channels.json" target="_blank">channels.json</a>
-    <a class="lnk" href="/healthz" target="_blank">healthz</a>
+    <a class="lnk" id="manifestLink" href="/manifest.json" target="_blank" title="Copy the manifest URL">manifest.json</a>
+    <a class="lnk" id="m3uLink" href="/playlist.m3u" target="_blank" title="Copy the M3U URL">playlist.m3u</a>
+    <a class="lnk" id="channelsLink" href="/channels.json" target="_blank" title="Copy the channels overview URL">channels.json</a>
   </div>
 </header>
 
@@ -138,32 +137,12 @@
       Great while configuring; you can turn it off once everything works.</div>
   </section>
 
-  <!-- ============ CONNECT CLIENTS ============ -->
-  <section class="card">
-    <h2><span class="n">3</span> Connect Nuvio, Stremio or an IPTV app</h2>
-    <div class="linkrow">
-      <span class="lk">Nuvio / Stremio →</span>
-      <code id="manifestUrl">…</code>
-      <button class="ghost small" id="btnCopyManifest" title="Copy the manifest URL to the clipboard">⧉ copy</button>
-    </div>
-    <div class="linkrow">
-      <span class="lk">IPTV app →</span>
-      <code id="m3uUrl">…</code>
-      <button class="ghost small" id="btnCopyM3u" title="Copy the M3U playlist URL to the clipboard">⧉ copy</button>
-    </div>
-    <div class="hint" data-info data-i18n-html="hint.clients">In <b>Nuvio</b>: Settings → Content and discovery → Add-ons, paste the manifest URL.
-      In <b>Stremio</b>: Add-ons → Community, paste the same URL.
-      The <b>M3U</b> URL works in any IPTV player (it only contains active lists) and is already in
-      <b>m3u_plus</b> format: if the sources have an EPG (or you set one in general settings)
-      the player will load the program guide by itself.</div>
-  </section>
-
   <!-- ============ LISTS ============ -->
-  <h2 class="secttl"><span class="n">4</span> Your lists</h2>
+  <h2 class="secttl"><span class="n">3</span> Your lists</h2>
   <section id="lists"></section>
 
   <!-- ============ CONFIGURATION HISTORY ============ -->
-  <h2 class="secttl" data-collapsed="1"><span class="n">5</span> Configuration history</h2>
+  <h2 class="secttl" data-collapsed="1"><span class="n">4</span> Configuration history</h2>
   <section class="card" id="historyCard">
     <div class="histbar">
       <label for="histList">List</label>
@@ -184,7 +163,7 @@
   </section>
 
   <!-- ============ LIVE LOGS ============ -->
-  <h2 class="secttl" data-collapsed="1"><span class="n">6</span> Live logs</h2>
+  <h2 class="secttl" data-collapsed="1"><span class="n">5</span> Live logs</h2>
   <section class="card" id="logCard">
     <div class="logbar">
       <select id="logScope" title="Filter by area">
@@ -221,15 +200,13 @@
 
 <footer>
   <button id="btnSave">💾 Save configuration</button>
-  <button class="ghost" id="btnReload">↻ Reload</button>
   <span id="status" class="kv"></span>
   <span id="appVersion" class="kv dim"></span>
 </footer>
 
-<!-- on phones: Save and Reload float on the same row (the footer stays at the bottom of the page) -->
+<!-- on phones: Save floats above the page footer -->
 <div class="fabbar" id="fabbar">
   <button id="fabSave" title="Save the configuration">💾 Save</button>
-  <button class="ghost" id="fabReload" title="Reload the configuration" aria-label="Reload the configuration">↻</button>
 </div>
 <!-- on phones: always-visible back-to-top button -->
 <button id="toTop" type="button" title="Back to top" aria-label="Back to top">↑</button>

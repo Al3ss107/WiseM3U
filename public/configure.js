@@ -453,6 +453,11 @@ function updateRefreshHints(){
     const hint = card.querySelector('[data-refresh-hint]');
     if (!l || !hint) continue;
     hint.textContent = `${refreshLabel(l)} · ${tr('minimum 5 minutes')}`;
+    const box = card.querySelector('[data-refresh-custom-box]');
+    const custom = card.querySelector('[data-refresh-custom]');
+    const wantCustom = l.options && l.options.refreshMode === 'custom';
+    if (box) box.hidden = !wantCustom;
+    if (custom) custom.disabled = !wantCustom;
   }
 }
 
@@ -487,12 +492,24 @@ async function refreshXtreamBadge(id){
 
 /* --------- side menu: list reordering + quick access --------- */
 
+let SD_DRAG = null; // {el, from, to, after}
+
+function moveList(from, to, after){
+  if (from === to || from < 0 || to < 0 || from >= CFG.lists.length || to >= CFG.lists.length) return false;
+  const [moved] = CFG.lists.splice(from, 1);
+  let idx = to;
+  if (from < to) idx--;
+  if (after) idx++;
+  idx = Math.max(0, Math.min(CFG.lists.length, idx));
+  CFG.lists.splice(idx, 0, moved);
+  return true;
+}
+
 function renderSideMenu(){
   const el = $('#sidemenu');
   if (!el) return;
-  const items = CFG.lists.map((l, i) => `<div class="sditem">
-    <button class="updn" data-sdup="${i}" title="Sposta su">▲</button>
-    <button class="updn" data-sddn="${i}" title="Sposta giu">▼</button>
+  const items = CFG.lists.map((l, i) => `<div class="sditem" data-sdid="${esc(l.id)}" data-sdindex="${i}">
+    <span class="bhandle sdhandle" draggable="true" data-sdhandle title="Trascina per riordinare" role="button" tabindex="0" aria-label="Trascina per riordinare">☰</span>
     <button class="sdname" data-sdgo="${esc(l.id)}" title="Vai alla lista">${l.kind === 'personal' ? '⭐ ' : ''}${esc(l.name || l.url)}</button>
   </div>`).join('');
   el.innerHTML = '<div class="sdtitle">Ordine delle liste</div>' + (items || '<div class="hint">Nessuna lista</div>');
@@ -640,12 +657,13 @@ function renderListCard(l){
               <option value="custom" ${o.refreshMode==='custom'?'selected':''}>${tr('Custom interval')}</option>
               <option value="manual" ${o.refreshMode==='manual'?'selected':''}>${tr('Manual only')}</option>
             </select>
+            <div class="hint" data-info data-refresh-hint>${refreshLabel(l)} · ${tr('minimum 5 minutes')}</div>
           </div>
-          <div>
+          <div class="refreshCustom" data-refresh-custom-box ${o.refreshMode==='custom'?'':'hidden'}>
             <label>${tr('Custom interval (minutes)')}</label>
             <input type="number" min="5" max="525600" data-f="options.refreshMinutes" data-refresh-custom
               value="${esc(o.refreshMinutes)}" ${o.refreshMode==='custom'?'':'disabled'}>
-            <div class="hint" data-info data-refresh-hint>${refreshLabel(l)} · ${tr('minimum 5 minutes')}</div>
+            <div class="hint">${tr('minimum 5 minutes')}</div>
           </div>`}
           ${uaField}
           <div>
@@ -1049,10 +1067,19 @@ function bindListEvents(){
       }
       if (el.dataset && el.dataset.f){
         if (el.dataset.f === 'options.refreshMode'){
+          const box = card.querySelector('[data-refresh-custom-box]');
           const custom = card.querySelector('[data-refresh-custom]');
-          if (custom) custom.disabled = el.value !== 'custom';
-          const info = custom && custom.parentElement && custom.parentElement.querySelector('.hint');
+          const wantCustom = el.value === 'custom';
+          if (box) box.hidden = !wantCustom;
+          if (custom) custom.disabled = !wantCustom;
+          const info = card.querySelector('[data-refresh-hint]');
           if (info) info.textContent = `${refreshLabel({ ...list, options: { ...list.options, refreshMode: el.value } })} · ${tr('minimum 5 minutes')}`;
+          if (wantCustom && custom) requestAnimationFrame(()=>custom.focus());
+        }
+        if (el.dataset.f === 'options.refreshMinutes'){
+          const n = Math.max(5, Math.min(525600, Math.round(Number(el.value) || 5)));
+          el.value = String(n);
+          updateRefreshHints();
         }
         setPath(list, el.dataset.f, el.type==='checkbox' ? el.checked : el.value);
         if (el.dataset.f.startsWith('options.protocols') || ['options.enabled','options.inCatalog','options.dedupe','options.emitLogo'].includes(el.dataset.f)){
@@ -1740,10 +1767,9 @@ function renderAll(){
     if (box) box.classList.toggle('on', on);
   }
   const base = (CFG.settings.publicBaseUrl || location.origin).replace(/\/+$/, '');
-  const m = base + '/manifest.json' + tokenQs();
-  $('#manifestUrl').textContent = m;
-  $('#m3uUrl').textContent = base + '/playlist.m3u' + tokenQs();
+  $('#manifestLink').href = base + '/manifest.json' + tokenQs();
   $('#m3uLink').href = base + '/playlist.m3u' + tokenQs();
+  $('#channelsLink').href = base + '/channels.json' + tokenQs();
   renderLists();
   $('#status').textContent = `${CFG.lists.length} liste · ${CFG.lists.filter(l=>l.options.enabled).length} attive`;
   if (CFG.version && String(CFG.version) !== WM_UI_VERSION){
@@ -1936,15 +1962,17 @@ function copyText(t){
 }
 
 /* ---------------- init ---------------- */
-$('#btnCopyManifest').addEventListener('click', () => {
-  copyText($('#manifestUrl').textContent).then(
-    () => toast('URL del manifest copiato ✔'),
+$('#manifestLink').addEventListener('click', (ev) => {
+  ev.preventDefault();
+  copyText(ev.currentTarget.href).then(
+    () => toast('Copiato manifest ✔'),
     (e) => toast('Copia non riuscita: ' + e.message, 4000)
   );
 });
-$('#btnCopyM3u').addEventListener('click', () => {
-  copyText($('#m3uUrl').textContent).then(
-    () => toast('URL playlist M3U copiato ✔'),
+$('#m3uLink').addEventListener('click', (ev) => {
+  ev.preventDefault();
+  copyText(ev.currentTarget.href).then(
+    () => toast('Copiato m3u ✔'),
     (e) => toast('Copia non riuscita: ' + e.message, 4000)
   );
 });
@@ -1981,20 +2009,102 @@ $('#sidemenu').addEventListener('click', async (ev) => {
     setSideMenu(false);
     return;
   }
-  const up = ev.target.closest('[data-sdup]');
-  const dn = ev.target.closest('[data-sddn]');
-  if (up || dn){
-    const i = Number(up ? up.dataset.sdup : dn.dataset.sddn);
-    const j = up ? i - 1 : i + 1;
-    if (j < 0 || j >= CFG.lists.length) return;
-    [CFG.lists[i], CFG.lists[j]] = [CFG.lists[j], CFG.lists[i]];
-    await saveConfig();
-    renderLists();
-  }
 });
+function sdDragCleanup(){
+  $$('#sidemenu .sditem').forEach(el => el.classList.remove('dragging','drag-before','drag-after'));
+  SD_DRAG = null;
+}
+
+$('#sidemenu').addEventListener('dragstart', (ev) => {
+  if (!ev.target.closest('[data-sdhandle]')) { ev.preventDefault(); return; }
+  const item = ev.target.closest('.sditem');
+  if (!item) return;
+  SD_DRAG = { el: item, from: Number(item.dataset.sdindex), to: null, after: false };
+  if (ev.dataTransfer){
+    ev.dataTransfer.effectAllowed = 'move';
+    try { ev.dataTransfer.setData('text/plain', String(SD_DRAG.from)); } catch (_) { /* ignore */ }
+  }
+  item.classList.add('dragging');
+});
+$('#sidemenu').addEventListener('dragover', (ev) => {
+  if (!SD_DRAG) return;
+  const item = ev.target.closest('.sditem');
+  if (!item || item === SD_DRAG.el) return;
+  ev.preventDefault();
+  if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'move';
+  $$('#sidemenu .sditem').forEach(el => el.classList.remove('drag-before','drag-after'));
+  const rect = item.getBoundingClientRect();
+  SD_DRAG.to = Number(item.dataset.sdindex);
+  SD_DRAG.after = ev.clientY > rect.top + rect.height / 2;
+  item.classList.add(SD_DRAG.after ? 'drag-after' : 'drag-before');
+});
+$('#sidemenu').addEventListener('drop', async (ev) => {
+  if (!SD_DRAG) return;
+  ev.preventDefault();
+  const drag = SD_DRAG;
+  sdDragCleanup();
+  if (drag.to == null || drag.to === drag.from) return;
+  if (!moveList(drag.from, drag.to, drag.after)) return;
+  await saveConfig();
+});
+$('#sidemenu').addEventListener('dragend', sdDragCleanup);
+
+// Touch/pen: native HTML5 drag does not work on most mobile browsers, so the
+// same handle also supports pointer dragging.
+let SD_PTR = null;
+$('#sidemenu').addEventListener('pointerdown', (ev) => {
+  if (ev.pointerType === 'mouse') return; // mouse uses native drag & drop above
+  const handle = ev.target.closest('[data-sdhandle]');
+  const item = handle && handle.closest('.sditem');
+  if (!item) return;
+  SD_PTR = { id: ev.pointerId, el: item, from: Number(item.dataset.sdindex), to: null, after: false, moved: false, x: ev.clientX, y: ev.clientY };
+  try { handle.setPointerCapture(ev.pointerId); } catch (_) { /* ignore */ }
+  ev.preventDefault();
+});
+$('#sidemenu').addEventListener('pointermove', (ev) => {
+  if (!SD_PTR || ev.pointerId !== SD_PTR.id) return;
+  if (!SD_PTR.moved && Math.hypot(ev.clientX - SD_PTR.x, ev.clientY - SD_PTR.y) < 6) return;
+  SD_PTR.moved = true;
+  ev.preventDefault();
+  const under = document.elementFromPoint(ev.clientX, ev.clientY);
+  const item = under && under.closest && under.closest('#sidemenu .sditem');
+  $$('#sidemenu .sditem').forEach(el => el.classList.remove('drag-before','drag-after'));
+  if (!item || item === SD_PTR.el){ SD_PTR.to = null; return; }
+  const rect = item.getBoundingClientRect();
+  SD_PTR.to = Number(item.dataset.sdindex);
+  SD_PTR.after = ev.clientY > rect.top + rect.height / 2;
+  item.classList.add(SD_PTR.after ? 'drag-after' : 'drag-before');
+  SD_PTR.el.classList.add('dragging');
+});
+async function sdPointerEnd(ev){
+  if (!SD_PTR || (ev && ev.pointerId !== SD_PTR.id)) return;
+  const drag = SD_PTR;
+  SD_PTR = null;
+  $$('#sidemenu .sditem').forEach(el => el.classList.remove('dragging','drag-before','drag-after'));
+  if (!drag.moved || drag.to == null || drag.to === drag.from) return;
+  if (!moveList(drag.from, drag.to, drag.after)) return;
+  await saveConfig();
+}
+$('#sidemenu').addEventListener('pointerup', sdPointerEnd);
+$('#sidemenu').addEventListener('pointercancel', sdPointerEnd);
+
+$('#sidemenu').addEventListener('keydown', async (ev) => {
+  if (!ev.target.closest('[data-sdhandle]')) return;
+  const item = ev.target.closest('.sditem');
+  if (!item) return;
+  const from = Number(item.dataset.sdindex);
+  const delta = ev.key === 'ArrowUp' ? -1 : ev.key === 'ArrowDown' ? 1 : 0;
+  if (!delta) return;
+  ev.preventDefault();
+  const to = from + delta;
+  if (!moveList(from, to, delta > 0)) return;
+  await saveConfig();
+  const next = document.querySelector('#sidemenu .sditem[data-sdindex="' + to + '"] [data-sdhandle]');
+  if (next) next.focus();
+});
+
 $('#btnProbe').addEventListener('click', probe);
 $('#btnSave').addEventListener('click', saveConfig);
-$('#btnReload').addEventListener('click', loadConfig);
 $('#btnClearCache').addEventListener('click', async ()=>{
   if(!confirm('Svuotare la cache di tutte le liste?')) return;
   try { await api('/api/cache/clear',{method:'POST'}); toast('Cache svuotata'); } catch(e){ toast(e.message); }
@@ -2372,7 +2482,6 @@ initCollapsibleSections();
 })();
 
 $('#fabSave').addEventListener('click', saveConfig);
-$('#fabReload').addEventListener('click', loadConfig);
 
 /* back to top: always floating on mobile, smooth scroll unless user preference */
 $('#toTop').addEventListener('click', ()=>{
