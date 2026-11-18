@@ -43,7 +43,7 @@ function prefixJoiner(prefix) {
 
 /**
  * Collects the channels of all enabled lists.
- * @param {object} config config normalizzata
+ * @param {object} config normalized config
  * @param {object} [opts] { force }
  * @returns {Promise<{channels:Array, lists:Array, errors:Array, epgUrls:string[]}>}
  */
@@ -53,7 +53,7 @@ async function collectChannels(config, opts = {}) {
   const channels = [];
   const listResults = [];
   const errors = [];
-  const epgUrls = []; // EPG ereditati dalle sorgenti m3u/m3u_plus attive
+  const epgUrls = []; // EPG inherited from the active m3u/m3u_plus sources
 
   for (const list of config.lists) {
     if (!list.options.enabled || (!list.url && list.kind !== 'personal')) {
@@ -299,7 +299,7 @@ async function buildPlaylist(config, opts = {}) {
   return { m3u, channels, lists, errors, epgUrls };
 }
 
-/* ---------------------------- cataloghi ---------------------------- */
+/* ---------------------------- catalogs ---------------------------- */
 
 const TYPE = 'tv';
 
@@ -539,7 +539,7 @@ function buildBranches(entry, list) {
   // personal groups ("@Name") created by moving channels from the page
   for (const [t, n] of inC) {
     if (!t.startsWith('@') || !n) continue;
-    if (delBranches.has(t)) continue; // gruppo personale eliminato
+    if (delBranches.has(t)) continue; // deleted custom group
     found.push({
       path: t,
       name: t.slice(1),
@@ -554,7 +554,7 @@ function buildBranches(entry, list) {
   // custom playlists/branches created empty from the page ("+ new playlist")
   for (const g of list.options.customGroups || []) {
     const t = '@' + g;
-    if (delBranches.has(t)) continue; // gruppo personale eliminato
+    if (delBranches.has(t)) continue; // deleted custom group
     if (found.some((b) => b.path === t)) continue;
     found.push({
       path: t,

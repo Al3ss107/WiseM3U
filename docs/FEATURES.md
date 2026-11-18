@@ -1,7 +1,5 @@
 # WiseM3U — complete feature inventory
 
-Reference version: **v1.1.0**
-
 > One line: it imports **WisePlay / M3U / Xtream** lists, normalizes them into a
 > tree of groups and channels, applies user customizations and exposes them as a
 > **Stremio/Nuvio addon** (catalogs + streams) and as an **M3U playlist** for any

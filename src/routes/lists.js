@@ -153,10 +153,10 @@ router.get('/:id/suggest', admin, async (req, res) => {
   try {
     const e = await playlist.entryFor(cfg, list);
     if (e && e.tree) pushTree(e.tree, list.options, cur);
-  } catch (_) { /* albero non disponibile */ }
+  } catch (_) { /* tree unavailable */ }
   for (const l of cfg.lists) {
     if (l.id === list.id || names.size >= CAP) continue;
-    const e = cache.getEntry(l.id); // solo cache: il manifest/pagina restano istantanei
+    const e = cache.getEntry(l.id); // cache only: manifest/page stay instant
     if (e && e.tree) pushTree(e.tree, l.options, null);
   }
   res.json({ names: [...names] });
@@ -243,7 +243,7 @@ router.post('/:id/addchannel', admin, async (req, res) => {
         store.saveConfig(cfg, { reason: 'channel moved', listId: list.id, listName: list.name || list.url });
         return res.json({ ok: true, from: list.name || list.id, undo });
       }
-    } catch (_) { /* albero non disponibile: provo con le altre liste */ }
+    } catch (_) { /* tree unavailable: try the other lists */ }
   }
 
   // 2) another list: nest in the branch + disable in the source
@@ -311,7 +311,7 @@ router.post('/:id/mergebranch', admin, async (req, res) => {
   }
 
   let e = null;
-  try { e = await playlist.entryFor(cfg, src); } catch (_) { /* non scaricata */ }
+  try { e = await playlist.entryFor(cfg, src); } catch (_) { /* not downloaded */ }
   if (!e || !e.tree) return res.status(409).json({ error: 'source list not downloaded yet' });
   const node = findByPath(e.tree, from);
   if (!node) return res.status(404).json({ error: 'source playlist not found' });
@@ -395,10 +395,10 @@ router.post('/:id/restoreorigin', admin, (req, res) => {
   const imp = dropExternalImports(cfg, list);
   const personal = list.kind === 'personal';
   list.options = store.defaultListOptions();
-  if (personal) list.options.inCatalog = false; // come una lista personale appena creata
+  if (personal) list.options.inCatalog = false; // like a newly created personal list
   list.state = { status: 'idle', error: '', fatal: false, fetchedAt: '', stats: null, kind: '' };
   store.saveConfig(cfg, { reason: 'list restored', listId: list.id, listName: list.name || list.url });
-  cache.invalidate(list.id);            // niente vecchio albero/snapshot
+  cache.invalidate(list.id);            // no stale tree/snapshot
   playlist.clearRows(list.id);
   refresher.startRefresh(list.id, true);          // riscarica da zero
   res.json({
@@ -453,8 +453,8 @@ router.get('/:id/channels', admin, async (req, res) => {
   if (!isCustom) {
     (node.stations || []).forEach((st) => {
       const key = `${path}::${st.name}`;
-      if (del.has(key)) return; // eliminato: non si vede piu'
-      if (movedOut.has(key)) return; // vive in un altro ramo/gruppo
+      if (del.has(key)) return; // deleted: no longer visible
+      if (movedOut.has(key)) return; // lives in another branch/group
       chans.push({
         name: st.name,
         shown: renames[key] || st.name,
@@ -482,7 +482,7 @@ router.get('/:id/channels', admin, async (req, res) => {
   chans.sort((a, b) => {
     const pa = posMap.has(a.name) ? posMap.get(a.name) : 1e9;
     const pb = posMap.has(b.name) ? posMap.get(b.name) : 1e9;
-    return pa - pb; // stabile: chi non e' in order mantiene l'ordine naturale
+    return pa - pb; // stable: items not in order keep their natural order
   });
   res.json({ path, count: chans.length, channels: chans });
 });

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * Poster composition test (v1.5.0)
+ * Poster composition test
  * =================================
  * Regression "cut posters": channel CDNs serve WebP/SVG/ICO besides
  * classic PNG/JPEG (Pluto TV, Rakuten). Only P/J failed to decode and the
@@ -24,7 +24,7 @@ const assert = (c, m) => { if (!c) { failures++; console.log(`FAIL  ${m}`); } el
 const isCanvas = async (buf, W, H) => { try { const m = await sharp(buf).metadata(); return m.format === 'jpeg' && m.width === W && m.height === H; } catch { return false; } };
 
 (async () => {
-  // fixture: png verticale, webp banner orizzontale (tipo Rakuten genre),
+  // fixture: vertical PNG, horizontal WebP banner (Rakuten genre style),
   // vector SVG (Pluto-style logo), ICO with embedded PNG (Rakuten favicon)
   const png = await sharp({ create: { width: 50, height: 300, channels: 4, background: { r: 0, g: 200, b: 0, alpha: 1 } } }).png().toBuffer();
   const webp = await sharp({ create: { width: 1200, height: 200, channels: 4, background: { r: 0, g: 0, b: 200, alpha: 1 } } }).webp().toBuffer();
@@ -56,7 +56,7 @@ const isCanvas = async (buf, W, H) => { try { const m = await sharp(buf).metadat
 
   // --- extract: ICO ----------------------------------------------------------------
   assert(icoToPng(ico) && icoToPng(ico).length === inner.length, 'ico parser: embedded png extracted');
-  assert(icoToPng(Buffer.from('MZ��')) === null, 'ico parser: non-ico -> null');
+  assert(icoToPng(Buffer.from('MZ��')) === null, 'ico parser: non-ICO input -> null');
 
   // --- produce(): all formats render the same canvas -----------------------------------
   for (const [f, exp] of [['x.png', true], ['x.webp', true], ['x.svg', true], ['x.ico', true], ['x.txt', false]]) {
@@ -70,14 +70,14 @@ const isCanvas = async (buf, W, H) => { try { const m = await sharp(buf).metadat
   assert(sq && (await isCanvas(sq, 512, 512)), 'produce square -> canvas JPEG 512x512');
 
   // logos must go out with a clean browser UA (CDN worker = 403 otherwise,
-  // v1.5.1: cut posters after cache clear)
+  // regression: cut posters after cache clear
   const cf = await produce(`${BASE}/cf.png`, 'landscape');
   assert(cf && (await isCanvas(cf, 640, 360)),
-    `produce dietro wannabe-Cloudflare: ok (UA='${lastImgUa.slice(0, 60)}…')`);
+    `produce behind wannabe-Cloudflare: ok (UA='${lastImgUa.slice(0, 60)}…')`);
   assert(/Chrome\/126/.test(lastImgUa) && !/WiseM3U/.test(lastImgUa),
     `image UA clean of bot suffix: ${lastImgUa}`);
 
-  // --- handler express: 200 jpeg, 302 fallback, cache su disco ---------------------------
+  // --- handler express: 200 jpeg, 302 fallback, cache on disk ---------------------------
   const app = express();
   app.get('/imgfit', (req, res) => handle(req, res));
   const appSrv = app.listen(0, '127.0.0.1');

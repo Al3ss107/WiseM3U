@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * Stream diagnostics test (v1.4.0)
+ * Stream diagnostics test
  * A) diag OFF: playlist and JSON streams have the original URLs
  * B) diag ON: playlist.m3u and /stream contain /proxy/play URLs
  * C) /proxy/play on a working channel -> 302 to the source
@@ -84,7 +84,7 @@ async function waitFor(pred, ms, step = 400) {
   const t0 = Date.now();
   for (;;) {
     if (await pred()) return true;
-    if (Date.now() - t0 > ms) throw new Error('timeout attesa');
+    if (Date.now() - t0 > ms) throw new Error('timeout wait');
     await new Promise((r) => setTimeout(r, step));
   }
 }
@@ -121,7 +121,7 @@ async function waitFor(pred, ms, step = 400) {
     return st.body && st.body.status === 'ready';
   }, 20000);
 
-  /* A) spenta: URL originali */
+  /* A) off: original URLs */
   ok = await run('A: diag off -> original URLs unchanged', async () => {
     const m3u = await apiJ('/playlist.m3u');
     assert(m3u.status === 200, `playlist -> ${m3u.status}`);
@@ -129,7 +129,7 @@ async function waitFor(pred, ms, step = 400) {
     assert(!m3u.body.includes('/proxy/play'), 'diag off but /proxy/play URLs present');
   }) && ok;
 
-  /* B) accesa: URL riscritti */
+  /* B) on: rewritten URLs */
   ok = await run('B: diag on -> playlist and streams rewritten', async () => {
     const cfgGet = await apiJ('/api/config');
     const cfg = cfgGet.body.config || cfgGet.body;

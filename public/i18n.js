@@ -181,16 +181,16 @@
           }
         } else if (m.type === 'characterData') {
           const node = m.target;
-          if (node.nodeValue === node.__wmOut) continue; // nostra traduzione
-          node.__wmSrc = node.nodeValue;               // nuovo testo dal codice
+          if (node.nodeValue === node.__wmOut) continue; // our translation
+          node.__wmSrc = node.nodeValue;               // new text from the code
           pending.push(node);
         } else if (m.type === 'attributes') {
           const el = m.target;
           const attr = m.attributeName;
           const current = el.getAttribute(attr);
-          if (el.__wmAttrsOut && el.__wmAttrsOut[attr] === current) continue; // nostra traduzione
+          if (el.__wmAttrsOut && el.__wmAttrsOut[attr] === current) continue; // our translation
           el.__wmAttrs = el.__wmAttrs || {};
-          el.__wmAttrs[attr] = current; // il codice ha scritto un nuovo valore sorgente
+          el.__wmAttrs[attr] = current; // the code wrote a new source value
           pending.push(el);
         }
       }

@@ -101,7 +101,7 @@ const mkList = (id, name, opts={}) => ({
   ok(jsRes.status === 200 && /javascript/.test(jsRes.headers.get('content-type') || ''), 'configure.js served');
   ok(jsText.includes('data-refresh-custom-box') && jsText.includes('data-refresh-input') && jsText.includes('refreshMenu') && jsText.includes('data-sdhandle'), 'editable custom interval dropdown and list drag handle rendered by the UI');
   ok(jsText.includes('options.epgUrl') && !jsText.includes('catalogName'), 'per-list EPG replaces the catalog name field');
-  ok(jsText.includes('Copiato manifest') && jsText.includes('Copiato m3u'), 'header links copy their URL');
+  ok(jsText.includes('manifest copied') && jsText.includes('m3u copied'), 'header links copy their URL');
   ok(jsText.includes('data-active-count') && jsText.includes('openActiveModal'), 'active playlist count opens a preview modal');
   ok(jsText.includes('data-copyurl'), 'list URL lines copy their link');
   ok(jsText.includes('wm-ui-version') && !jsText.includes('__WM_UI_VERSION__'), 'JS reads the version from meta');
@@ -179,7 +179,7 @@ const mkList = (id, name, opts={}) => ({
   ok(!('token' in cfg.settings) && !('publicBaseUrl' in cfg.settings), 'legacy token/public URL are dropped');
   ok(cfg.lists.find(l=>l.id==='l_b').name === 'List B', 'list name restored');
 
-  // categorie vuote / id inesistente
+  // empty categories / non-existent id
   r = await api(`/api/history/${idV1}/restore`, { method:'POST', body: '{}' });
   ok(r.status === 400, 'no category -> 400');
   r = await api('/api/history/nonesiste/restore', { method:'POST', body: JSON.stringify({ options: ['order'] }) });
@@ -247,7 +247,7 @@ const mkList = (id, name, opts={}) => ({
   ok(JSON.stringify(afterU.lists.find((l)=>l.id === 'l_b').options.purgedBranches || []) === purgedBefore,
     'empty trash undo re-enables items in the trash');
 
-  // ---- checkpoint nominati ----
+  // ---- named checkpoints ----
   const cpBefore = (await api('/api/history')).body.entries.length;
   r = await api('/api/history/checkpoints', { method:'POST', body: JSON.stringify({ name:'before merge' }) });
   ok(r.status === 200 && r.body.entry && r.body.entry.id, 'checkpoint created');

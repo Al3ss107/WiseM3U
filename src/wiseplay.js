@@ -1,15 +1,15 @@
 'use strict';
 
 /**
- * Parser del formato WisePlay (catene JSON servite via link condivisi/accorciati).
+ * WisePlay format parser (JSON chains served through shared/short links).
  *
- * Nodo radice:
+ * Root node:
  *   { name, author, image, url, info, groups: [ ... ] }
  *
  * A group node can be:
  *   1) local container    -> { name, image, groups: [...], stations: [...] }
- *   2) riferimento esterno -> { name, image, url: "...", isHost?: true }
- *      - se l'URL punta a JSON WisePlay  -> ricorsione
+ *   2) external reference -> { name, image, url: "...", isHost?: true }
+ *      - if the URL points to WisePlay JSON -> recurse
  *      - if the URL points to an .m3u        -> import channels (isHost: true)
  *
  * A station is { name, image, url } with url = acestream:// | http(s) | rtmp ...
@@ -45,7 +45,7 @@ const MAX_BYTES = 60 * 1024 * 1024;
 const CONCURRENCY = 32;
 
 /* ------------------------------------------------------------------ */
-/* JSON tollerante: molti file WisePlay hanno BOM, virgole finali,      */
+/* Tolerant JSON: many WisePlay files have a BOM, trailing commas,      */
 /* control characters or HTML text before/after the payload.            */
 /* ------------------------------------------------------------------ */
 
@@ -73,7 +73,7 @@ function removeStrayCommas(json) {
   let out = '';
   let inStr = false;
   let esc = false;
-  let prev = ''; // ultimo carattere NON-spazio emesso
+  let prev = ''; // last NON-space character emitted
   for (let i = 0; i < n; i++) {
     const c = json[i];
     if (inStr) {
@@ -150,7 +150,7 @@ class FetchError extends Error {
 }
 
 /** TLS error codes indicating an untrusted certificate
- *  (self-signed, scaduto, catena rotta: frequente nei pannelli Xtream). */
+ *  (self-signed, expired, broken chain: common in Xtream panels). */
 const CERT_ERROR_RE = /UNABLE_TO_VERIFY_LEAF_SIGNATURE|DEPTH_ZERO_SELF_SIGNED_CERT|SELF_SIGNED_CERT_IN_CHAIN|CERT_HAS_EXPIRED|UNABLE_TO_GET_ISSUER_CERT|CERT_NOT_YET_VALID/i;
 
 /**
@@ -177,7 +177,7 @@ function fetchFailure(err, url) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Riconoscimento del contenuto (magic number + testualita')           */
+/* Content detection (magic number + plain text)                       */
 /* ------------------------------------------------------------------ */
 
 /** Format label from the first bytes: tells the user what it really is
@@ -261,10 +261,10 @@ function countM3uEntries(text) {
  * Definitive error: retrying is useless. The link points to something else
  * (video, archive, binary) or the playlist exceeds the memory limit.
  *
- * v1.5.2: previously EVERYTHING was downloaded (e.g. 609 MB) and only at the end
+ * Previously EVERYTHING was downloaded (e.g. 609 MB) and only at the end
  * was it clear it was too large: RAM full, 60s wasted and "Refresh" repeating
  * the same 609 MB download.
- * v1.5.3: the limit applies while streaming, but we no longer reject based
+ * The limit applies while streaming, and we no longer reject based
  * only on the Content-Length header (PHP panels often get it wrong):
  * if the body ends before the limit, the list is imported.
  */
@@ -312,7 +312,7 @@ function tooLargeError(size, contentType, head, opts = {}) {
       '(not a single-channel stream or an .mp4/.mkv file).',
     0
   );
-  err.fatal = true; // niente retry inutili (v. fetchRoot)
+  err.fatal = true; // no useless retries (see fetchRoot)
   return err;
 }
 
@@ -350,7 +350,7 @@ function decodeBody(buf) {
   return b.toString('utf8');
 }
 
-const SNIFF_BYTES = 4096; // quanti byte bastano per capire cosa stiamo scaricando
+const SNIFF_BYTES = 4096; // enough bytes to understand what we are downloading
 
 /** Accumulates chunks applying the limit (used by the "text" path).
  *  `limit` is parameterized only for tests: in production it is MAX_BYTES. */
@@ -406,7 +406,7 @@ async function fetchText(url, opts = {}) {
     const buf = await readCapped(res, url);
     return decodeBody(buf);
   } catch (err) {
-    if (err && err.fatal) throw err; // gia' diagnosticato, non avvolgere
+    if (err && err.fatal) throw err; // already diagnosed, do not wrap
     throw fetchFailure(err, url);
   } finally {
     clearTimeout(timer);
@@ -431,9 +431,9 @@ function nodeFetchText(url, opts = {}, redirectsLeft = 5) {
     const headers = {
       'User-Agent': getUserAgent(opts && opts.userAgent),
       Accept: 'application/json, text/plain, application/x-mpegurl, */*',
-      'Accept-Encoding': 'identity', // niente compressione: qui non viene decompressa
+      'Accept-Encoding': 'identity', // no compression: it is not decompressed here
     };
-    if (opts.ip) headers.host = u.host; // connessi per IP: il vhost deve vedere il dominio
+    if (opts.ip) headers.host = u.host; // connected by IP: the vhost must still see the domain
     const requestOpts = {
       host: connectHost,
       port: u.port || (isHttps ? 443 : 80),
@@ -497,7 +497,7 @@ function resolveViaPublicDns(hostname) {
   return Promise.race([
     r.resolve4(hostname).then((a) => a[0]),
     new Promise((resolve, rej) => {
-      const t = setTimeout(() => rej(new Error('timeout DNS pubblici')), 4000);
+      const t = setTimeout(() => rej(new Error('public DNS timeout')), 4000);
       if (t.unref) t.unref();
     }),
   ]);
@@ -625,7 +625,7 @@ async function* streamChunks(reader, first) {
 async function importM3uStream(chunks, rootUrl, opts = {}) {
   const decoder = new TextDecoder(opts.encoding || 'utf-8');
   const onEvent = typeof opts.onEvent === 'function' ? opts.onEvent : () => {};
-  const groups = new Map(); // nome gruppo -> { seen:Set, stations:Array }
+  const groups = new Map(); // group name -> { seen:Set, stations:Array }
   let header = {};
   let pending = null;
   let lastExtGrp = '';
@@ -708,7 +708,7 @@ async function importM3uStream(chunks, rootUrl, opts = {}) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Costruzione albero                                                  */
+/* Tree construction                                                   */
 /* ------------------------------------------------------------------ */
 
 function makeNode(name, image, info, parentPath, index) {
@@ -772,7 +772,7 @@ async function buildTree(rootUrl, options = {}) {
   // HTTP 4xx errors (wrong credentials or URL) are not retried.
   async function recoveryFetch(err, opts) {
     // definitive errors (URL pointing to a video/binary, huge playlist):
-    // inutile riprovare o cambiare trasporto
+    // no point retrying or changing transport
     if (err && err.fatal) return null;
     const causeRef = (err && err.causeRef) || {};
     const causeStr = `${causeRef.code || ''} ${causeRef.message || ''} ${(err && err.message) || ''}`;
@@ -836,7 +836,7 @@ async function buildTree(rootUrl, options = {}) {
    *            channel count (huge m3u files were rejected at 60 MB
    *            in previous builds)
    *  - other -> classic path with buffer and cap (WisePlay JSON, HTML...)
-   * In caso di problema di rete/TLS/DNS delega a fetchRoot() (retry+recovery).
+   * On network/TLS/DNS problems it delegates to fetchRoot() (retry + recovery).
    */
   async function fetchRootAuto() {
     const opts = { ...options, timeout: ROOT_FETCH_TIMEOUT_MS };
@@ -958,7 +958,7 @@ async function buildTree(rootUrl, options = {}) {
         (snippet ? ` — response start: "${snippet}"` : ''),
       0
     );
-    bad.fatal = true; // stesso URL -> stessa risposta: "Aggiorna" non aiuta
+    bad.fatal = true; // same URL -> same response: "Refresh" does not help
     throw bad;
   }
 
@@ -1034,7 +1034,7 @@ async function buildTree(rootUrl, options = {}) {
     }
     target._seen.add(key);
     // only essential fields go into the snapshot: fewer bytes to
-    // scrivere, comprimere e riparsare (su hardware lento cambia tanto)
+    // write, compress and re-parse (it matters on slow hardware)
     const station = {
       name: (s.name || 'Stream').toString().trim(),
       // only the channel's own logo: the group icon stays on the group
@@ -1200,8 +1200,8 @@ function flattenStations(tree, isSelected, opts = {}) {
   const moves = opts.channelMoves || null;
   const displayName = (n) => (renames && renames[n.path]) || n.name;
   const out = [];
-  const nodeInfo = new Map(); // path -> { dn, label, image } dei rami visitati
-  const moved = []; // canali riassegnati: risolti dopo la visita dell'albero
+  const nodeInfo = new Map(); // path -> { dn, label, image } of visited branches
+  const moved = []; // reassigned channels: resolved after visiting the tree
 
   const groupOf = (label) => (prefix ? `${prefix}${joiner}${label}` : label);
 

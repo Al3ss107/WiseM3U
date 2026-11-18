@@ -30,11 +30,11 @@ const MAX_PIXELS = 4096 * 4096;
 const FETCH_TIMEOUT_MS = 6000;
 const CONCURRENCY = 4;
 const MAX_QUEUE = 24;
-const BG = { r: 16, g: 20, b: 24, alpha: 1 }; // #101418, tono scuro da app TV
+const BG = { r: 16, g: 20, b: 24, alpha: 1 }; // #101418, dark tone matching the TV app
 
 const SHAPES = {
-  square: [512, 512],     // preset residuo/fallback (posterShape square)
-  landscape: [640, 360],  // poster canali e gruppi (posterShape landscape)
+  square: [512, 512],     // fallback preset (posterShape square)
+  landscape: [640, 360],  // channel and group posters (posterShape landscape)
 };
 
 let active = 0;
@@ -57,8 +57,8 @@ async function fetchBuf(url, userAgent = '') {
       redirect: 'follow',
       signal: ctrl.signal,
       headers: {
-        // niente suffisso WiseM3U (vedi getImgUserAgent) + Accept da browser:
-        // diversi CDN di loghi rispondono 403/i-frame challenge altrimenti
+        // no WiseM3U suffix (see getImgUserAgent) + browser Accept header:
+        // several logo CDNs otherwise answer with 403/i-frame challenges
         'User-Agent': getImgUserAgent(userAgent),
         Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
         'Accept-Language': 'it-IT,it;q=0.9,en;q=0.8',
@@ -66,7 +66,7 @@ async function fetchBuf(url, userAgent = '') {
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const buf = Buffer.from(await res.arrayBuffer());
-    if (!buf.length) throw new Error('immagine vuota');
+    if (!buf.length) throw new Error('empty image');
     if (buf.length > MAX_BYTES) throw new Error('image too large');
     return buf;
   } finally {
@@ -170,11 +170,11 @@ async function handle(req, res) {
   const file = cachePath(key);
 
   try {
-    const cached = await fsp.readFile(file); // async: non blocca l'event loop
+    const cached = await fsp.readFile(file); // async: does not block the event loop
     res.setHeader('Cache-Control', 'public, max-age=604800');
     res.setHeader('Content-Type', 'image/jpeg');
     return res.send(cached);
-  } catch (_) { /* non in cache: si elabora */ }
+  } catch (_) { /* not cached: process it */ }
 
   if (queue.length >= MAX_QUEUE) return fallbackRedirect(res, url);
 
@@ -191,7 +191,7 @@ async function handle(req, res) {
     const out = await p;
     if (!out) return fallbackRedirect(res, url);
     ensureDir();
-    fsp.writeFile(file, out).catch(() => { /* disco pieno: risponde comunque */ });
+    fsp.writeFile(file, out).catch(() => { /* disk full: still respond */ });
     res.setHeader('Cache-Control', 'public, max-age=604800');
     res.setHeader('Content-Type', 'image/jpeg');
     return res.send(Buffer.from(out));

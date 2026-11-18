@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * Compatibility test for NeroZone-style "chained lists" (v1.4.8)
+ * Compatibility test for NeroZone-style "chained lists"
  * ==============================================================
  * Replicates the real defects found in the gists reported by the user:
  *  - non-strict JSON: trailing comma `},]` and empty element `, ,` (SPORT branch)
@@ -10,7 +10,7 @@
  *  - root with "url" pointing to itself (meta only, must NOT loop)
  *  - "embed": true stations (web pages Serially/Plex/...): not streams, excluded
  *  - m3u URL with a TRAILING SPACE: trim must save it
- *  - v1.5.2 huge response (video/archive/binary pasted instead of the
+ *  - huge response (video/archive/binary pasted instead of the
  *    list): DEFINITIVE and immediate error, no full download and no retry
  *  - huge m3u in streaming (Xtream panel replica): imported
  *    with no MB cap, stopped by channel count and without downloading everything
@@ -139,11 +139,11 @@ const ROUTES = {
 
 (async () => {
   let lastUa = '';
-  let videoBytesSent = 0;   // quanto il server riesce a spingere sull'URL "video"
+  let videoBytesSent = 0;   // how many bytes the server can push on the "video" URL
   let endlessClosed = false;
   let bigLiveSent = 0;      // byte effettivamente serviti per l'm3u enorme
   let bigLiveClosed = false;
-  const BIG_LIVE_TOTAL = 4000 * 115; // stima per eccesso dei byte totali
+  const BIG_LIVE_TOTAL = 4000 * 115; // upper-bound estimate of total bytes
   const mock = http.createServer((req, res) => {
     const pathname = new URL(req.url, 'http://x').pathname;
     lastUa = req.headers['user-agent'] || '';
@@ -225,7 +225,7 @@ const ROUTES = {
   const mixed = '{"x":"virgola, ] dentro la stringa","y":"a,,b","list":[1,2,]}';
   const ok = parseLenientJson(mixed);
   assert(ok && ok.x === 'virgola, ] dentro la stringa' && ok.y === 'a,,b' && ok.list.length === 2,
-    'sanitizer: virgole finali tolte ma stringhe simili intatte');
+    'sanitizer: trailing commas removed while similar strings stay intact');
 
   const hole = parseLenientJson('{"a":[{\n},\n,\n{ "b": 1 }\n],\n}');
   assert(hole && hole.a.length === 2 && hole.a[1].b === 1, 'array with empty element (, ,) recovered');
@@ -266,7 +266,7 @@ const ROUTES = {
 
   assert(root.counts.stations === 3 + 2 + 2 + 2 + 2 + 1, `conteggi: ${root.counts.stations}`);
 
-  // --- v1.5.6: User-Agent personalizzato --------------------------------------
+  // --- custom User-Agent ---------------------------------------------------
   const customUa = 'VLC/3.0.20 LibVLC/3.0.20';
   await buildTree(`${BASE}/ua.m3u`, { userAgent: customUa });
   assert(lastUa === customUa, `per-request UA sent to the panel: ${lastUa}`);
@@ -280,7 +280,7 @@ const ROUTES = {
   await buildTree(`${BASE}/ua.m3u`, { userAgent: 'Evil\r\nX-Injected: 1' });
   assert(!/[\r\n]/.test(lastUa), `per-list UA sanitized on the wire: ${JSON.stringify(lastUa)}`);
 
-  // --- v1.5.2: huge / non-playlist responses -------------------------------
+  // --- huge / non-playlist responses ---------------------------------------
   const t0 = Date.now();
   let eVideo = null;
   try { await buildTree(`${BASE}/big-video.mp4`); } catch (e) { eVideo = e; }
@@ -302,7 +302,7 @@ const ROUTES = {
   assert(dtLive < 1500, `stopped in ${dtLive} ms`);
   assert(endlessClosed, 'live socket closed on our side (no phantom download)');
 
-  // --- v1.5.3: gzip nudo, UTF-16, archivi ------------------------------------
+  // --- bare gzip, UTF-16, archives -----------------------------------------
   const gzTree = await buildTree(`${BASE}/list.m3u.gz`);
   assert(gzTree.stats.stations === 2, `m3u in gzip served as octet-stream imported (${gzTree.stats.stations} channels)`);
   const u16Tree = await buildTree(`${BASE}/utf16.m3u`);
@@ -315,7 +315,7 @@ const ROUTES = {
     `zip -> definitive error saying ZIP ARCHIVE (${(eZip && eZip.message.slice(0, 70))}…)`);
   assert(Date.now() - tZip < 1200, `zip rejected after a few KB, not after the download (${Date.now() - tZip} ms)`);
 
-  // --- v1.5.4: m3u enorme in streaming ---------------------------------------
+  // --- huge m3u in streaming -----------------------------------------------
   const tBig = Date.now();
   const big = await buildTree(`${BASE}/big-live.m3u`);
   const dtBig = Date.now() - tBig;

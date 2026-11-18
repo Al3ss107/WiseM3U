@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * Live log + targeted retry test (v1.1.3)
+ * Live log + targeted retry test
  * A) https on an HTTP-only server -> downgrade to http (ERR_SSL_WRONG_VERSION_NUMBER)
  * B) empty 0-byte response -> "empty content" message
  * C) HTML page -> direct link suggestion
@@ -57,7 +57,7 @@ async function waitFor(pred, ms, step = 400) {
   for (;;) {
     const v = await pred();
     if (v) return v;
-    if (Date.now() - t0 > ms) throw new Error('timeout attesa');
+    if (Date.now() - t0 > ms) throw new Error('timeout wait');
     await new Promise((r) => setTimeout(r, step));
   }
 }
@@ -106,7 +106,7 @@ async function waitFor(pred, ms, step = 400) {
     assert(err && /HTML WEB PAGE|DIRECT LINK/i.test(err.message), `message: ${err && err.message}`);
   }) && ok;
 
-  ok = await run('D: HTTP 403 → spiegazione accesso negato', async () => {
+  ok = await run('D: HTTP 403 → access denied explanation', async () => {
     let err = null;
     try { await buildTree(`http://127.0.0.1:${MOCK_PORT}/negato.m3u`, { maxDepth: 5 }); }
     catch (e) { err = e; }
@@ -132,7 +132,7 @@ async function waitFor(pred, ms, step = 400) {
 
     const dl = await apiJ('/api/logs?scope=download&limit=200');
     const dlMsgs = dl.body.entries.map((e) => e.msg).join('\n');
-    assert(dlMsgs.includes(LIST_NAME) && /✔|pronta/i.test(dlMsgs), `download log:\n${dlMsgs}`);
+    assert(dlMsgs.includes(LIST_NAME) && /✔|ready/i.test(dlMsgs), `download log:\n${dlMsgs}`);
 
     const treeR = await apiJ(`/api/lists/${listId}/tree`);
     const brPath = (treeR.body.branches || [])[0];
@@ -147,11 +147,11 @@ async function waitFor(pred, ms, step = 400) {
     const cat = await apiJ(`/catalog/tv/wise%3A${encodeURIComponent(listId)}.json?skip=0`);
     const metas = (cat.body && cat.body.metas) || [];
     const meta = metas.find((m) => (m.name || '').includes('Test'));
-    assert(meta, `catalogo: ${JSON.stringify(metas).slice(0, 200)}`);
+    assert(meta, `catalog: ${JSON.stringify(metas).slice(0, 200)}`);
     // TV channels must come out as landscape cards (horizontal logos):
-    // se ricompare 'square' i client ricominciano a tagliare i loghi (v1.4.7)
+    // if 'square' comes back, clients start cropping logos again
     assert(meta.posterShape === 'landscape',
-      `posterShape catalogo: ${meta.posterShape}`);
+      `catalog posterShape: ${meta.posterShape}`);
     const metaDet = await apiJ(`/meta/tv/${encodeURIComponent(meta.id)}.json`);
     assert(metaDet.body && metaDet.body.meta && metaDet.body.meta.posterShape === 'landscape',
       `posterShape meta: ${JSON.stringify(metaDet.body).slice(0, 200)}`);
@@ -160,7 +160,7 @@ async function waitFor(pred, ms, step = 400) {
     assert(stream.status === 200 && (stream.body.streams || []).some((s) => s.url === CHAN_URL),
       `stream: ${JSON.stringify(stream.body).slice(0, 200)}`);
 
-    // BULK deletion ("Delete selected" button, v1.4.9): {paths:[...]}
+    // BULK deletion ("Delete selected" button): {paths:[...]}
     // — new count, idempotency, restore via /restore
     const bulk1 = await apiJ(`/api/lists/${listId}/delete`, {
       method: 'POST', body: JSON.stringify({ paths: [brPath.path] }),
@@ -194,7 +194,7 @@ async function waitFor(pred, ms, step = 400) {
     const after = await apiJ('/api/logs');
     assert(after.body.entries.length === 0, `buffer: ${after.body.entries.length}`);
 
-    // v1.4.4→v1.4.5 bug regression: the UI version in the page MUST be
+    // regression: the UI version in the page MUST be
     // injected by the server = same version as the backend (otherwise the
     // "old page" warning stays forever even after updating)
     const page = await fetch(`${BASE}/configure`);

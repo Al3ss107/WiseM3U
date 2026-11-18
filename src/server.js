@@ -71,7 +71,7 @@ app.use(express.static(path.join(__dirname, '..', 'public'), {
 }));
 // The configuration page is served with the addon version INJECTED
 // by the server (placeholder __WM_UI_VERSION__): the empty marker cannot
-// lag behind the backend (v1.4.4/v1.4.5 bug) — no endless warnings.
+// lag behind the backend — no endless warnings.
 let CONFIG_HTML = null;
 function configPageHtml() {
   if (!CONFIG_HTML) {
@@ -158,7 +158,7 @@ app.get('/manifest.json', async (req, res) => {
 
 /* ------------------------------------------------------------------ */
 /* rescaled posters/logos (clients that crop "cover"                   */
-/* altrimenti mostrano i loghi zoomati)                                */
+/* otherwise they show zoomed logos)                                  */
 /* ------------------------------------------------------------------ */
 
 app.get('/imgfit', (req, res) => { imgfit.handle(req, res); });
@@ -184,14 +184,14 @@ function fitPosters(result, req, list) {
 }
 
 /* ------------------------------------------------------------------ */
-/* catalogo / meta / stream                                            */
+/* catalog / meta / stream                                             */
 /* ------------------------------------------------------------------ */
 
 // extras arrive as path segments: /genre=X, /search=Y, /skip=N,
 // also combined (/genre=X/skip=100) or joined with & (SDK format)
 app.get(/^\/catalog\/([^/]+)\/(.+)\.json$/, async (req, res) => {
   try {
-    // params[0] = type (tv), params[1] = id catalogo + eventuali extra
+    // params[0] = type (tv), params[1] = catalog id + optional extras
     const parts = req.params[1].split('/');
     const catId = parts[0].split('|')[0];
     const extras = {};
@@ -214,7 +214,7 @@ app.get(/^\/catalog\/([^/]+)\/(.+)\.json$/, async (req, res) => {
     live.add(
       'catalog',
       'debug',
-      `catalogo "${listName}" (${catId})${extras.genre ? ` genere: "${extras.genre}"` : ''}${extras.search ? ` ricerca: "${extras.search}"` : ''}${extras.skip ? ` da #${extras.skip}` : ''}${extras.date ? ` del ${extras.date}` : ''} → ${(result.metasDetailed || result.metas || []).length} voci`,
+      `catalog "${listName}" (${catId})${extras.genre ? ` genre: "${extras.genre}"` : ''}${extras.search ? ` search: "${extras.search}"` : ''}${extras.skip ? ` from #${extras.skip}` : ''}${extras.date ? ` on ${extras.date}` : ''} → ${(result.metasDetailed || result.metas || []).length} items`,
       { list: listName, ...clientInfo(req) }
     );
     res.set('Cache-Control', C.PUBLIC_CACHE_CONTROL);
@@ -426,10 +426,10 @@ app.post('/api/easyproxy/test', requireAdmin, async (req, res) => {
   try {
     const r = await easyProxyFetch(base, '/api/info', { password, timeout: C.EP_INFO_TIMEOUT_MS });
     if (r.status !== 200) {
-      return res.json({ ok: false, error: `EasyProxy ha risposto ${r.status} su /api/info (password errata?)` });
+      return res.json({ ok: false, error: `EasyProxy answered ${r.status} on /api/info (wrong password?)` });
     }
     let info = null;
-    try { info = JSON.parse(r.body); } catch (e) { /* risposta non-JSON: va bene comunque */ }
+    try { info = JSON.parse(r.body); } catch (e) { /* non-JSON response: still fine */ }
     const out = { ok: true, info };
     if (/^https?:\/\//i.test(testUrl)) {
       const t0 = Date.now();

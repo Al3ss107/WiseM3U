@@ -70,7 +70,7 @@ function capabilities() {
  */
 function probe(urlText, redirectsLeft = 3, chain) {
   return new Promise((resolve) => {
-    if (!chain) chain = [urlText]; // traccia gli hop: [...url visitati]
+    if (!chain) chain = [urlText]; // trace the hops: [...visited urls]
     let u;
     try {
       u = new URL(urlText);
@@ -91,7 +91,7 @@ function probe(urlText, redirectsLeft = 3, chain) {
           method: 'GET',
           headers: { 'User-Agent': DIAG_UA, Accept: '*/*', Range: 'bytes=0-0', Connection: 'close' },
           timeout: PROBE_TIMEOUT_MS,
-          // molti pannelli hanno certificati self-signed e i player li accettano:
+          // many panels use self-signed certificates and players accept them:
           // here we only report if the stream is truly unreachable
           rejectUnauthorized: false,
           ...(require('net').isIP(u.hostname) ? {} : { servername: u.hostname }),
@@ -163,7 +163,7 @@ function probeMedia(url) {
     }
     let out = '';
     const killer = setTimeout(() => {
-      try { p.kill('SIGKILL'); } catch (_) { /* gia' morto */ }
+      try { p.kill('SIGKILL'); } catch (_) { /* already dead */ }
       resolve(null);
     }, 8000);
     killer.unref();
@@ -193,7 +193,7 @@ function probeMedia(url) {
   });
 }
 
-/* --------------------------- video di error a schermo --------------------------- */
+/* --------------------------- on-screen error video --------------------------- */
 
 /** Splits text into lines of at most `max` characters for drawtext. */
 function wrapLines(texts, max = 58) {
@@ -208,7 +208,7 @@ function wrapLines(texts, max = 58) {
     }
     if (s) lines.push(s);
   }
-  return lines.slice(0, 8); // non oltre: deve stare a schermo
+  return lines.slice(0, 8); // no more: it must fit on screen
 }
 
 const videoPromiseByKey = new Map(); // hash -> Promise<file|null>

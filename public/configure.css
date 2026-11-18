@@ -143,7 +143,7 @@
   .row{display:flex;gap:12px;flex-wrap:wrap}
   .row>*{flex:1 1 180px}
   .btns{display:flex;gap:8px;align-items:flex-end;flex:0 0 auto;flex-wrap:wrap}
-  /* ---------- pannelli richiudibili ---------- */
+  /* ---------- collapsible panels ---------- */
   details.fold{border:0;border-radius:16px;margin-top:12px;background:var(--md-surface-1)}
   details.fold>summary{cursor:pointer;list-style:none;padding:14px 16px;font-weight:500;font-size:14px;color:var(--md-on-surface);
     display:flex;align-items:center;gap:10px;user-select:none;border-radius:16px}
@@ -239,7 +239,7 @@
   .url.copyurl:hover{background:rgba(189,147,249,.12)}
   .url.copyurl:focus-visible{outline:2px solid var(--md-primary);outline-offset:2px}
   .acts{display:flex;gap:8px;flex-wrap:wrap}
-  /* ---------- intestazione playlist ---------- */
+  /* ---------- playlist header ---------- */
   .plhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:18px}
   .plhead h2{margin:0;flex:1 1 100%}
   .pltools{display:flex;gap:6px;flex-wrap:wrap;align-items:center;flex:1 1 330px;justify-content:flex-end}
@@ -247,7 +247,7 @@
   .pltools button{flex:0 0 auto}
   /* active filter button (e.g. "Show active") */
   .pltools button.on{background:var(--md-primary);color:var(--md-on-primary);filter:none}
-  /* blocco playlist comprimibile */
+  /* collapsible playlist block */
   .plwrap.collapsed>.branches,.plwrap.collapsed>.trash,
   .plwrap.collapsed>.hint,.plwrap.collapsed .pltools{display:none}
   /* ---------- branches ---------- */
@@ -511,7 +511,7 @@
 
     /* --- static footer at the bottom of the page --- */
     /* used to be fixed: with the keyboard open it floated above the keys,
-       rubando spazio. Ora numero liste e versione scorrono con la pagina. */
+       stealing space. Now list count and version scroll with the page. */
     body{padding-bottom:0}
     footer{position:static;left:auto;right:auto;bottom:auto;display:flex;flex-direction:column;
            gap:4px;padding:12px 12px calc(76px + env(safe-area-inset-bottom));
@@ -551,7 +551,7 @@
     .listcard{scroll-margin-top:12px}
     button,a.lnk,summary{touch-action:manipulation}
   }
-  /* ---------- telefoni molto piccoli (iPhone SE & co.) ---------- */
+  /* ---------- very small phones (iPhone SE and similar) ---------- */
   @media (max-width:380px){
     main{padding:8px}
     .card{padding:10px}
@@ -567,7 +567,7 @@
     .crow>button[data-capply],.crow>button[data-creset],.crow>button[data-cdel],
     .brow>button[data-bdel]{width:38px;min-height:40px}
   }
-  /* ---------- touch: niente hover "appiccicoso" ---------- */
+  /* ---------- touch: no "sticky" hover ---------- */
   @media (hover:none){
     button:hover{filter:none}
     button.ghost:hover{background:var(--md-secondary-container)}

@@ -3,8 +3,8 @@
 /**
  * WiseM3U lint: blocking errors only for real problems (undefined
  * variables, duplicate keys/arguments, unreachable code). Style rules
- * stile non sono imposte: il codebase ha una formattazione coerente e un
- * riformattamento massivo renderebbe il diff illeggibile.
+ * style rules are not enforced: the codebase has consistent formatting and a
+ * massive reformat would make the diff unreadable.
  */
 
 const globals = require('globals');

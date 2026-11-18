@@ -296,7 +296,7 @@ function normalizeConfig(raw) {
   const lists = Array.isArray(cfg.lists) ? cfg.lists.map(normalizeList) : [];
 
   /* migration: old "personal lists" (settings.personalLists) become
-     liste composite a tutti gli effetti (kind:'personal'). */
+     full-fledged composite lists (kind:'personal'). */
   for (const pl of settings.personalLists || []) {
     const entries = (pl.channels || []).map((src, i) => ({
       id: `e${i}_${crypto.randomBytes(2).toString('hex')}`,

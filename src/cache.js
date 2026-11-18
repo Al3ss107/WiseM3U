@@ -4,7 +4,7 @@
  * Cache of downloaded WisePlay trees: memory + disk snapshots,
  * with background refresh (stale-while-revalidate).
  *
- * RAM diet (v1.4.5): trees with hundreds of thousands of stations were
+ * RAM diet: trees with hundreds of thousands of stations were
  * ALWAYS kept parsed in memory (JSON.parse of whole snapshots = JS objects
  * of a few kB per station): with 3-4 lists the container exceeded 800 MB.
  * Instead, we keep in memory ONLY the gzip buffer of the snapshot (~1/6 of
@@ -253,7 +253,7 @@ async function getTree(req) {
     if (stale) {
       // keep the fatal flag so the scheduler does not retry an invalid URL
       stale.fatal = !!(err && err.fatal);
-      return stale; // dati stale meglio di niente
+      return stale; // stale data is better than none
     }
     throw err;
   }
@@ -290,7 +290,7 @@ function epgUrls(id) {
   return e && Array.isArray(e.epgUrls) ? e.epgUrls : [];
 }
 
-/** Diagnostica memoria (debug/test): quante entry e quante parseate. */
+/** Memory diagnostics (debug/test): entry count and parsed count. */
 function isRefreshing(id) {
   const e = memory.get(id);
   return !!(e && (e.refreshing || e.promise));

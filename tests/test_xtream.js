@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * Xtream account expiry test (v1.4.1)
+ * Xtream account expiry test
  * A) get.php list with user/pass -> /api/lists/:id/xtream ok with expiry + days
  * B) the second call uses the cache (30 min): identical fetchedAt
  * C) non-Xtream list (plain m3u) -> {ok:false, xtream:false}
- * D) pannello irraggiungibile ma cache presente -> stale:true
+ * D) unreachable panel but cache present -> stale:true
  * E) xtreamInfo parser: no username/password -> null
  */
 const http = require('http');
@@ -58,7 +58,7 @@ async function waitFor(pred, ms, step = 400) {
   const t0 = Date.now();
   for (;;) {
     if (await pred()) return true;
-    if (Date.now() - t0 > ms) throw new Error('timeout attesa');
+    if (Date.now() - t0 > ms) throw new Error('timeout wait');
     await new Promise((r) => setTimeout(r, step));
   }
 }

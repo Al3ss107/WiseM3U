@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * RAM diet test (v1.4.5)
+ * RAM diet test
  * =======================
  * Real server with 3 lists x 9000 channels (27k stations kept in cache):
  * after all are ready (and after playlist/catalog/channel uses),
@@ -60,7 +60,7 @@ async function waitFor(pred, ms, step = 500) {
   const t0 = Date.now();
   for (;;) {
     if (await pred()) return true;
-    if (Date.now() - t0 > ms) throw new Error('timeout attesa');
+    if (Date.now() - t0 > ms) throw new Error('timeout wait');
     await new Promise((r) => setTimeout(r, step));
   }
 }

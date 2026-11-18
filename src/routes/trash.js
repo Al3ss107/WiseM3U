@@ -96,7 +96,7 @@ module.exports = function createTrashRouter({ admin }) {
     const purgedBranches = new Set(options.purgedBranches || []);
     const purgedChannels = new Set(options.purgedChannels || []);
 
-    // stessi conteggi di buildBranches: nativi - eliminati - spostati via + arrivati
+    // same counts as buildBranches: native - deleted - moved away + arrived
     const countFor = (path, node) => {
       let out = 0;
       let incoming = 0;
@@ -117,7 +117,7 @@ module.exports = function createTrashRouter({ admin }) {
 
     const branches = [];
     for (const path of options.deletedBranches || []) {
-      if (purgedBranches.has(path)) continue; // cestino svuotato: eliminazione definitiva
+      if (purgedBranches.has(path)) continue; // trash emptied: permanent deletion
       if (path.startsWith('@')) {
         const stations = Object.values(moves).filter((v) => v === path).length;
         branches.push({ path, name: renames[path] || path.slice(1), stations, custom: true });
@@ -133,7 +133,7 @@ module.exports = function createTrashRouter({ admin }) {
 
     const channels = [];
     for (const key of options.deletedChannels || []) {
-      if (purgedChannels.has(key)) continue; // cestino svuotato: eliminazione definitiva
+      if (purgedChannels.has(key)) continue; // trash emptied: permanent deletion
       const separator = key.lastIndexOf('::');
       if (separator < 0) continue;
       const path = key.slice(0, separator);

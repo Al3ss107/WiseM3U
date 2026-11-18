@@ -8,7 +8,7 @@ const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
 let CFG = null;
 let TREES = {};   // id -> { meta, fetchedAt, branches:[{path,name,displayName,stations,image,enabled}] }
 
-const PROTO_LABEL = { http:'HTTP/HLS', ace:'AceStream', rtmp:'RTMP', rtsp:'RTSP', other:'altri' };
+const PROTO_LABEL = { http:'HTTP/HLS', ace:'AceStream', rtmp:'RTMP', rtsp:'RTSP', other:'other' };
 
 // Common User-Agent strings suggested per list. The input stays free-form:
 // these are only shortcuts for panels/CDNs that block the WiseM3U UA.
@@ -40,7 +40,7 @@ function toast(msg, ms=2600, opts={}){
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'toast-act';
-    b.textContent = act.label || '↩ Annulla';
+    b.textContent = act.label || '↩ Undo';
     b.addEventListener('click', () => { hide(); act.onClick(); });
     t.appendChild(b);
     t.classList.add('has-act');
@@ -66,15 +66,15 @@ async function reloadAfterUndo(ids){
  *  point (null undo) it shows the normal message. */
 function showUndo(msg, undo){
   if (!undo || !undo.id){ toast(msg); return; }
-  toast(msg, 9000, { action: { label: 'Annulla', onClick: async () => {
+  toast(msg, 9000, { action: { label: 'Cancel', onClick: async () => {
     try {
       const r = await api(`/api/history/${encodeURIComponent(undo.id)}/undo`, {
         method: 'POST',
         body: JSON.stringify({ listIds: undo.listIds || [] }),
       });
-      toast('Operazione annullata ✔');
+      toast('Operation undone ✔');
       await reloadAfterUndo(r.lists || undo.listIds || []);
-    } catch (e){ toast('Errore: ' + e.message, 5000); }
+    } catch (e){ toast('Error: ' + e.message, 5000); }
   }}});
 }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -118,12 +118,12 @@ function rebuildOrder(list){
 }
 /* ---------------- render ---------------- */
 
-const EXPANDED = new Set();  // "listId|path" dei rami con la lista canali aperta
+const EXPANDED = new Set();  // "listId|path" of branches with the channel list open
 const CHANS = {};            // "listId|path" -> [{name, shown, enabled}]
-const BRSQ = {};             // listId -> testo del filtro playlist (persiste ai re-render)
-const BRONLY = new Set();    // listId con "Visualizza attive" attivo
-const OPEN_LISTS = new Set();      // schede lista aperte (di default sono tutte chiuse)
-const PLAYLISTS_OPEN = new Set();  // id delle liste con il blocco "Playlist della lista" aperto
+const BRSQ = {};             // listId -> playlist filter text (persists across re-renders)
+const BRONLY = new Set();    // listId with "Show enabled" active
+const OPEN_LISTS = new Set();      // open list cards (all closed by default)
+const PLAYLISTS_OPEN = new Set();  // ids of lists with the "List playlists" block open
 
 /** Playlists (non-personal branches) that match the current tab filter.
  *  This is the scope for All / None / Delete selected: during
@@ -142,18 +142,18 @@ function renderBranches(list){
   const bs = branchesOf(list.id);
   const st = (list.state && list.state.status) || 'idle';
   if (!bs){
-    if (st === 'fetching') return '<div class="hint" style="margin-top:10px">⏳ Scaricamento della lista in corso… la sezione delle playlist appare appena è pronto.</div>';
+    if (st === 'fetching') return '<div class="hint" style="margin-top:10px">⏳ Downloading the list… the playlist section appears as soon as it is ready.</div>';
     if (st === 'error'){
       const fatal = !!(list.state && list.state.fatal);
       // "inherent" error (URL pointing to a video, an HTML page, a huge playlist):
       // retrying yields the same error, better to say it clearly
-      return `<div class="err">Scaricamento fallito: ${esc((list.state&&list.state.error)||'')} — ${
+      return `<div class="err">Download failed: ${esc((list.state&&list.state.error)||'')} — ${
         fatal
-          ? 'questo errore <b>non si risolve con Aggiorna</b>: correggi l\'URL della lista e salva.'
-          : 'riprova con <b>Aggiorna</b>.'
+          ? 'this error <b>cannot be fixed with Refresh</b>: fix the list URL and save.'
+          : 'retry with <b>Refresh</b>.'
       }</div>`;
     }
-    return '<div class="hint" style="margin-top:10px">Rami non caricati: premi <b>Aggiorna</b> per scaricare la lista.</div>';
+    return '<div class="hint" style="margin-top:10px">Branches not loaded: press <b>Refresh</b> to download the list.</div>';
   }
   const q = (BRSQ[list.id] || '').trim().toLowerCase();
   const onlyActive = BRONLY.has(list.id);
@@ -168,15 +168,15 @@ function renderBranches(list){
     const open = EXPANDED.has(`${list.id}|${b.path}`);
     const custom = !!b.custom;
     let html = `<div class="brow ${on?'':'off'}" draggable="true" data-path="${esc(b.path)}" data-name="${esc(b.name)}" data-search="${esc((b.name+' '+shown).toLowerCase())}">
-      <span class="bhandle" title="Trascina per riordinare">☰</span>
+      <span class="bhandle" title="Drag to reorder">☰</span>
       ${custom
-        ? '<input type="checkbox" checked disabled title="Gruppo personale: per svuotarlo riporta altrove i canali">'
-        : `<input type="checkbox" data-cb="${esc(b.path)}" ${on?'checked':''} title="Includi/escludi questo ramo">`}
-      <input class="bname ${renamed?'renamed':''}" type="text" value="${esc(shown)}" placeholder="${esc(b.name)}" title="Nome del ramo (diventa il genere nel catalogo)">
-      ${custom ? '<span class="badge">personale</span>' : ''}
-      <span class="cnt bcount">${b.stations} canali${b.hidden?` <span style="color:var(--warn)">(${b.hidden} esclusi)</span>`:''}</span>
-      <button class="expbtn" data-exp="${esc(b.path)}" title="Gestisci i singoli canali">${open?'▾ canali':'\u25b8 canali'}</button>
-      <button class="ghost small" data-bdel="${esc(b.path)}" title="Elimina questa playlist (recuperabile nel cestino)">✕</button>
+        ? '<input type="checkbox" checked disabled title="Custom group: move the channels elsewhere to empty it">'
+        : `<input type="checkbox" data-cb="${esc(b.path)}" ${on?'checked':''} title="Include/exclude this branch">`}
+      <input class="bname ${renamed?'renamed':''}" type="text" value="${esc(shown)}" placeholder="${esc(b.name)}" title="Branch name (becomes the genre in the catalog)">
+      ${custom ? '<span class="badge">custom</span>' : ''}
+      <span class="cnt bcount">${b.stations} channels${b.hidden?` <span style="color:var(--warn)">(${b.hidden} excluded)</span>`:''}</span>
+      <button class="expbtn" data-exp="${esc(b.path)}" title="Manage individual channels">${open?'▾ channels':'\u25b8 channels'}</button>
+      <button class="ghost small" data-bdel="${esc(b.path)}" title="Delete this playlist (recoverable from trash)">✕</button>
     </div>`;
     if (open) html += renderChannels(list, b);
     return html;
@@ -190,43 +190,27 @@ function renderBranches(list){
   return `<div class="plwrap${plOpen ? '' : ' collapsed'}">
   <div class="plhead">
     <h2 data-ptgl="${esc(list.id)}" role="button" tabindex="0" aria-expanded="${plOpen}"
-      title="${plOpen ? 'Comprimi le playlist' : 'Espandi le playlist'}"><span class="ttl">Playlist della lista</span>${
-      visible.length !== bs.length ? ` <span class="badge" title="Playlist mostrate con i filtri attivi">${visible.length} in vista</span>` : ''
+      title="${plOpen ? 'Collapse the playlists' : 'Expand the playlists'}"><span class="ttl">List playlists</span>${
+      visible.length !== bs.length ? ` <span class="badge" title="Playlists shown with active filters">${visible.length} shown</span>` : ''
     }<span class="sectgl" aria-hidden="true">${plOpen ? '\u25be' : '\u25b8'}</span></h2>
     <div class="pltools">
       <button class="ghost small ${onlyActive?'on':''}" data-act="onlyactive"
-        title="Mostra solo le playlist attive (e, se c'e' una ricerca, solo quelle che corrispondono)">👁 Visualizza attive</button>
-      <input type="text" data-act="filter" value="${esc(BRSQ[list.id] || '')}" placeholder="🔎 Filtra playlist…">
-      <button class="ghost small" data-act="all" title="Attiva tutte le playlist">✓ Tutto</button>
-      <button class="ghost small" data-act="none" title="Disattiva tutte le playlist">✗ Nulla</button>
-      <button class="ghost small" data-act="delsel" title="Sposta nel cestino tutte le playlist spuntate (recuperabili)">✕ Cancella selezionate</button>
-      <button class="ghost small" data-act="trash" title="Canali e playlist eliminati: da qui li ripristini">🗑 Cestino${nTrash ? ` (${nTrash})` : ''}</button>
+        title="Show only enabled playlists (and, with a search, only matching ones)">👁 Show enabled</button>
+      <input type="text" data-act="filter" value="${esc(BRSQ[list.id] || '')}" placeholder="🔎 Filter playlists…">
+      <button class="ghost small" data-act="all" title="Enable all playlists">✓ All</button>
+      <button class="ghost small" data-act="none" title="Disable all playlists">✗ None</button>
+      <button class="ghost small" data-act="delsel" title="Move all checked playlists to trash (recoverable)">✕ Delete selected</button>
+      <button class="ghost small" data-act="trash" title="Deleted channels and playlists: restore them here">🗑 Trash${nTrash ? ` (${nTrash})` : ''}</button>
     </div>
   </div>
-  ${bs.length ? '' : '<div class="hint" style="margin-top:10px">Nessuna playlist (ramo con canali) trovata nella lista.</div>'}
+  ${bs.length ? '' : '<div class="hint" style="margin-top:10px">No playlist (branch with channels) found in this list.</div>'}
   <details class="help">
-    <summary>ℹ️ Come si usa: rinomina, riordina, canali, spostamenti, cestino</summary>
-    <div class="hint" data-i18n-html="hint.usage">Ogni riga è una playlist: spuntala per includerla, scrivi nel campo per <b>rinominarla</b>,
-    trascinala dalla maniglia <b>☰</b> per <b>riordinare</b>. Con <b>▸ canali</b> apri la playlist e gestisci i
-    <b>singoli canali</b>: escludi, rinomina, riordina e — col <b>campo gruppo</b> a destra —
-    <b>spostali in un'altra playlist o in un gruppo personale</b>: la tendina suggerisce i gruppi
-    esistenti, ma il campo è sempre libero. Poi premi <b>➜</b> per spostare il canale nel gruppo
-    scritto o scelto (un gruppo inesistente viene creato al volo) oppure <b>↺</b> per riportarlo
-    alla playlist originale (i canali spostati hanno il badge "da …"). Lo spostamento si
-    <b>salva automaticamente</b>; per le altre modifiche ricorda <b>Salva configurazione</b>
-    in fondo alla pagina. In alternativa <b>trascina un canale sopra un'altra playlist</b> per
-    spostarvelo (funziona anche tra liste diverse) e <b>trascina una playlist al centro di
-    un'altra riga</b> per spostarci dentro tutti i suoi canali (ai bordi invece la riordini).
-    Il pulsante <b>✕</b> elimina il canale o l'intera playlist; se vuoi buttare <b>tante
-    playlist in una volta</b>, spuntale e premi <b>✕ Cancella selezionate</b> in alto.
-    Il tasto <b>👁 Visualizza attive</b> (a sinistra della ricerca) mostra solo le playlist
-    attive; <b>✓ Tutto</b>, <b>✗ Nulla</b> e <b>✕ Cancella selezionate</b> agiscono
-    <b>solo sulle playlist visibili</b>: con una ricerca attiva non toccano quelle nascoste.
-    Nulla è perduto: trovi tutto nel <b>🗑 Cestino</b> da cui puoi ripristinare con un clic.</div>
+    <summary>ℹ️ How to use it: rename, reorder, channels, moves, trash</summary>
+    <div class="hint" data-i18n-html="hint.usage">Every row is a playlist: check it to include it, type in the field to <b>rename</b> it, drag it by the <b>☰</b> handle to <b>reorder</b>. With <b>▸ channels</b> you open the playlist and manage <b>individual channels</b>: exclude, rename, reorder and — with the <b>group field</b> on the right — <b>move them to another playlist or a custom group</b>. Then press <b>➜</b> to move the channel to the typed or selected group, or <b>↺</b> to move it back to its original playlist. Moves are <b>saved automatically</b>; for other changes remember <b>Save configuration</b>. You can also <b>drag a channel onto another playlist</b> (even across lists) or <b>drag a playlist to the center of another row</b> to move all its channels there. The <b>✕</b> button deletes the channel or the whole playlist; to delete <b>many at once</b>, check them and press <b>✕ Delete selected</b>. Nothing is lost: everything is in the <b>🗑 Trash</b>.</div>
   </details>
   <div class="branches">
-    <div class="hint brsnone" style="margin-top:10px;${visible.length ? 'display:none' : ''}">Nessuna playlist corrisponde al filtro.
-      <button class="ghost small" data-act="clearfilter">Mostra tutte</button></div>
+    <div class="hint brsnone" style="margin-top:10px;${visible.length ? 'display:none' : ''}">No playlist matches the filter.
+      <button class="ghost small" data-act="clearfilter">Show all</button></div>
     ${rows}
   </div>
   ${TRASHOPEN.has(list.id) ? renderTrash(list) : ''}
@@ -235,28 +219,28 @@ function renderBranches(list){
 }
 
 /* ---------------- trash: recoverable deleted items ---------------- */
-const TRASHOPEN = new Set(); // id delle liste col cestino aperto
+const TRASHOPEN = new Set(); // ids of lists with the trash open
 const TRASH = {};            // id -> {branches:[], channels:[]}
 
 function renderTrash(list){
   const t = TRASH[list.id];
-  if (!t) return '<div class="trash" data-trash><div class="hint">Caricamento cestino…</div></div>';
+  if (!t) return '<div class="trash" data-trash><div class="hint">Loading trash…</div></div>';
   const br = (t.branches || []).map((b)=>`<div class="trashrow">
-      <span>📁</span><b>${esc(b.name)}</b><span class="cnt">${b.stations} canali</span>
+      <span>📁</span><b>${esc(b.name)}</b><span class="cnt">${b.stations} channels</span>
       <div class="spacer" style="flex:1"></div>
-      <button class="ghost small" data-rbranch="${esc(b.path)}">↩ Ripristina</button>
+      <button class="ghost small" data-rbranch="${esc(b.path)}">↩ Restore</button>
     </div>`).join('');
   const ch = (t.channels || []).map((c)=>`<div class="trashrow">
-      <span>📺</span><b>${esc(c.shown || c.name)}</b><span class="cnt">era in «${esc(c.branch)}»</span>
+      <span>📺</span><b>${esc(c.shown || c.name)}</b><span class="cnt">was in «${esc(c.branch)}»</span>
       <div class="spacer" style="flex:1"></div>
-      <button class="ghost small" data-rchan="1" data-rpath="${esc(c.path)}" data-rname="${esc(c.name)}">↩ Ripristina</button>
+      <button class="ghost small" data-rchan="1" data-rpath="${esc(c.path)}" data-rname="${esc(c.name)}">↩ Restore</button>
     </div>`).join('');
-  const empty = !br && !ch ? '<div class="hint">Il cestino è vuoto.</div>' : '';
+  const empty = !br && !ch ? '<div class="hint">The trash is empty.</div>' : '';
   const tot = (t.branches || []).length + (t.channels || []).length;
   return `<div class="trash" data-trash>
-    <div class="row" style="align-items:center;gap:8px"><b>🗑 Cestino</b><span class="cnt">elementi eliminati da questa lista</span>
+    <div class="row" style="align-items:center;gap:8px"><b>🗑 Trash</b><span class="cnt">items deleted from this list</span>
       <div class="spacer" style="flex:1"></div>
-      ${tot ? `<button class="danger small" data-etrash="1" title="Elimina definitivamente tutte le voci del cestino (non saranno piu' ripristinabili)">🗑 Svuota cestino</button>` : ''}
+      ${tot ? `<button class="danger small" data-etrash="1" title="Permanently delete all trash items (they will no longer be restorable)">🗑 Empty trash</button>` : ''}
     </div>
     ${empty}${br}${ch}
   </div>`;
@@ -269,7 +253,7 @@ async function refreshTrash(id){
 
 function renderChannels(list, b){
   const chans = CHANS[`${list.id}|${b.path}`];
-  if (!chans) return `<div class="chans" data-chans="${esc(b.path)}"><div class="hint">Caricamento canali…</div></div>`;
+  if (!chans) return `<div class="chans" data-chans="${esc(b.path)}"><div class="hint">Loading channels…</div></div>`;
   const on = chans.filter(c=>c.enabled).length;
   const bs = branchesOf(list.id) || [];
   const rows = chans.map((c, i)=>{
@@ -278,31 +262,31 @@ function renderChannels(list, b){
     const homeB = bs.find((x) => x.path === c.home);
     const curName = curB ? curB.displayName : (String(c.cur).startsWith('@') ? String(c.cur).slice(1) : c.cur);
     return `<div class="crow ${c.enabled?'':'off'}" draggable="true" data-ci="${i}" data-cname="${esc(c.name)}" data-csearch="${esc((c.name+' '+c.shown).toLowerCase())}">
-      <span class="bhandle" title="Trascina per riordinare">☰</span>
-      <input type="checkbox" data-cch="${i}" ${c.enabled?'checked':''} title="Includi/escludi questo canale">
-      <input class="cname ${renamed?'renamed':''}" type="text" value="${esc(c.shown)}" placeholder="${esc(c.name)}" title="Nome del canale (come lo vedi in playlist e catalogo)">
-      ${c.from ? `<span class="cnt" style="color:var(--warn)" title="Canale spostato: proviene da &quot;${esc(c.from)}&quot;">da ${esc(c.from)}</span>` : ''}
-      <input class="cmove ${curName !== (homeB ? homeB.displayName : '') ? 'renamed' : ''}" data-cmove="${i}" list="dl-${list.id}" value="${esc(curName)}" placeholder="${esc(homeB ? homeB.displayName : '')}" title="Gruppo del canale: scegli dalla tendina oppure scrivi un nome nuovo">
-      <button class="ghost small" data-capply="${i}" title="Sposta il canale nel gruppo scritto o scelto">➜</button>
-      <button class="ghost small" data-creset="${i}" title="Riporta il canale nella sua playlist originale">↺</button>
-      <button class="ghost small" data-cdel="${i}" title="Elimina il canale (recuperabile nel cestino)">✕</button>
+      <span class="bhandle" title="Drag to reorder">☰</span>
+      <input type="checkbox" data-cch="${i}" ${c.enabled?'checked':''} title="Include/exclude this channel">
+      <input class="cname ${renamed?'renamed':''}" type="text" value="${esc(c.shown)}" placeholder="${esc(c.name)}" title="Channel name (as shown in playlist and catalog)">
+      ${c.from ? `<span class="cnt" style="color:var(--warn)" title="Channel moved: comes from &quot;${esc(c.from)}&quot;">from ${esc(c.from)}</span>` : ''}
+      <input class="cmove ${curName !== (homeB ? homeB.displayName : '') ? 'renamed' : ''}" data-cmove="${i}" list="dl-${list.id}" value="${esc(curName)}" placeholder="${esc(homeB ? homeB.displayName : '')}" title="Channel group: choose from the list or type a new name">
+      <button class="ghost small" data-capply="${i}" title="Move the channel to the typed or selected group">➜</button>
+      <button class="ghost small" data-creset="${i}" title="Move the channel back to its original playlist">↺</button>
+      <button class="ghost small" data-cdel="${i}" title="Delete the channel (recoverable from trash)">✕</button>
     </div>`;
   }).join('');
   return `<div class="chans" data-chans="${esc(b.path)}">
     <div class="chead">
-      <input type="text" class="cfilter" placeholder="🔎 Filtra canali…" data-cfilter>
-      <span class="cnt ccount">${on}/${chans.length} attivi</span>
+      <input type="text" class="cfilter" placeholder="🔎 Filter channels…" data-cfilter>
+      <span class="cnt ccount">${on}/${chans.length} enabled</span>
     </div>
     <div class="chead">
-      <input type="text" data-cadd list="dladd-${list.id}" placeholder="Aggiungi un canale da un'altra playlist o da un'altra lista…">
-      <button class="ghost small" data-caddbtn="${esc(b.path)}" title="Se il canale e' di un'altra playlist di questa lista viene spostato qui; se e' di un'altra lista viene importato qui e tolto dalla sorgente">➕ Aggiungi</button>
+      <input type="text" data-cadd list="dladd-${list.id}" placeholder="Add a channel from another playlist or another list…">
+      <button class="ghost small" data-caddbtn="${esc(b.path)}" title="If the channel is from another playlist of this list it is moved here; if it is from another list it is imported here and removed from the source">➕ Add</button>
     </div>
     <datalist id="dladd-${list.id}" data-dladd></datalist>
     ${rows}
   </div>`;
 }
 
-let SKIP_TREE_RELOAD = false; // il drag ha gia' l'ordine in memoria: non rileggerlo dal server
+let SKIP_TREE_RELOAD = false; // the drag already holds the order in memory: do not reload it from the server
 
 function renderLists(){
   // make containers WITH their own scroll (.branches) rebuildable too:
@@ -317,8 +301,8 @@ function renderLists(){
   const root = $('#lists');
   if (!CFG.lists.length){
     root.innerHTML = `<section class="card">
-      <div class="hint">Nessuna lista. Aggiungi un URL qui sopra (una lista WisePlay o un link <code>.m3u</code>),
-      oppure premi <b>⭐ Crea lista personalizzata</b> per comporre una lista scegliendo canali e playlist dalle tue liste.</div></section>`;
+      <div class="hint">No lists. Add a URL above (a WisePlay list or a <code>.m3u</code>),
+      or press <b>⭐ Create custom list</b> to build a list by choosing channels and playlists from your lists.</div></section>`;
     return;
   }
   root.innerHTML = CFG.lists.map(renderListCard).join('');
@@ -336,9 +320,9 @@ function renderLists(){
   });
 }
 
-/* -------- scadenza account Xtream (player_api.php) -------- */
+/* -------- Xtream account expiry (player_api.php) -------- */
 
-function fmtItDate(iso){
+function fmtDate(iso){
   try { return new Date(iso).toLocaleDateString((window.WM_I18N && WM_I18N.locale()) || 'en', { day:'numeric', month:'short', year:'numeric' }); }
   catch(_) { return iso; }
 }
@@ -491,18 +475,18 @@ async function fillXtreamBadge(l, force){
     const u = r.user;
     const days = u.daysLeft;
     const expTxt = u.expired
-      ? '⛔ account SCADUTO'
+      ? '⛔ account EXPIRED'
       : days == null
-        ? '⏳ senza scadenza'
-        : `⏳ scade il ${fmtItDate(u.expiryIso)} (${days} gg)`;
+        ? '⏳ no expiry'
+        : `⏳ expires on ${fmtDate(u.expiryIso)} (${days} days)`;
     const conn = u.maxConnections ? ` · max ${u.maxConnections} conn` : '';
     const color = u.expired ? 'background:#3a0d14;color:#ffb4ab'
       : days == null ? 'background:#0e2a17;color:#50fa7b'
       : days <= 7 ? 'background:#3a0d14;color:#ffb4ab'
       : days <= 30 ? 'background:#2b2410;color:#f1fa8c'
       : 'background:#0e2a17;color:#50fa7b';
-    el.innerHTML = `<span class="badge" data-xtream="${esc(l.id)}" style="${color};cursor:pointer" title="Account Xtream: ${esc(u.status)} · aggiornato ${fmtItDate(r.fetchedAt)} — click per rileggere">${expTxt}${conn}</span>`;
-  } catch (_) { /* nessun dato: badge vuoto */ }
+    el.innerHTML = `<span class="badge" data-xtream="${esc(l.id)}" style="${color};cursor:pointer" title="Account Xtream: ${esc(u.status)} · updated ${fmtDate(r.fetchedAt)} — click to refresh">${expTxt}${conn}</span>`;
+  } catch (_) { /* no data: empty badge */ }
 }
 async function refreshXtreamBadge(id){
   const l = (CFG.lists || []).find(x => x.id === id);
@@ -528,10 +512,10 @@ function renderSideMenu(){
   const el = $('#sidemenu');
   if (!el) return;
   const items = CFG.lists.map((l, i) => `<div class="sditem" data-sdid="${esc(l.id)}" data-sdindex="${i}">
-    <span class="bhandle sdhandle" draggable="true" data-sdhandle title="Trascina per riordinare" role="button" tabindex="0" aria-label="Trascina per riordinare">☰</span>
-    <button class="sdname" data-sdgo="${esc(l.id)}" title="Vai alla lista">${l.kind === 'personal' ? '⭐ ' : ''}${esc(l.name || l.url)}</button>
+    <span class="bhandle sdhandle" draggable="true" data-sdhandle title="Drag to reorder" role="button" tabindex="0" aria-label="Drag to reorder">☰</span>
+    <button class="sdname" data-sdgo="${esc(l.id)}" title="Go to the list">${l.kind === 'personal' ? '⭐ ' : ''}${esc(l.name || l.url)}</button>
   </div>`).join('');
-  el.innerHTML = '<div class="sdtitle">Ordine delle liste</div>' + (items || '<div class="hint">Nessuna lista</div>');
+  el.innerHTML = '<div class="sdtitle">List order</div>' + (items || '<div class="hint">No lists</div>');
 }
 
 
@@ -539,7 +523,7 @@ function renderSideMenu(){
 
 async function plPopulateBranches(card){
   const lid = card.querySelector('[data-plsel="list"]').value;
-  if (lid && !SKIP_TREE_RELOAD) await loadBranches(lid); // fresco: rinomine e gruppi nuovi
+  if (lid && !SKIP_TREE_RELOAD) await loadBranches(lid); // fresh: renames and new groups
   const bs = (lid && branchesOf(lid)) || [];
   card.querySelector('[data-plsel="branch"]').innerHTML =
     bs.map((b) => `<option value="${esc(b.path)}">${esc(b.displayName)}</option>`).join('');
@@ -554,7 +538,7 @@ async function plPopulateChans(card){
   if (!lid || bp == null || bp === ''){ dl.innerHTML = ''; return; }
   try {
     const r = await api(`/api/lists/${lid}/channels?path=${encodeURIComponent(bp)}`);
-    dl.innerHTML = `<option value="— tutta la playlist —">`
+    dl.innerHTML = `<option value="— the whole playlist —">`
       + r.channels.filter((c) => c.enabled).map((c) => `<option value="${esc(c.shown)}">`).join('');
   } catch (e){ dl.innerHTML = ''; }
 }
@@ -562,7 +546,7 @@ async function plPopulateChans(card){
 /** Resolves the channel field: '*' = whole playlist, otherwise the channel (typed or suggested name). */
 async function plResolveChan(lid, bp, value){
   const v = String(value || '').trim();
-  if (!v || v === '*' || v === '— tutta la playlist —') return { wild: true };
+  if (!v || v === '*' || v === '— the whole playlist —') return { wild: true };
   const r = await api(`/api/lists/${lid}/channels?path=${encodeURIComponent(bp)}`);
   const c = r.channels.find((x) => x.enabled && (x.shown === v || x.name === v));
   return c ? { wild: false, chan: c } : null;
@@ -574,7 +558,7 @@ async function createPersonalList(){
   OPEN_LISTS.add(newId);
   CFG.lists.push({
     id: newId,
-    name: `La mia lista ${n + 1}`,
+    name: `My list ${n + 1}`,
     kind: 'personal',
     url: '',
     state: { status: 'ready', stats: { nodes: 0, stations: 0, external: 0, m3u: 0, failed: 0 } },
@@ -582,7 +566,7 @@ async function createPersonalList(){
   });
   await saveConfig();
   renderLists();
-  toast('Lista personale creata: aggiungi canali o playlist intere dal riquadro "Aggiungi contenuto"');
+  toast('Personal list created: add channels or whole playlists from the "Add content" box');
 }
 
 function renderListCard(l){
@@ -590,85 +574,82 @@ function renderListCard(l){
   const stats = s.stats || null;
   const bs = branchesOf(l.id);
   const activeN = bs ? bs.filter((b) => branchEnabled(l, b.path)).length : null;
-  const activeLabel = bs ? `${activeN}/${bs.length} attive` : 'playlist…';
+  const activeLabel = bs ? `${activeN}/${bs.length} enabled` : 'playlist…';
   const personal = l.kind === 'personal';
   const purl = personal
     ? location.origin.replace(/\/+$/, '') + '/personal/' + l.id + '.m3u'
     : '';
   const collapsed = !OPEN_LISTS.has(l.id);
-  // A personal list has no remote source: the custom UA would do nothing.
+  // A personal list has no remote source: a custom UA would do nothing.
   const uaOptions = UA_PRESETS.map((p) => `<button type="button" class="uaOpt" role="option"
               data-ua-opt="${esc(p.value)}" title="${esc(p.value || p.note)}">
               <span class="uan">${esc(p.name)}</span><span class="uav">${esc(p.note)}</span>
             </button>`).join('');
   const uaField = personal ? '' : `<div>
-            <label>Custom User-Agent (opzionale)</label>
+            <label>Custom User-Agent (optional)</label>
             <div class="uaCombo">
               <input type="text" maxlength="300" spellcheck="false" data-f="options.userAgent" data-ua-input
-                value="${esc(o.userAgent || '')}" placeholder="vuoto = predefinito (Chrome 126 + WiseM3U)"
+                value="${esc(o.userAgent || '')}" placeholder="empty = default (Chrome 126 + WiseM3U)"
                 autocomplete="off" aria-haspopup="listbox" aria-expanded="false">
               <button type="button" class="uaTgl" data-ua-toggle tabindex="-1"
-                aria-label="User-Agent consigliati" aria-expanded="false">▾</button>
-              <div class="uaMenu" role="listbox" aria-label="User-Agent consigliati" hidden>${uaOptions}</div>
+                aria-label="Suggested User-Agents" aria-expanded="false">▾</button>
+              <div class="uaMenu" role="listbox" aria-label="Suggested User-Agents" hidden>${uaOptions}</div>
             </div>
-            <div class="hint" data-info data-i18n-html="hint.userAgent">Used to <b>download this list</b> and its branches, the
-              Xtream panel and channel logos. Useful when a panel or CDN returns
-              <code>403</code> because it recognizes WiseM3U: paste the UA of a browser,
-              VLC or the app you normally use. One line only; empty = default behavior.</div>
+            <div class="hint" data-info data-i18n-html="hint.userAgent">Used to <b>download this list</b> and its branches, the Xtream panel and channel logos. Useful when a panel or CDN returns <code>403</code> because it recognizes WiseM3U: paste the UA of a browser, VLC or the app you normally use. One line only; empty = default behavior.</div>
           </div>`;
   return `<section class="card listcard${collapsed ? ' collapsed' : ''}" data-id="${esc(l.id)}" ${personal ? 'data-kind="personal"' : ''}>
     <div class="listhead">
       <div class="listtitle">
         <span class="name" data-ltgl="${esc(l.id)}" role="button" tabindex="0"
               aria-expanded="${collapsed ? 'false' : 'true'}"
-              title="${collapsed ? 'Espandi' : 'Comprimi'} la lista"><i class="listdot ${o.enabled ? 'on' : 'off'}" role="img" title="${o.enabled ? 'Lista attiva' : 'Lista disattivata'}" aria-label="${o.enabled ? 'Lista attiva' : 'Lista disattivata'}"></i>${personal ? '⭐ ' : ''}${esc(l.name || l.url)}</span>
+              title="${collapsed ? 'Expand' : 'Collapse'} the list"><i class="listdot ${o.enabled ? 'on' : 'off'}" role="img" title="${o.enabled ? 'List enabled' : 'List disabled'}" aria-label="${o.enabled ? 'List enabled' : 'List disabled'}"></i>${personal ? '⭐ ' : ''}${esc(l.name || l.url)}</span>
         <button type="button" class="activeCount" data-act="activecount" data-active-count aria-haspopup="dialog"
-          title="Mostra un'anteprima delle playlist attive">${activeLabel}</button>
+          title="Show a preview of the enabled playlists">${activeLabel}</button>
         <div class="linfo"></div>
       </div>
       <span class="xtbadge" id="xt_${esc(l.id)}"></span>
       <div class="spacer" style="flex:1"></div>
       <div class="acts">
-        <button class="ghost small" data-act="toggle" style="${o.enabled ? '' : 'opacity:.55;color:var(--warn)'}" title="Attiva/disattiva completamente la lista">${o.enabled ? 'on' : 'off'}</button>
-        <button class="ghost small" data-act="refresh">Aggiorna</button>
-        <button class="ghost small" data-act="origin" title="Annulla unioni e spostamenti: i canali tornano nelle playlist di origine">↩ Ripristina</button>
-        <button class="danger small" data-act="del">Elimina</button>
+        <button class="ghost small" data-act="toggle" style="${o.enabled ? '' : 'opacity:.55;color:var(--warn)'}" title="Enable/disable the whole list">${o.enabled ? 'on' : 'off'}</button>
+        <button class="ghost small" data-act="refresh">Refresh</button>
+        <button class="ghost small" data-act="origin" title="Undo merges and moves: channels return to their original playlists">↩ Restore</button>
+        <button class="danger small" data-act="del">Delete</button>
       </div>
     </div>
     ${personal
-      ? `<div class="url copyurl" data-copyurl="${esc(purl)}" role="button" tabindex="0" title="Clicca per copiare il link M3U">
-         Lista personale (senza URL remoto): il contenuto lo scegli tu qui sotto.
-         Link M3U: <code>${esc(purl)}</code> <button class="ghost small" data-act="copypl" style="margin-left:6px">⧉ copia</button></div>`
-      : `<div class="url copyurl" data-copyurl="${esc(l.url)}" role="button" tabindex="0" title="Clicca per copiare il link della lista">${esc(l.url)}</div>`}
+      ? `<div class="url copyurl" data-copyurl="${esc(purl)}" role="button" tabindex="0" title="Click to copy the M3U link">
+         Personal list (no remote URL): you choose its content below.
+         Link M3U: <code>${esc(purl)}</code> <button class="ghost small" data-act="copypl" style="margin-left:6px">⧉ copy</button></div>`
+      : `<div class="url copyurl" data-copyurl="${esc(l.url)}" role="button" tabindex="0" title="Click to copy the list URL">${esc(l.url)}</div>`}
     <div class="kv" style="margin-top:6px">
       <span data-refreshmeta="${esc(l.id)}">${refreshMeta(l)}</span>
-      ${stats ? ` · nodi <b>${stats.nodes}</b> · rami esterni <b>${stats.external}</b> · m3u importate <b>${stats.m3u}</b> · stream <b>${stats.stations}</b>${stats.failed?` · errori <b>${stats.failed}</b>`:''}` : ''}
+      ${stats ? ` · nodes <b>${stats.nodes}</b> · external branches <b>${stats.external}</b> · imported m3u <b>${stats.m3u}</b> · streams <b>${stats.stations}</b>${stats.failed?` · errors <b>${stats.failed}</b>`:''}` : ''}
     </div>
-    ${stats && stats.truncated ? `<div class="hint" style="margin-top:6px;color:#f5c451">⚠︎ Lista molto grande: importati i primi <b>${stats.stations}</b> canali (limite di sicurezza). Il resto viene saltato per non esaurire la memoria del container.</div>` : ''}
+    ${stats && stats.truncated ? `<div class="hint" style="margin-top:6px;color:#f5c451">⚠︎ Very large list: imported the first <b>${stats.stations}</b> channels (safety limit). The rest is skipped to avoid exhausting container memory.</div>` : ''}
     ${s.error ? `<div class="err">${esc(s.error)}</div>` : ''}
 
     <details class="fold">
-      <summary>⚙️ Impostazioni della lista</summary>
+      <summary>⚙️ List settings</summary>
       <div class="foldbody">
         <div class="grid2">
           <div>
-            <label>Nome visualizzato</label>
+            <label>Display name</label>
             <input type="text" data-f="name" value="${esc(l.name)}">
           </div>
           <div>
-            <label>Prefisso group-title</label>
+            <label>group-title prefix</label>
             <select data-f="options.groupPrefix">
-              <option value="list" ${o.groupPrefix==='list'?'selected':''}>Nome della lista</option>
-              <option value="none" ${o.groupPrefix==='none'?'selected':''}>Nessuno</option>
-              <option value="custom" ${o.groupPrefix==='custom'?'selected':''}>Personalizzato</option>
+              <option value="list" ${o.groupPrefix==='list'?'selected':''}>List name</option>
+              <option value="none" ${o.groupPrefix==='none'?'selected':''}>None</option>
+              <option value="custom" ${o.groupPrefix==='custom'?'selected':''}>Custom</option>
             </select>
           </div>
           <div>
-            <label>Prefisso personalizzato</label>
+            <label>Custom prefix</label>
             <input type="text" data-f="options.customPrefix" value="${esc(o.customPrefix||'')}">
           </div>
           <div>
-            <label>Livelli nel group-title</label>
+            <label>Levels in group-title</label>
             <input type="number" min="1" max="6" data-f="options.groupDepth" value="${o.groupDepth}">
           </div>
           ${personal ? '' : `<div>
@@ -695,24 +676,23 @@ function renderListCard(l){
           </div>`}
           ${uaField}
           <div>
-            <label>EPG della lista</label>
+            <label>List EPG</label>
             <input type="url" data-f="options.epgUrl" value="${esc(o.epgUrl||'')}" placeholder="https://example.com/guide.xml">
-            <div class="hint" data-info data-i18n-html="hint.listEpg">Vuoto = EPG delle impostazioni generali;
-              se anche quello è vuoto, usa quello rilevato nella lista.</div>
+            <div class="hint" data-info data-i18n-html="hint.listEpg">Empty = EPG from the general settings; if that is empty too, the one detected in the list is used.</div>
           </div>
         </div>
 
         <div class="row" style="margin-top:12px">
-          <label class="chk ${o.enabled?'on':''}"><input type="checkbox" data-f="options.enabled" ${o.enabled?'checked':''}> Lista attiva</label>
-          <label class="chk ${o.inCatalog?'on':''}"><input type="checkbox" data-f="options.inCatalog" ${o.inCatalog?'checked':''}> Mostra come catalogo in Stremio/Nuvio</label>
-          <label class="chk ${o.dedupe?'on':''}"><input type="checkbox" data-f="options.dedupe" ${o.dedupe?'checked':''}> Rimuovi duplicati</label>
-          <label class="chk ${o.emitLogo?'on':''}"><input type="checkbox" data-f="options.emitLogo" ${o.emitLogo?'checked':''}> Usa l'icona del gruppo come logo (appesantisce la playlist)</label>
+          <label class="chk ${o.enabled?'on':''}"><input type="checkbox" data-f="options.enabled" ${o.enabled?'checked':''}> List enabled</label>
+          <label class="chk ${o.inCatalog?'on':''}"><input type="checkbox" data-f="options.inCatalog" ${o.inCatalog?'checked':''}> Show as catalog in Stremio/Nuvio</label>
+          <label class="chk ${o.dedupe?'on':''}"><input type="checkbox" data-f="options.dedupe" ${o.dedupe?'checked':''}> Remove duplicates</label>
+          <label class="chk ${o.emitLogo?'on':''}"><input type="checkbox" data-f="options.emitLogo" ${o.emitLogo?'checked':''}> Use the group icon as logo (makes the playlist heavier)</label>
         </div>
       </div>
     </details>
 
     <details class="fold">
-      <summary>🧪 Protocolli, AceStream ed esclusioni</summary>
+      <summary>🧪 Protocols, AceStream and exclusions</summary>
       <div class="foldbody">
         <div class="row">
           ${['http','ace','rtmp','rtsp','other'].map(k=>`
@@ -722,43 +702,38 @@ function renderListCard(l){
           <div style="flex:1 1 220px">
             <label>AceStream</label>
             <select data-f="options.aceMode">
-              <option value="keep" ${o.aceMode==='keep'?'selected':''}>acestream:// (serve Ace Player/Engine)</option>
-              <option value="engine" ${o.aceMode==='engine'?'selected':''}>Riscrivi in HTTP via Engine</option>
-              <option value="off" ${o.aceMode==='off'?'selected':''}>Escludi AceStream</option>
+              <option value="keep" ${o.aceMode==='keep'?'selected':''}>acestream:// (requires Ace Player/Engine)</option>
+              <option value="engine" ${o.aceMode==='engine'?'selected':''}>Rewrite to HTTP via Engine</option>
+              <option value="off" ${o.aceMode==='off'?'selected':''}>Exclude AceStream</option>
             </select>
           </div>
           <div style="flex:1 1 260px">
-            <label>Host AceStream Engine (se "Riscrivi in HTTP")</label>
+            <label>AceStream Engine host (if "Rewrite to HTTP")</label>
             <input type="text" data-f="options.aceEngineHost" value="${esc(o.aceEngineHost||'')}" placeholder="http://IP:6878">
           </div>
         </div>
         <div style="margin-top:12px">
-          <label>Escludi canali contenenti queste parole (una per riga)</label>
+          <label>Exclude channels containing these words (one per line)</label>
           <textarea data-f="options.excludeKeywords" rows="2">${esc((o.excludeKeywords||[]).join('\n'))}</textarea>
         </div>
       </div>
     </details>
 
     <details class="fold">
-      <summary>🌐 EasyProxy (opzionale)</summary>
+      <summary>🌐 EasyProxy (optional)</summary>
       <div class="foldbody">
-        <div class="hint" data-info data-i18n-html="hint.easyProxy" style="margin-top:2px">Le liste <b>"(dns)"</b> spesso non funzionano perche' il <b>client</b>
-          (TV/telefono) non risolve quei domini, indipendentemente dal DNS del server. Con
-          <a class="lnk" href="https://github.com/realbestia1/EasyProxy" target="_blank">EasyProxy</a> i flussi
-          passano dal server (con il suo DNS/WARP/estrattori): compila l'URL della tua istanza
-          (es. <code>http://192.168.1.10:7860</code>) e gli stream di questa lista verranno riscritti.
-          Attenzione: tutto il traffico video passa dal server.</div>
+        <div class="hint" data-info data-i18n-html="hint.easyProxy" style="margin-top:2px"><b>“(dns)”</b> lists often do not work because the <b>client</b> (TV/phone) cannot resolve those domains, regardless of the server DNS. With <a class="lnk" href="https://github.com/realbestia1/EasyProxy" target="_blank">EasyProxy</a> streams go through the server (with its DNS/WARP/extractors): enter your instance URL (e.g. <code>http://192.168.1.10:7860</code>) and this list's streams will be rewritten. Warning: all video traffic goes through the server.</div>
         <div class="row" style="margin-top:10px">
           <div style="flex:2 1 260px">
-            <label>URL di EasyProxy (vuoto = disattivato)</label>
+            <label>EasyProxy URL (empty = disabled)</label>
             <input type="text" data-f="options.easyProxy" value="${esc(o.easyProxy||'')}" placeholder="IP/DNS">
           </div>
           <div style="flex:1 1 160px">
-            <label>API_PASSWORD (se impostata)</label>
+            <label>API_PASSWORD (if set)</label>
             <input type="text" data-f="options.easyProxyPassword" value="${esc(o.easyProxyPassword||'')}">
           </div>
           <div style="flex:1 1 160px">
-            <label>Parametri extra (es. warp=off)</label>
+            <label>Extra parameters (e.g. warp=off)</label>
             <input type="text" data-f="options.easyProxyParams" value="${esc(o.easyProxyParams||'')}">
           </div>
         </div>
@@ -768,45 +743,36 @@ function renderListCard(l){
           </div>
         </div>
         <details class="help">
-          <summary>ℹ️ Come interpretare il test (avvisi non bloccanti)</summary>
-          <div class="hint" data-i18n-html="hint.easyProxyTest">Scrivi <b>IP oppure dominio</b>: funziona cosi' com'e', senza configurazioni speciali.
-            L'addon si limita a <b>riscrivere gli stream</b> verso EasyProxy: sara' il <b>client</b> (TV/telefono) a
-            connettersi. Il <b>Test</b> qui sotto e' solo indicativo: su molte reti di
-            casa il container Docker non riesce a raggiungere il proprio dominio pubblico (manca il NAT hairpin) o non
-            si fida del certificato; in quei casi mostra un <b>avviso non bloccante</b> e la riproduzione funziona
-            comunque sul client.</div>
+          <summary>ℹ️ How to read the test (non-blocking warnings)</summary>
+          <div class="hint" data-i18n-html="hint.easyProxyTest">Enter <b>IP or domain</b>: it works as is, with no special configuration. The addon only <b>rewrites streams</b> to EasyProxy: the <b>client</b> (TV/phone) connects. The <b>Test</b> is only indicative: on many home networks the Docker container cannot reach its public domain (no NAT hairpin) or does not trust the certificate; in those cases it shows a <b>non-blocking warning</b> and playback still works on the client.</div>
         </details>
         <div class="epbox" data-epbox></div>
       </div>
     </details>
 
     <details class="fold">
-      <summary>➕ Aggiungi contenuto dalle tue liste</summary>
+      <summary>➕ Add content from your lists</summary>
       <div class="foldbody">
         <div class="row" style="margin-top:2px">
-          <div style="flex:1 1 140px"><label>Lista</label><select data-plsel="list">${CFG.lists.filter((x) => x.id !== l.id).map((x) => `<option value="${esc(x.id)}">${x.kind === 'personal' ? '⭐ ' : ''}${esc(x.name || x.url)}</option>`).join('')}</select></div>
-          <div style="flex:1 1 150px"><label>Playlist/ramo</label><select data-plsel="branch"></select></div>
-          <div style="flex:1 1 190px"><label>Canale (scrivi o scegli)</label><input type="text" data-plchan list="pldl-${l.id}" placeholder="nome canale o — tutta la playlist —"></div>
+          <div style="flex:1 1 140px"><label>List</label><select data-plsel="list">${CFG.lists.filter((x) => x.id !== l.id).map((x) => `<option value="${esc(x.id)}">${x.kind === 'personal' ? '⭐ ' : ''}${esc(x.name || x.url)}</option>`).join('')}</select></div>
+          <div style="flex:1 1 150px"><label>Playlist/branch</label><select data-plsel="branch"></select></div>
+          <div style="flex:1 1 190px"><label>Channel (type or choose)</label><input type="text" data-plchan list="pldl-${l.id}" placeholder="channel name or — the whole playlist —"></div>
           <div style="flex:0 0 auto;display:flex;gap:6px;align-items:flex-end">
-            <button data-act="pladd">+ Aggiungi</button>
-            <button class="ghost" data-act="plnew" title="Crea una playlist personalizzata vuota in questa lista">+ Nuova playlist</button>
+            <button data-act="pladd">+ Add</button>
+            <button class="ghost" data-act="plnew" title="Create an empty custom playlist in this list">+ New playlist</button>
           </div>
         </div>
         <div class="row" data-plnewrow style="display:none">
-          <div style="flex:1 1 220px"><label>Nome della nuova playlist</label><input type="text" data-plnewname placeholder="es. Preferiti"></div>
+          <div style="flex:1 1 220px"><label>New playlist name</label><input type="text" data-plnewname placeholder="e.g. Favorites"></div>
           <div style="flex:0 0 auto;display:flex;gap:6px;align-items:flex-end">
-            <button data-act="plnewok">Crea</button>
-            <button class="ghost" data-act="plnewno">Annulla</button>
+            <button data-act="plnewok">Create</button>
+            <button class="ghost" data-act="plnewno">Cancel</button>
           </div>
         </div>
         <datalist id="pldl-${l.id}" data-pldl></datalist>
         <details class="help">
-          <summary>ℹ️ Come funziona l'importazione</summary>
-          <div class="hint" data-i18n-html="hint.import">Da un'<b>altra</b> lista importi canali o <b>— tutta la playlist —</b> come playlist aggiuntive
-            di questa lista. Dalla <b>stessa</b> lista sposti i canali in un'altra playlist o in una
-            <b>playlist personalizzata</b> (creala con <b>+ Nuova playlist</b>: compare tra le playlist e ci porti i
-            canali anche col campo gruppo e ➜). Il campo canale e' <b>scrivibile</b>: i suggerimenti arrivano dalla
-            playlist scelta (vedi anche i nomi personalizzati).</div>
+          <summary>ℹ️ How importing works</summary>
+          <div class="hint" data-i18n-html="hint.import">From <b>another</b> list you import channels or <b>— the whole playlist —</b> as additional playlists of this list. From the <b>same</b> list you move channels to another playlist or a <b>custom playlist</b> (create it with <b>+ New playlist</b>). The channel field is <b>editable</b>: suggestions come from the selected playlist.</div>
         </details>
       </div>
     </details>
@@ -854,24 +820,24 @@ async function applyChannelMove(list, c, target, curPath){
   try {
     const saved = await api('/api/config', {
       method:'PUT',
-      body: JSON.stringify({ settings: CFG.settings, lists: CFG.lists, reason: 'spostamento canale', baseRev: CFG.rev }),
+      body: JSON.stringify({ settings: CFG.settings, lists: CFG.lists, reason: 'channel move', baseRev: CFG.rev }),
     });
     CFG.rev = saved.rev;
   } catch(e){
     if (e.status === 409){
-      toast('Configurazione cambiata altrove: ricarico lo stato del server', 6000);
+      toast('Configuration changed elsewhere: reloading the server state', 6000);
       await loadConfig();
-    } else toast('Errore: '+e.message, 4000);
+    } else toast('Error: '+e.message, 4000);
     return;
   }
-  await loadBranches(list.id); // aggiorna conteggi e gruppi personali
+  await loadBranches(list.id); // refresh counts and custom groups
   for (const p of new Set([curPath, target])) {
     const k = `${list.id}|${p}`;
     if (EXPANDED.has(k)) {
       try {
         const r = await api(`/api/lists/${list.id}/channels?path=${encodeURIComponent(p)}`);
         CHANS[k] = r.channels;
-      } catch(_){ /* si aggiornera' alla prossima apertura */ }
+      } catch(_){ /* it will refresh on the next open */ }
     }
   }
   renderLists();
@@ -897,12 +863,12 @@ function updateChannelCounts(card, list, path){
   const chDiv = card.querySelector(`.chans[data-chans="${path}"]`);
   if (chDiv){
     const cc = chDiv.querySelector('.ccount');
-    if (cc) cc.textContent = `${chans.length - hidden}/${chans.length} attivi`;
+    if (cc) cc.textContent = `${chans.length - hidden}/${chans.length} enabled`;
     const brow = chDiv.previousElementSibling;
     if (brow && brow.classList.contains('brow')){
       const b = (branchesOf(list.id) || []).find(x=>x.path===path);
       const bc = brow.querySelector('.bcount');
-      if (b && bc) bc.innerHTML = `${b.stations} canali${hidden?` <span style="color:var(--warn)">(${hidden} esclusi)</span>`:''}`;
+      if (b && bc) bc.innerHTML = `${b.stations} channels${hidden?` <span style="color:var(--warn)">(${hidden} excluded)</span>`:''}`;
     }
   }
 }
@@ -920,14 +886,14 @@ async function toggleExpand(card, list, path){
   if (EXPANDED.has(key)){
     EXPANDED.delete(key);
     if (existing) existing.remove();
-    if (btn) btn.textContent = '\u25b8 canali';
+    if (btn) btn.textContent = '\u25b8 channels';
     if (brBox) requestAnimationFrame(()=>{ brBox.scrollTop = bTop; });
-    return; // niente renderLists(): ricostruire tutto faceva saltare lo scroll
+    return; // no renderLists(): rebuilding everything broke the scroll position
   }
   EXPANDED.add(key);
-  if (btn) btn.textContent = '▾ canali';
+  if (btn) btn.textContent = '▾ channels';
   if (row) row.insertAdjacentHTML('afterend',
-    `<div class="chans" data-chans="${esc(path)}"><div class="hint">Caricamento canali…</div></div>`);
+    `<div class="chans" data-chans="${esc(path)}"><div class="hint">Loading channels…</div></div>`);
   if (brBox) brBox.scrollTop = bTop;
 
   try {
@@ -935,10 +901,10 @@ async function toggleExpand(card, list, path){
     CHANS[key] = r.channels;
   } catch(e){
     EXPANDED.delete(key);
-    toast('Errore: ' + e.message, 4000);
+    toast('Error: ' + e.message, 4000);
     const el = card.querySelector(`.chans[data-chans="${CSS.escape(path)}"]`);
     if (el) el.remove();
-    if (btn) btn.textContent = '\u25b8 canali';
+    if (btn) btn.textContent = '\u25b8 channels';
     return;
   }
   const b = (branchesOf(list.id) || []).find(x=>x.path===path);
@@ -977,27 +943,27 @@ function applyDrop(card, list){
     const dstName = type === 'branch' ? (DRAG.target.dataset.name || tPath || 'playlist').trim() : '';
     dragCleanup(card);
     if (!tPath) return;
-    if (type === 'branch' && !confirm(`Unire la playlist «${srcName}» dentro «${dstName}»?\nTutti i suoi canali verranno spostati nella playlist di destinazione. Potrai annullare con «↩ Ripristina».`)) return;
+    if (type === 'branch' && !confirm(`Merge the playlist «${srcName}» into «${dstName}»?\nAll its channels will be moved to the destination playlist. You can undo with «↩ Restore».`)) return;
     (async ()=>{
       try {
         if (type === 'chan'){
           if (!c) return;
           if (srcId === id){
-            if (tPath === (c.cur || '')){ toast('Il canale e\' gia\' in questa playlist'); return; }
+            if (tPath === (c.cur || '')){ toast('The channel is already in this playlist'); return; }
             const srcList = CFG.lists.find((l)=>l.id===srcId);
             await applyChannelMove(srcList, c, tPath, c.cur || '');
-            toast('Canale spostato');
+            toast('Channel moved');
           } else {
             const r = await api(`/api/lists/${id}/addchannel`, { method:'POST', body: JSON.stringify({ path: tPath, name: c.name, home: c.home, fromList: srcId }) });
-            showUndo(r.revived ? 'Canale ripristinato e spostato qui' : `Canale spostato qui (era in: ${r.from})`, r.undo);
+            showUndo(r.revived ? 'Channel restored and moved here' : `Channel moved here (was in: ${r.from})`, r.undo);
             await loadConfig();
             await reloadOpenChans([id, srcId]);
             renderLists();
           }
         } else {
-          if (srcId === id && fromPath === tPath){ toast('Stessa playlist'); return; }
+          if (srcId === id && fromPath === tPath){ toast('Same playlist'); return; }
           const r = await api(`/api/lists/${id}/mergebranch`, { method:'POST', body: JSON.stringify({ fromList: srcId, from: fromPath, to: tPath }) });
-          showUndo(r.moved ? `${r.moved} canali spostati dentro la playlist` : 'Nessun canale da spostare', r.undo);
+          showUndo(r.moved ? `${r.moved} channels moved into the playlist` : 'No channels to move', r.undo);
           await loadConfig();
           if (srcId !== id) { await loadBranches(id); await loadBranches(srcId); }
           await reloadOpenChans([id, srcId]);
@@ -1007,7 +973,7 @@ function applyDrop(card, list){
     })();
     return;
   }
-  if (DRAG.listId !== id){ dragCleanup(card); return; } // riordino solo dentro la stessa lista
+  if (DRAG.listId !== id){ dragCleanup(card); return; } // reordering only within the same list
   if (DRAG.type === 'branch'){
     const bs = branchesOf(id);
     const from = bs.findIndex(b=>b.path===DRAG.el.dataset.path);
@@ -1132,7 +1098,7 @@ function bindListEvents(){
       const copyurl = ev.target.closest('[data-copyurl]');
       if (copyurl && (ev.key === 'Enter' || ev.key === ' ' || ev.key === 'Spacebar')){
         ev.preventDefault();
-        copyListLink(copyurl.dataset.copyurl, list.kind === 'personal' ? 'Link M3U copiato ✔' : 'Link della lista copiato ✔');
+        copyListLink(copyurl.dataset.copyurl, list.kind === 'personal' ? 'M3U link copied ✔' : 'List link copied ✔');
         return;
       }
       const tgl = ev.target.closest('[data-ltgl], [data-ptgl]');
@@ -1193,7 +1159,7 @@ function bindListEvents(){
       const copyurl = ev.target.closest('[data-copyurl]');
       if (copyurl && !ev.target.closest('button, a')){
         // a click on the URL text copies it; the inner copy button keeps its own handler
-        copyListLink(copyurl.dataset.copyurl, list.kind === 'personal' ? 'Link M3U copiato ✔' : 'Link della lista copiato ✔');
+        copyListLink(copyurl.dataset.copyurl, list.kind === 'personal' ? 'M3U link copied ✔' : 'List link copied ✔');
         return;
       }
       const ltl = ev.target.closest('[data-ltgl]');
@@ -1202,7 +1168,7 @@ function bindListEvents(){
         if (OPEN_LISTS.has(lid)) OPEN_LISTS.delete(lid); else OPEN_LISTS.add(lid);
         const open = !card.classList.toggle('collapsed');
         ltl.setAttribute('aria-expanded', String(open));
-        ltl.title = `${open ? 'Comprimi' : 'Espandi'} la lista`;
+        ltl.title = `${open ? 'Collapse' : 'Expand'} the list`;
         return;
       }
       const ptgl = ev.target.closest('[data-ptgl]');
@@ -1217,7 +1183,7 @@ function bindListEvents(){
           const arrow = ptgl.querySelector('.sectgl');
           if (arrow) arrow.textContent = open ? '\u25be' : '\u25b8';
           ptgl.setAttribute('aria-expanded', String(open));
-          ptgl.title = open ? 'Comprimi le playlist' : 'Espandi le playlist';
+          ptgl.title = open ? 'Collapse the playlists' : 'Expand the playlists';
         }
         return;
       }
@@ -1225,15 +1191,15 @@ function bindListEvents(){
       if (cab){
         const inp = cab.parentElement.querySelector('[data-cadd]');
         const v = (inp ? inp.value : '').trim();
-        if (!v){ toast('Scrivi il nome del canale da aggiungere'); return; }
+        if (!v){ toast('Type the name of the channel to add'); return; }
         try {
           const r = await api(`/api/lists/${id}/addchannel`, {
             method: 'POST',
             body: JSON.stringify({ path: cab.dataset.caddbtn, name: v }),
           });
-          showUndo(`Canale aggiunto qui (presi da: ${r.from})`, r.undo);
+          showUndo(`Channel added here (taken from: ${r.from})`, r.undo);
           if (inp) inp.value = '';
-          await loadConfig();          // risincronizza la config (mosse/voci lato server)
+          await loadConfig();          // resync the config (server-side moves/entries)
           await reloadOpenChans([id]);
           renderLists();
         } catch (e){ toast(e.message, 4000); }
@@ -1243,11 +1209,11 @@ function bindListEvents(){
       if (et){
         const t = TRASH[id] || { branches: [], channels: [] };
         const n = (t.branches || []).length + (t.channels || []).length;
-        if (!n){ toast('Il cestino e\' gia\' vuoto'); return; }
-        if (!confirm(`Eliminare definitivamente ${n} voci dal cestino?\nNon saranno piu' ripristinabili: resteranno fuori dalla lista per sempre.`)) return;
+        if (!n){ toast('The trash is already empty'); return; }
+        if (!confirm(`Permanently delete ${n} items from the trash?\nThey will no longer be restorable: they will stay out of the list forever.`)) return;
         try {
           const r = await api(`/api/lists/${id}/emptytrash`, { method:'POST', body:'{}' });
-          showUndo(`Cestino svuotato: ${r.removed} voci eliminate definitivamente`, r.undo);
+          showUndo(`Trash emptied: ${r.removed} items permanently deleted`, r.undo);
           await loadConfig();
           await reloadOpenChans([id]);
           await refreshTrash(id);
@@ -1259,7 +1225,7 @@ function bindListEvents(){
       if (rb){
         try {
           await api(`/api/lists/${id}/restore`, { method:'POST', body: JSON.stringify({ path: rb.dataset.rbranch }) });
-          toast('Playlist ripristinata');
+          toast('Playlist restored');
           await loadConfig();
           await reloadOpenChans([id]);
           await refreshTrash(id);
@@ -1271,7 +1237,7 @@ function bindListEvents(){
       if (rc){
         try {
           await api(`/api/lists/${id}/restore`, { method:'POST', body: JSON.stringify({ path: rc.dataset.rpath, name: rc.dataset.rname }) });
-          toast('Canale ripristinato');
+          toast('Channel restored');
           await loadConfig();
           await reloadOpenChans([id]);
           await refreshTrash(id);
@@ -1285,10 +1251,10 @@ function bindListEvents(){
         const path = row.closest('.chans').dataset.chans;
         const c = (CHANS[`${id}|${path}`] || [])[Number(cdel.dataset.cdel)];
         if (!c) return;
-        if (!confirm(`Eliminare "${c.shown || c.name}" da questa lista? Potrai ripristinarlo dal 🗑 Cestino.`)) return;
+        if (!confirm(`Delete "${c.shown || c.name}" from this list? You can restore it from the 🗑 Trash.`)) return;
         try {
           const r = await api(`/api/lists/${id}/delete`, { method:'POST', body: JSON.stringify({ path: c.home || path, name: c.name }) });
-          showUndo('Canale eliminato — recuperabile nel 🗑 Cestino', r.undo);
+          showUndo('Channel deleted — recoverable from the 🗑 Trash', r.undo);
           await loadConfig();
           await reloadOpenChans([id]);
           if (TRASHOPEN.has(id)) await refreshTrash(id);
@@ -1301,12 +1267,12 @@ function bindListEvents(){
         const path = bdel.dataset.bdel;
         const b = (branchesOf(id) || []).find((x)=>x.path===path);
         const nm = b ? (b.displayName || b.name) : path;
-        if (!confirm(`Eliminare la playlist "${nm}" e tutti i suoi canali? Potrai ripristinarla dal 🗑 Cestino.`)) return;
+        if (!confirm(`Delete the playlist "${nm}" and all its channels? You can restore it from the 🗑 Trash.`)) return;
         try {
           const r = await api(`/api/lists/${id}/delete`, { method:'POST', body: JSON.stringify({ path }) });
           EXPANDED.delete(`${id}|${path}`);
           delete CHANS[`${id}|${path}`];
-          showUndo('Playlist eliminata — recuperabile nel 🗑 Cestino', r.undo);
+          showUndo('Playlist deleted — recoverable from the 🗑 Trash', r.undo);
           await loadConfig();
           if (TRASHOPEN.has(id)) await refreshTrash(id);
           renderLists();
@@ -1350,13 +1316,13 @@ function bindListEvents(){
         // bulk deletion of checked playlists (custom ones are not
         // checkable): same outcome as the single ✕ but in one call
         const sel = visibleBranches(list).filter((b) => !b.custom && branchEnabled(list, b.path));
-        if (!sel.length){ toast('Nessuna playlist spuntata da eliminare'); return; }
+        if (!sel.length){ toast('No checked playlist to delete'); return; }
         const few = sel.slice(0, 3).map((b) => b.displayName || b.name).join(', ');
-        if (!confirm(`Eliminare ${sel.length} playlist spuntate (${few}${sel.length > 3 ? ', …' : ''}) e tutti i loro canali? Potrai ripristinarle dal 🗑 Cestino.`)) return;
+        if (!confirm(`Delete ${sel.length} checked playlists (${few}${sel.length > 3 ? ', …' : ''}) and all their channels? You can restore them from the 🗑 Trash.`)) return;
         try {
           const r = await api(`/api/lists/${id}/delete`, { method:'POST', body: JSON.stringify({ paths: sel.map((b) => b.path) }) });
           for (const b of sel){ EXPANDED.delete(`${id}|${b.path}`); delete CHANS[`${id}|${b.path}`]; }
-          showUndo(`${sel.length} playlist eliminate — recuperabili nel 🗑 Cestino`, r.undo);
+          showUndo(`${sel.length} playlists deleted — recoverable from the 🗑 Trash`, r.undo);
           await loadConfig();
           if (TRASHOPEN.has(id)) await refreshTrash(id);
           renderLists();
@@ -1367,18 +1333,18 @@ function bindListEvents(){
         list.options.enabled = !list.options.enabled;
         await saveConfig();
         renderLists();
-        toast(list.options.enabled ? 'Lista attivata' : 'Lista disattivata');
+        toast(list.options.enabled ? 'List enabled' : 'List disabled');
       }
       if (act === 'refresh') await refreshList(id, btn);
-      if (act === 'del'){ if (confirm(`Eliminare definitivamente la lista «${list.name || list.url}» e la sua configurazione?`)) await delList(id); }
+      if (act === 'del'){ if (confirm(`Permanently delete the list «${list.name || list.url}» and its configuration?`)) await delList(id); }
       if (act === 'origin'){
-        if (!confirm(`Riportare «${list.name || list.url}» allo stato di quando e' stata aggiunta?\nVerranno azzerate tutte le personalizzazioni (rinomine, esclusioni, ordine, unioni, spostamenti, cestino) e la lista verra' riscaricata.`)) return;
+        if (!confirm(`Reset «${list.name || list.url}» to the state it had when it was added?\nAll customizations (renames, exclusions, order, merges, moves, trash) will be cleared and the list will be downloaded again.`)) return;
         try {
           const r = await api(`/api/lists/${id}/restoreorigin`, { method:'POST', body:'{}' });
           await loadConfig();
           for (const lid of r.lists || []) await loadBranches(lid);
           renderLists();
-          showUndo('Lista ripristinata: riscaricamento in corso…', r.undo);
+          showUndo('List restored: re-downloading…', r.undo);
           await pollUntilReady(id);
         } catch (e){ toast(e.message, 4000); }
         return;
@@ -1387,8 +1353,8 @@ function bindListEvents(){
       if (act === 'copypl'){
         const base = location.origin.replace(/\/+$/, '');
         copyText(base + '/personal/' + id + '.m3u').then(
-          () => toast('Link M3U della lista personale copiato ✔'),
-          (e) => toast('Copia non riuscita: ' + e.message, 4000)
+          () => toast('Personal list M3U link copied ✔'),
+          (e) => toast('Copy failed: ' + e.message, 4000)
         );
       }
       if (act === 'plnew'){
@@ -1399,34 +1365,34 @@ function bindListEvents(){
       if (act === 'plnewno'){ card.querySelector('[data-plnewrow]').style.display = 'none'; return; }
       if (act === 'plnewok'){
         const nm = card.querySelector('[data-plnewname]').value.trim();
-        if (!nm){ toast('Scrivi un nome per la playlist'); return; }
+        if (!nm){ toast('Type a name for the playlist'); return; }
         list.options.customGroups = list.options.customGroups || [];
-        if (list.options.customGroups.includes(nm)){ toast('Esiste gia\' una playlist con questo nome'); return; }
+        if (list.options.customGroups.includes(nm)){ toast('A playlist with this name already exists'); return; }
         list.options.customGroups.push(nm);
         await saveConfig();
         await loadBranches(id);
         renderLists();
-        toast(`Playlist "${nm}" creata: sceglila nella tendina o spostaci i canali`);
+        toast(`Playlist "${nm}" created: choose it from the menu or move channels into it`);
         return;
       }
       if (act === 'pladd'){
         const lid = card.querySelector('[data-plsel="list"]').value;
         const bp = card.querySelector('[data-plsel="branch"]').value;
         const cv = card.querySelector('[data-plchan]').value;
-        if (!lid || bp == null || bp === ''){ toast('Scegli lista e playlist/ramo'); return; }
+        if (!lid || bp == null || bp === ''){ toast('Choose a list and a playlist/branch'); return; }
         if (lid === id){
           // same list: moves the channel to the chosen playlist/group
           const res = await plResolveChan(lid, bp, cv).catch(() => null);
-          if (!res || res.wild){ toast('Per spostare, scrivi o scegli un singolo canale'); return; }
+          if (!res || res.wild){ toast('To move, type or choose a single channel'); return; }
           const c = res.chan;
           list.options.channelMoves = list.options.channelMoves || {};
           const key = `${c.home}::${c.name}`;
           if (!bp.startsWith('@') && bp === c.home){
             delete list.options.channelMoves[key];
-            toast('Il canale resta nella sua playlist');
+            toast('The channel stays in its playlist');
           } else {
             list.options.channelMoves[key] = bp;
-            toast(bp.startsWith('@') ? `Canale spostato nel gruppo personale` : 'Canale spostato nella playlist scelta');
+            toast(bp.startsWith('@') ? `Channel moved to the custom group` : 'Channel moved to the chosen playlist');
           }
           await saveConfig();
           await loadBranches(id);
@@ -1434,10 +1400,10 @@ function bindListEvents(){
         } else {
           // other list: imports the channel or the whole playlist as a new branch
           const res = await plResolveChan(lid, bp, cv).catch(() => null);
-          if (!res){ toast('Canale non trovato nella playlist scelta'); return; }
+          if (!res){ toast('Channel not found in the chosen playlist'); return; }
           const src = `${lid}::${bp}::${res.wild ? '*' : res.chan.name}`;
           list.options.personalEntries = list.options.personalEntries || [];
-          if (list.options.personalEntries.some((e) => e.src === src)){ toast('Voce gia\' presente'); return; }
+          if (list.options.personalEntries.some((e) => e.src === src)){ toast('Item already present'); return; }
           list.options.personalEntries.push({ id: 'e' + Math.random().toString(16).slice(2, 8), src });
           await saveConfig();
           await loadBranches(id);
@@ -1460,12 +1426,12 @@ function bindListEvents(){
         // during a search (or with "active only") act ONLY on
         // visible playlists: silently changing filtered ones was a trap
         const scoped = visibleBranches(list).filter((b) => !b.custom);
-        if (!scoped.length){ toast('Nessuna playlist nei risultati del filtro'); return; }
+        if (!scoped.length){ toast('No playlist in the filter results'); return; }
         for (const b of scoped) setBranchEnabled(list, b.path, act === 'all');
         const filtered = !!String(BRSQ[id] || '').trim() || BRONLY.has(id);
         renderLists();
-        toast(`${act === 'all' ? 'Attivate' : 'Disattivate'} ${scoped.length} playlist` +
-          (filtered ? ' (solo i risultati del filtro)' : ''));
+        toast(`${act === 'all' ? 'Enabled' : 'Disabled'} ${scoped.length} playlists` +
+          (filtered ? ' (filter results only)' : ''));
       }
     });
 
@@ -1493,10 +1459,10 @@ function bindListEvents(){
         const brow = ev.target.closest('.brow');
         const crow = ev.target.closest('.crow');
         let target = null;
-        if (brow){ target = brow; DRAG.into = true; }            // canale sopra una playlist
+        if (brow){ target = brow; DRAG.into = true; }            // channel dropped onto a playlist
         else if (crow && crow !== DRAG.el){
           target = crow;
-          DRAG.into = crow.closest('.chans') !== DRAG.chans;     // altro ramo aperto: sposta li'
+          DRAG.into = crow.closest('.chans') !== DRAG.chans;     // another open branch: move it there
         }
         if (!target) return;
         ev.preventDefault();
@@ -1542,7 +1508,7 @@ function bindListEvents(){
           try {
             const r = await api(`/api/lists/${id}/suggest?path=${encodeURIComponent(pth)}`);
             dl.innerHTML = r.names.map((n) => `<option value="${esc(n)}">`).join('');
-          } catch (_) { /* suggerimenti non disponibili */ }
+          } catch (_) { /* suggestions unavailable */ }
         }
         return;
       }
@@ -1560,7 +1526,7 @@ function updateBadge(card, list){
   const bs = branchesOf(list.id) || [];
   const active = bs.filter(b=>branchEnabled(list, b.path)).length;
   const badge = card.querySelector('[data-active-count]');
-  if (badge) badge.textContent = `${active}/${bs.length} attive`;
+  if (badge) badge.textContent = `${active}/${bs.length} enabled`;
 }
 
 /* ---------- active playlists preview ---------- */
@@ -1583,15 +1549,15 @@ function openActiveModal(list){
   if (!modal || !body || !title) return;
   const bs = branchesOf(list.id);
   const active = (bs || []).filter((b) => branchEnabled(list, b.path));
-  title.textContent = `Playlist attive · ${list.name || list.url || list.id}`;
+  title.textContent = `Enabled playlists · ${list.name || list.url || list.id}`;
   if (!bs){
-    body.innerHTML = '<div class="hint">Playlist non ancora caricate: attendi il download della lista oppure premi <b>Aggiorna</b>.</div>';
+    body.innerHTML = '<div class="hint">Playlists not loaded yet: wait for the list download or press <b>Refresh</b>.</div>';
   } else if (!active.length){
-    body.innerHTML = '<div class="hint">Nessuna playlist attiva in questa lista.</div>';
+    body.innerHTML = '<div class="hint">No enabled playlist in this list.</div>';
   } else {
-    body.innerHTML = `<div class="hint" style="margin:0 0 8px">${active.length} di ${bs.length} playlist attive</div>`
+    body.innerHTML = `<div class="hint" style="margin:0 0 8px">${active.length} of ${bs.length} playlists enabled</div>`
       + active.map((b) => `<div class="activePrevRow"><b>${esc(branchDisplayName(list, b))}</b>`
-        + `<span class="cnt">${Number(b.stations) || 0} canali${b.hidden ? ` · ${b.hidden} esclusi` : ''}</span></div>`).join('');
+        + `<span class="cnt">${Number(b.stations) || 0} channels${b.hidden ? ` · ${b.hidden} excluded` : ''}</span></div>`).join('');
   }
   MODAL_PREV_FOCUS = document.activeElement;
   modal.hidden = false;
@@ -1606,7 +1572,7 @@ function copyListLink(value, message){
   if (!value) return;
   copyText(value).then(
     () => toast(message),
-    (e) => toast('Copia non riuscita: ' + e.message, 4000)
+    (e) => toast('Copy failed: ' + e.message, 4000)
   );
 }
 
@@ -1723,7 +1689,7 @@ async function api(path, opts={}){
     ...opts
   });
   if (res.status === 401){
-    const t = prompt('Token amministratore (ADMIN_TOKEN):') || '';
+    const t = prompt('Admin token (ADMIN_TOKEN):') || '';
     localStorage.setItem('wisem3u_admin', t);
     return api(path, opts);
   }
@@ -1740,7 +1706,7 @@ async function api(path, opts={}){
 
 /* ---------------- log live ---------------- */
 const LOG = { since: 0, pause: false, lines: [] };
-const LOG_MAX_LINES = 600; // limite nel DOM (il server ne tiene 1000)
+const LOG_MAX_LINES = 600; // DOM limit (the server keeps 1000)
 
 function fmtLogTs(ts){
   const d = new Date(ts);
@@ -1758,7 +1724,7 @@ async function pollLogs(){
     }
     if (LOG.lines.length > LOG_MAX_LINES) LOG.lines.splice(0, LOG.lines.length - LOG_MAX_LINES);
     if (r.entries && r.entries.length) renderLogs();
-  } catch (_) { /* log silenzioso: mai disturbare con il polling */ }
+  } catch (_) { /* silent log: never disturb the UI with polling */ }
 }
 
 function renderLogs(){
@@ -1775,7 +1741,7 @@ function renderLogs(){
     ? rows.map(e =>
         `<span class="lgline ${e.level}"><span class="lgts">${fmtLogTs(e.ts)}</span><span class="lgscope">${esc(e.scope)}</span>${esc(e.msg)}</span>`
       ).join('')
-    : `<div class="hint">${LOG.lines.length ? 'Nessun evento corrisponde ai filtri.' : 'In attesa di eventi…'}</div>`;
+    : `<div class="hint">${LOG.lines.length ? 'No event matches the filters.' : 'Waiting for events…'}</div>`;
   if (atBottom) box.scrollTop = box.scrollHeight;
 }
 
@@ -1796,11 +1762,11 @@ function exportLogs(){
 
 $('#logPause').addEventListener('click', () => {
   LOG.pause = !LOG.pause;
-  $('#logPause').textContent = LOG.pause ? 'Riprendi' : 'Pausa';
+  $('#logPause').textContent = LOG.pause ? 'Resume' : 'Pause';
   $('#logPause').classList.toggle('on', LOG.pause);
 });
 $('#logClear').addEventListener('click', async () => {
-  try { await api('/api/logs/clear', { method: 'POST', body: '{}' }); } catch (_) { /* niente */ }
+  try { await api('/api/logs/clear', { method: 'POST', body: '{}' }); } catch (_) { /* ignore */ }
   LOG.lines.length = 0;
   LOG.since = 0;
   renderLogs();
@@ -1835,7 +1801,7 @@ async function loadBranches(id){
 /** Waits for the background download to finish, updating the UI.
  *  Polls /api/config: it always exists and the server also uses it to resume
  *  interrupted downloads by itself (e.g. after a restart). */
-const POLLING = new Map(); // id -> promise, un solo polling per lista
+const POLLING = new Map(); // id -> promise, one polling loop per list
 
 async function waitReady(id){
   const start = Date.now();
@@ -1846,27 +1812,27 @@ async function waitReady(id){
     let cfg;
     try { cfg = await api('/api/config'); fails = 0; }
     catch(e){
-      if (++fails >= 10){ toast('Il server non risponde: ricarica la pagina.', 6000); return false; }
-      continue; // errore transitorio: continua a provare
+      if (++fails >= 10){ toast('The server is not responding: reload the page.', 6000); return false; }
+      continue; // transient error: keep trying
     }
     const fresh = cfg.lists.find(x=>x.id===id);
-    if (!fresh) return false; // lista eliminata
+    if (!fresh) return false; // list deleted
     const mine = CFG.lists.find(x=>x.id===id);
     const s = fresh.state || {};
     if (mine) mine.state = s;
     if (s.status !== last){ last = s.status; renderLists(); }
     if (s.status === 'ready'){
       if (mine && !mine.name && fresh.name){
-        mine.name = fresh.name; // nome assegnato dal server...
-        if (cfg.rev) CFG.rev = cfg.rev; // ...che ha anche incrementato la revisione
+        mine.name = fresh.name; // name assigned by the server...
+        if (cfg.rev) CFG.rev = cfg.rev; // ...which also incremented the revision
       }
       await loadBranches(id);
       renderLists();
       return true;
     }
-    if (s.status === 'error'){ toast('Errore: ' + (s.error || 'sconosciuto'), 6000); renderLists(); return false; }
+    if (s.status === 'error'){ toast('Error: ' + (s.error || 'sconosciuto'), 6000); renderLists(); return false; }
   }
-  toast('Lo scaricamento sta impiegando molto: riprova più tardi con Aggiorna.', 6000);
+  toast('The download is taking a long time: try again later with Refresh.', 6000);
   return false;
 }
 
@@ -1915,13 +1881,13 @@ function renderAll(){
   $('#m3uLink').href = base + '/playlist.m3u';
   renderLists();
   const activeLists = CFG.lists.filter(l=>l.options.enabled).length;
-  $('#status').textContent = `${activeLists} attive · ${CFG.lists.length} totali`;
+  $('#status').textContent = `${activeLists} enabled · ${CFG.lists.length} total`;
   if (CFG.version && String(CFG.version) !== WM_UI_VERSION){
     // page stale in the browser: UI and server are not aligned (possible "ghost" bugs)
     const el = $('#appVersion');
-    el.textContent = `WiseM3U v${CFG.version} ⚠ pagina UI v${WM_UI_VERSION}: aggiorna con Ctrl+Maiusc+R`;
+    el.textContent = `WiseM3U v${CFG.version} ⚠ UI page v${WM_UI_VERSION}: reload with Ctrl+Shift+R`;
     el.style.color = 'var(--warn)';
-    toast('Pagina di configurazione stale (cache del browser): premi Ctrl+Maiusc+R per aggiornarla', 6000);
+    toast('Stale configuration page (browser cache): press Ctrl+Shift+R to update it', 6000);
   } else {
     $('#appVersion').textContent = CFG.version ? `WiseM3U v${CFG.version}` : '';
   }
@@ -1940,40 +1906,40 @@ function readSettings(){
 
 async function saveConfig(){
   readSettings();
-  const payload = { settings: CFG.settings, lists: CFG.lists, reason: 'salvataggio manuale', baseRev: CFG.rev };
+  const payload = { settings: CFG.settings, lists: CFG.lists, reason: 'manual save', baseRev: CFG.rev };
   try {
     const saved = await api('/api/config', { method:'PUT', body: JSON.stringify(payload) });
     CFG = saved;
     renderAll();
     loadHistory();
-    toast('Configurazione salvata ✔');
+    toast('Configuration saved ✔');
   } catch(e){
     if (e.status === 409){
       // someone else (another tab, automatic merge, refresh) changed the
       // configuration: do not overwrite, ask whether to realign with the server
-      if (confirm('La configurazione è cambiata altrove (altra scheda o operazione automatica).\nRicaricare la versione del server? Le modifiche non ancora salvate in questa pagina andranno perse.')){
+      if (confirm('The configuration changed elsewhere (another tab or an automatic operation).\nReload the server version? Unsaved changes on this page will be lost.')){
         await loadConfig();
         loadHistory();
-        toast('Configurazione ricaricata dal server');
+        toast('Configuration reloaded from the server');
       } else {
-        toast('Salvataggio annullato: il server ha una versione più recente', 6000);
+        toast('Save cancelled: the server has a newer version', 6000);
       }
       return;
     }
-    toast('Errore: '+e.message, 4000);
+    toast('Error: '+e.message, 4000);
   }
 }
 
 async function refreshList(id, btn){
-  if (btn){ btn.disabled = true; btn.textContent = 'Aggiorno…'; }
+  if (btn){ btn.disabled = true; btn.textContent = 'Refreshing…'; }
   const l = CFG.lists.find(x=>x.id===id);
   try {
     await api(`/api/lists/${id}/refresh`, { method:'POST' });
     if (l) l.state = { status:'fetching' };
     renderLists();
     const ok = await pollUntilReady(id);
-    if (ok) toast('Lista aggiornata ✔');
-  } catch(e){ toast('Errore: '+e.message, 4000); }
+    if (ok) toast('List refreshed ✔');
+  } catch(e){ toast('Error: '+e.message, 4000); }
   finally { renderLists(); }
 }
 
@@ -1982,8 +1948,8 @@ async function delList(id){
     const r = await api(`/api/lists/${id}`, { method:'DELETE' });
     delete TREES[id];
     await loadConfig();
-    showUndo('Lista eliminata', r.undo);
-  } catch(e){ toast('Errore: '+e.message); }
+    showUndo('List deleted', r.undo);
+  } catch(e){ toast('Error: '+e.message); }
 }
 
 /** URL pasted from HTML pages/messages: &amp;/&#38; go back to & (see also server side). */
@@ -1994,28 +1960,28 @@ function cleanListUrl(s){
 async function addList(){
   const url = cleanListUrl($('#newUrl').value);
   const name = $('#newName').value.trim();
-  if (!url) return toast('Inserisci un URL');
-  const btn = $('#btnAdd'); btn.disabled = true; btn.textContent = 'Aggiungo…';
+  if (!url) return toast('Enter a URL');
+  const btn = $('#btnAdd'); btn.disabled = true; btn.textContent = 'Adding…';
   try {
     const r = await api('/api/lists', { method:'POST', body: JSON.stringify({ url, name }) });
-    OPEN_LISTS.add(r.list.id);   // la lista appena creata si apre da sola
+    OPEN_LISTS.add(r.list.id);   // the newly created list opens by itself
     $('#newUrl').value = ''; $('#newName').value = '';
     await loadConfig();
-    toast('Lista aggiunta: scaricamento in background…');
+    toast('List added: downloading in background…');
     const ok = await pollUntilReady(r.list.id);
-    if (ok) toast('Lista pronta: sistema i rami qui sotto ✔');
-  } catch(e){ toast('Errore: '+e.message, 5000); }
-  finally { btn.disabled=false; btn.textContent='Aggiungi'; renderLists(); }
+    if (ok) toast('List ready: set up the branches below ✔');
+  } catch(e){ toast('Error: '+e.message, 5000); }
+  finally { btn.disabled=false; btn.textContent='Add'; renderLists(); }
 }
 
 async function testEasyProxy(card, list, btn){
   const box = card.querySelector('[data-epbox]');
   if (!list.options.easyProxy){
-    box.innerHTML = '<div class="err">Inserisci prima l\'URL di EasyProxy.</div>';
+    box.innerHTML = '<div class="err">Enter the EasyProxy URL first.</div>';
     return;
   }
   btn.disabled = true;
-  box.innerHTML = '<div class="hint">Test della connessione in corso…</div>';
+  box.innerHTML = '<div class="hint">Testing the connection…</div>';
   try {
     const r = await api('/api/easyproxy/test', { method:'POST', body: JSON.stringify({
       base: String(list.options.easyProxy || '').trim().replace(/\/+$/, ''),
@@ -2024,70 +1990,70 @@ async function testEasyProxy(card, list, btn){
     })});
     if (!r.ok){
       if (epNetErr(r.error)) {
-        box.innerHTML = `<div class="warn"><b>Avviso non bloccante.</b> ${esc(r.error || 'Connessione fallita')}${epHint(r.error)}</div>`;
+        box.innerHTML = `<div class="warn"><b>Non-blocking warning.</b> ${esc(r.error || 'Connection failed')}${epHint(r.error)}</div>`;
       } else {
-        box.innerHTML = `<div class="err">${esc(r.error || 'Connessione fallita')}${epHint(r.error)}</div>`;
+        box.innerHTML = `<div class="err">${esc(r.error || 'Connection failed')}${epHint(r.error)}</div>`;
       }
     } else {
       const v = r.info || {};
       const pt = r.proxyTest;
       const ptHtml = pt
         ? (pt.error
-          ? `<span class="pill">test proxy <b style="color:#ffb4ab">KO</b></span><div class="${epNetErr(pt.error)?'warn':'err'}" style="margin-top:6px">${epNetErr(pt.error)?'<b>Avviso non bloccante.</b> ':''}${esc(pt.error)}${epHint(pt.error)}</div>`
-          : `<span class="pill">test proxy <b style="color:#9be7b4">HTTP ${pt.status}</b> (${pt.ms} ms)</span>`)
+          ? `<span class="pill">proxy test <b style="color:#ffb4ab">KO</b></span><div class="${epNetErr(pt.error)?'warn':'err'}" style="margin-top:6px">${epNetErr(pt.error)?'<b>Non-blocking warning.</b> ':''}${esc(pt.error)}${epHint(pt.error)}</div>`
+          : `<span class="pill">proxy test <b style="color:#9be7b4">HTTP ${pt.status}</b> (${pt.ms} ms)</span>`)
         : '';
       box.innerHTML = `<div class="hint" style="margin-top:8px">
-        <span class="pill">EasyProxy <b style="color:#9be7b4">raggiungibile</b></span>
-        ${v.version?`<span class="pill">versione <b style="color:#fff">${esc(v.version)}</b></span>`:''}
-        ${v.public_ip?`<span class="pill">IP di uscita <b style="color:#fff">${esc(v.public_ip)}</b></span>`:''}
+        <span class="pill">EasyProxy <b style="color:#9be7b4">reachable</b></span>
+        ${v.version?`<span class="pill">version <b style="color:#fff">${esc(v.version)}</b></span>`:''}
+        ${v.public_ip?`<span class="pill">exit IP <b style="color:#fff">${esc(v.public_ip)}</b></span>`:''}
         ${ptHtml}
       </div>
-      <div class="hint">Se il test proxy risponde <b>HTTP 200</b> gli stream passano da EasyProxy.
-        Ricorda <b>Salva configurazione</b> per applicare la riscrittura degli URL.</div>`;
+      <div class="hint">If the proxy test returns <b>HTTP 200</b> streams go through EasyProxy.
+        Remember to <b>Save configuration</b> to apply the URL rewrite.</div>`;
     }
   } catch(e){
-    box.innerHTML = `<div class="${epNetErr(e.message)?'warn':'err'}">${epNetErr(e.message)?'<b>Avviso non bloccante.</b> ':''}${esc(e.message)}${epHint(e.message)}</div>`;
+    box.innerHTML = `<div class="${epNetErr(e.message)?'warn':'err'}">${epNetErr(e.message)?'<b>Non-blocking warning.</b> ':''}${esc(e.message)}${epHint(e.message)}</div>`;
   }
   finally { btn.disabled = false; }
 }
 
 /** True if the test error is network/certificate: non-blocking, because the client is the one connecting. */
 function epNetErr(err){
-  return /timeout|ECONNREFUSED|EHOSTUNREACH|ENETUNREACH|ENOTFOUND|EAI_AGAIN|getaddrinfo|certificate|self signed|self-signed|unable to verify|SSL routines|DNS pubblici/i.test(String(err || ''));
+  return /timeout|ECONNREFUSED|EHOSTUNREACH|ENETUNREACH|ENOTFOUND|EAI_AGAIN|getaddrinfo|certificate|self signed|self-signed|unable to verify|SSL routines|public DNS/i.test(String(err || ''));
 }
 
 /** Targeted hint based on the EasyProxy test error type. */
 function epHint(err){
   const e = String(err || '');
   if (/certificate|self signed|self-signed|unable to verify|SSL routines/i.test(e)) {
-    return ' Il container non si fida del certificato: non e\' bloccante, l\'importante e\' che se ne fidi il client (TV/telefono); con un certificato Let\'s Encrypt e\' automatico.';
+    return ' The container does not trust the certificate: this is non-blocking; what matters is that the client (TV/phone) trusts it. With a Let\'s Encrypt certificate this is automatic.';
   }
   if (/ECONNREFUSED|EHOSTUNREACH|ENETUNREACH|timeout/i.test(e)) {
-    return ' Sulle reti di casa il container spesso non raggiunge il proprio dominio pubblico (manca il NAT hairpin): non e\' bloccante, verifica la riproduzione sul client.';
+    return ' On home networks the container often cannot reach its own public domain (no NAT hairpin): this is non-blocking; check playback on the client.';
   }
   return '';
 }
 
 async function probe(){
   const url = cleanListUrl($('#newUrl').value);
-  if (!url) return toast('Inserisci un URL');
+  if (!url) return toast('Enter a URL');
   const box = $('#probeBox');
-  box.innerHTML = '<div class="hint">Download e analisi in corso…</div>';
+  box.innerHTML = '<div class="hint">Downloading and analyzing…</div>';
   try {
     const r = await api('/api/probe', { method:'POST', body: JSON.stringify({ url }) });
     const t = r.tree;
     box.innerHTML = `<div class="hint" style="margin-top:10px">
-      <span class="pill">nome <b style="color:#fff">${esc(t.meta.name)}</b></span>
-      <span class="pill">formato <b style="color:#fff">${esc(t.meta.kind || 'wiseplay')}</b></span>
-      <span class="pill">nodi <b style="color:#fff">${t.stats.nodes}</b></span>
+      <span class="pill">name <b style="color:#fff">${esc(t.meta.name)}</b></span>
+      <span class="pill">format <b style="color:#fff">${esc(t.meta.kind || 'wiseplay')}</b></span>
+      <span class="pill">nodes <b style="color:#fff">${t.stats.nodes}</b></span>
       <span class="pill">stream <b style="color:#fff">${t.stats.stations}</b></span>
-      <span class="pill">m3u importate <b style="color:#fff">${t.stats.m3u}</b></span>
-      ${t.errors.length?`<span class="pill">errori <b style="color:#fff">${t.errors.length}</b></span>`:''}
+      <span class="pill">imported m3u <b style="color:#fff">${t.stats.m3u}</b></span>
+      ${t.errors.length?`<span class="pill">errors <b style="color:#fff">${t.errors.length}</b></span>`:''}
     </div>`;
   } catch(e){ box.innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
 
-/* ---------------- copia negli appunti ---------------- */
+/* ---------------- clipboard copy ---------------- */
 function copyText(t){
   if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(t);
   return new Promise((res, rej) => {
@@ -2097,7 +2063,7 @@ function copyText(t){
     ta.style.opacity = '0';
     document.body.appendChild(ta);
     ta.select();
-    try { document.execCommand('copy') ? res() : rej(new Error('copia non riuscita')); }
+    try { document.execCommand('copy') ? res() : rej(new Error('copy failed')); }
     catch(e){ rej(e); }
     finally { ta.remove(); }
   });
@@ -2107,15 +2073,15 @@ function copyText(t){
 $('#manifestLink').addEventListener('click', (ev) => {
   ev.preventDefault();
   copyText(ev.currentTarget.href).then(
-    () => toast('Copiato manifest ✔'),
-    (e) => toast('Copia non riuscita: ' + e.message, 4000)
+    () => toast('manifest copied ✔'),
+    (e) => toast('Copy failed: ' + e.message, 4000)
   );
 });
 $('#m3uLink').addEventListener('click', (ev) => {
   ev.preventDefault();
   copyText(ev.currentTarget.href).then(
-    () => toast('Copiato m3u ✔'),
-    (e) => toast('Copia non riuscita: ' + e.message, 4000)
+    () => toast('m3u copied ✔'),
+    (e) => toast('Copy failed: ' + e.message, 4000)
   );
 });
 
@@ -2256,8 +2222,8 @@ $('#sidemenu').addEventListener('keydown', async (ev) => {
 $('#btnProbe').addEventListener('click', probe);
 $('#btnSave').addEventListener('click', saveConfig);
 $('#btnClearCache').addEventListener('click', async ()=>{
-  if(!confirm('Svuotare la cache di tutte le liste?')) return;
-  try { await api('/api/cache/clear',{method:'POST'}); toast('Cache svuotata'); } catch(e){ toast(e.message); }
+  if(!confirm('Clear the cache of all lists?')) return;
+  try { await api('/api/cache/clear',{method:'POST'}); toast('Cache cleared'); } catch(e){ toast(e.message); }
 });
 
 /* ---------------- configuration history ---------------- */
@@ -2265,15 +2231,15 @@ $('#btnClearCache').addEventListener('click', async ()=>{
 const HIST = { entries: [] };
 
 const HIST_CATS = [
-  ['settings', 'Impostazioni generali'],
-  ['lists', 'Elenco liste (nomi e URL)'],
-  ['order', 'Ordine delle playlist'],
-  ['names', 'Nomi di playlist e canali'],
+  ['settings', 'General settings'],
+  ['lists', 'List collection (names and URLs)'],
+  ['order', 'Playlist order'],
+  ['names', 'Playlist and channel names'],
   ['exclusions', 'Esclusioni'],
-  ['moves', 'Unioni e spostamenti'],
-  ['trash', 'Cestino'],
-  ['groups', 'Gruppi personali'],
-  ['listSettings', 'Impostazioni delle liste'],
+  ['moves', 'Merges and moves'],
+  ['trash', 'Trash'],
+  ['groups', 'Custom groups'],
+  ['listSettings', 'List settings'],
 ];
 const HIST_LABEL = Object.fromEntries(HIST_CATS);
 
@@ -2281,30 +2247,30 @@ function histListOptions(){
   const sel = $('#histList');
   if (!sel || typeof CFG === 'undefined' || !CFG) return;
   const cur = sel.value;
-  sel.innerHTML = '<option value="">Tutte le liste</option>' +
+  sel.innerHTML = '<option value="">All lists</option>' +
     CFG.lists.map((l)=>`<option value="${esc(l.id)}">${esc(l.name || l.url || l.id)}</option>`).join('');
   if (cur && CFG.lists.some((l)=>l.id===cur)) sel.value = cur;
 }
 
 function describeChanges(ch){
-  if (!ch) return 'nessuna differenza calcolata';
+  if (!ch) return 'no differences computed';
   const parts = [];
-  if (ch.settings) parts.push('impostazioni generali');
-  if (ch.lists) parts.push('elenco liste');
+  if (ch.settings) parts.push('general settings');
+  if (ch.lists) parts.push('list collection');
   const cats = new Set();
   for (const arr of Object.values(ch.options || {})) (arr || []).forEach((c)=>cats.add(c));
   for (const c of cats){
     const label = HIST_LABEL[c] || c;
     parts.push((window.WM_I18N && WM_I18N.translate(label)) || label);
   }
-  return parts.length ? `Cambia: ${parts.join(', ')}` : 'Nessuna differenza';
+  return parts.length ? `Changes: ${parts.join(', ')}` : 'No differences';
 }
 
 function renderHistory(){
   const box = $('#histBody');
   if (!box) return;
   if (!HIST.entries.length){
-    box.innerHTML = '<div class="hint">Nessuna modifica registrata: la cronologia parte dal prossimo salvataggio.</div>';
+    box.innerHTML = '<div class="hint">No changes recorded: history starts with the next save.</div>';
     return;
   }
   box.innerHTML = HIST.entries.map((e)=>{
@@ -2315,7 +2281,7 @@ function renderHistory(){
         ${e.name ? `<span class="badge ready">★ ${esc(e.name)}</span>` : ''}
         ${e.reason ? `<span class="badge idle">${esc(e.reason)}</span>` : ''}
         ${e.listName ? `<span class="cnt">${esc(e.listName)}</span>` : ''}
-        <div class="histactions"><button class="ghost small" data-hpick="${esc(e.id)}">${e.name ? '↩ Ripristina checkpoint…' : '↩ Ripristina…'}</button></div>
+        <div class="histactions"><button class="ghost small" data-hpick="${esc(e.id)}">${e.name ? '↩ Restore checkpoint…' : '↩ Restore…'}</button></div>
       </div>
       <div class="histchanges">${esc(describeChanges(e.changes))}</div>
       <div class="histrestore" hidden data-hpanel="${esc(e.id)}"></div>
@@ -2334,26 +2300,26 @@ function histPanelHtml(entry){
       (all || (k !== 'settings' && k !== 'lists')) ? 'checked' : ''}>${esc(label)}</label>`)
     .join('');
   const when = new Date(entry.ts).toLocaleString((window.WM_I18N && WM_I18N.locale()) || 'en');
-  return `<div class="hint">${all ? `Checkpoint <b>★ ${esc(entry.name)}</b> del <b>${esc(when)}</b>. Tutte le categorie sono spuntate: togli la spunta a quelle che non vuoi ripristinare.` : `Stato del <b>${esc(when)}</b>${entry.listName ? ` · ${esc(entry.listName)}` : ''}.`}
-      ${listId ? 'Le categorie si applicano solo alla lista selezionata.' : 'Le categorie delle opzioni si applicano a tutte le liste.'}
-      <br>Il ripristino verrà registrato come nuovo stato: potrai annullarlo.</div>
+  return `<div class="hint">${all ? `Checkpoint <b>★ ${esc(entry.name)}</b> from <b>${esc(when)}</b>. All categories are checked: uncheck the ones you do not want to restore.` : `State from <b>${esc(when)}</b>${entry.listName ? ` · ${esc(entry.listName)}` : ''}.`}
+      ${listId ? 'The categories apply only to the selected list.' : 'Option categories apply to all lists.'}
+      <br>The restore will be recorded as a new state: you can undo it.</div>
     <div class="hcats">${cats}</div>
     <div class="hrow">
-      <button class="danger small" data-hgo="${esc(entry.id)}">Ripristina selezionato</button>
-      <button class="ghost small" data-hcancel="1">Annulla</button>
+      <button class="danger small" data-hgo="${esc(entry.id)}">Restore selected</button>
+      <button class="ghost small" data-hcancel="1">Cancel</button>
     </div>`;
 }
 
 async function saveCheckpoint(){
-  const name = (prompt('Nome del checkpoint (es. «prima del merge»):') || '').trim().slice(0, 80);
+  const name = (prompt('Checkpoint name (e.g. “before the merge”):') || '').trim().slice(0, 80);
   if (!name) return;
   try {
     await api('/api/history/checkpoints', { method:'POST', body: JSON.stringify({ name }) });
     // the checkpoint is global: remove the filter to see it immediately in the list
     $('#histList').value = '';
-    toast('Checkpoint «' + name + '» salvato ✔');
+    toast('Checkpoint «' + name + '» saved ✔');
     await loadHistory();
-  } catch(e){ toast('Errore: '+e.message, 4000); }
+  } catch(e){ toast('Error: '+e.message, 4000); }
 }
 
 async function loadHistory(){
@@ -2361,12 +2327,12 @@ async function loadHistory(){
   if (!box) return;
   histListOptions();
   const listId = $('#histList').value;
-  $('#histStatus').textContent = 'Carico…';
+  $('#histStatus').textContent = 'Loading…';
   try {
     const r = await api('/api/history' + (listId ? `?list=${encodeURIComponent(listId)}` : ''));
     HIST.entries = r.entries || [];
     renderHistory();
-    $('#histStatus').textContent = `${HIST.entries.length} stati`;
+    $('#histStatus').textContent = `${HIST.entries.length} states`;
   } catch (e){
     HIST.entries = [];
     box.innerHTML = `<div class="err">${esc(e.message)}</div>`;
@@ -2403,12 +2369,12 @@ async function loadHistory(){
     if (!panel || !entry) return;
     const listId = $('#histList').value;
     const cats = [...panel.querySelectorAll('input[name="hcat"]:checked')].map((i)=>i.value);
-    if (!cats.length){ toast('Spunta almeno una categoria da ripristinare'); return; }
+    if (!cats.length){ toast('Check at least one category to restore'); return; }
     const when = new Date(entry.ts).toLocaleString((window.WM_I18N && WM_I18N.locale()) || 'en');
     const msg = entry.name
-      ? `Ripristinare le categorie selezionate dal checkpoint «${entry.name}»?`
-      : `Ripristinare le categorie selezionate dallo stato del ${when}?`;
-    if (!confirm(msg + '\nVerrà creato un nuovo stato, quindi potrai annullare anche questo ripristino.')) return;
+      ? `Restore the selected categories from checkpoint «${entry.name}»?`
+      : `Restore the selected categories from the state of ${when}?`;
+    if (!confirm(msg + '\nA new state will be created, so you can undo this restore too.')) return;
     go.disabled = true;
     try {
       const r = await api(`/api/history/${encodeURIComponent(entry.id)}/restore`, {
@@ -2425,7 +2391,7 @@ async function loadHistory(){
       renderLists();
       for (const lid of [...TRASHOPEN]) await refreshTrash(lid);
       renderLists();
-      toast('Ripristino completato ✔');
+      toast('Restore completed ✔');
       await loadHistory();
     } catch (e){ toast(e.message, 4000); go.disabled = false; }
   });
@@ -2438,7 +2404,7 @@ document.addEventListener('wm:language', () => {
   renderLogs();
 });
 
-/* ---------------- icone info e sezioni comprimibili ---------------- */
+/* ---------------- info icons and collapsible sections ---------------- */
 
 /** Wraps the title text in a span (.ttl) so that number, title,
  *  info icon and expand button always stay on the same line. */
@@ -2452,8 +2418,8 @@ function wrapHeadingText(h2){
   texts.forEach(n => ttl.appendChild(n));
 }
 
-/** Sposta tutte le note informative di un contenitore accanto al suo titolo,
- *  dentro un unico pannello (i) apribile al tocco. */
+/** Moves all info notes of a container next to its title,
+ *  into a single panel (i) that opens on tap. */
 function collectInfo(container, host, { skip }={}){
   if (!container || !host || host.querySelector(':scope > .sectinfo')) return;
   const items = [...container.querySelectorAll('[data-info], details.help')]
@@ -2476,7 +2442,7 @@ function collectInfo(container, host, { skip }={}){
       const s = el.querySelector('summary');
       label = (s ? s.textContent : '').trim().replace(/^[^\p{L}\p{N}]+/u, '');
       content = el.querySelector('.hint');
-      el.remove();                       // il blocco help diventa una nota del pannello
+      el.remove();                       // the help block becomes a note in the panel
     } else {
       const p = el.parentElement;
       const lab = (p && p !== container) ? p.querySelector('label') : null;
@@ -2583,7 +2549,7 @@ initCollapsibleSections();
   document.addEventListener('toggle', (ev)=>{
     const p = ev.target;
     if (!p || !p.classList || !p.classList.contains('sectinfo') || !p.open) return;
-    if (window.matchMedia && window.matchMedia('(max-width:560px)').matches) return; // mobile: foglio fisso
+    if (window.matchMedia && window.matchMedia('(max-width:560px)').matches) return; // mobile: fixed sheet
     requestAnimationFrame(()=>{
       const body = p.querySelector('.ibody');
       if (!body) return;
@@ -2701,5 +2667,5 @@ $('#s_refreshMinutes').addEventListener('change', (ev)=>{
 });
 
 loadConfig().then(()=>{ loadHistory(); }).catch(e=>{
-  $('#lists').innerHTML = `<section class="card"><div class="err">Impossibile caricare la configurazione: ${esc(e.message)}</div></section>`;
+  $('#lists').innerHTML = `<section class="card"><div class="err">Unable to load the configuration: ${esc(e.message)}</div></section>`;
 });
