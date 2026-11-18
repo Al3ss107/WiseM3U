@@ -89,12 +89,14 @@ background download with state and statistics.
   lists" box, managed exactly like normal lists.
 
 **Global** — addon name/ID, default list refresh interval (6 hours by
-default; 0 = manual), maximum depth, EPG URL, global
+default; 0 = manual), maximum parse depth (nested group/URL levels followed by
+the importer), default EPG URL (used by lists without their own), global
 deduplication (off by default), proportional logos, stream diagnostics, clear
 cache, **interface language**.
 
-**Per list** — name, group-title prefix and depth, catalog name, refresh
-policy (global / custom / manual), **custom User-Agent**, allowed protocols,
+**Per list** — name, group-title prefix and depth, EPG URL (empty = global
+setting, then the EPG detected in the source), refresh policy (global / custom /
+manual), **custom User-Agent**, allowed protocols,
 AceStream mode, exclusions, renames/order, EasyProxy.
 
 **Configuration history** — every "stable" change (settings, lists, options)
@@ -182,7 +184,7 @@ with the selected locale.
 | Feature | Details |
 | --- | --- |
 | **Stremio/Nuvio catalogs** | an enabled list with "show as catalog" becomes a catalog; playlists are the **genres**; `skip` pagination, `search` |
-| **Native EPG** | XMLTV URL set manually or inherited from `x-tvg-url`/`url-tvg`; matches `tvg-id`/`tvg-name`/normalized name, shows **Now/Next** in details and search, exposes programme `videos` and a dated `metasDetailed` catalog for Stremio Native EPG; guide cached in RAM |
+| **Native EPG** | per-list XMLTV URL, with fallback to the general setting and then to the source's `x-tvg-url`/`url-tvg`; matches `tvg-id`/`tvg-name`/normalized name, shows **Now/Next** in details and search, exposes programme `videos` and a dated `metasDetailed` catalog for Stremio Native EPG; one cached guide per effective URL set |
 | **M3U playlist** | multi-level `group-title`, logos, EPG, deduplication, protocol filter; `.m3u8` alias |
 | **Logos** | `/imgfit` with **sharp/libvips** (PNG, JPEG, WebP, SVG, GIF, ICO), 640×360 landscape or 512×512 square canvas, 10% padding, `#101418` background, JPEG disk cache, 302 fallback |
 | **EasyProxy** | stream rewriting to an external instance (HLS/DASH proxy with WARP), with public DNS resolution + connection by IP |

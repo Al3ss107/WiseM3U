@@ -69,8 +69,9 @@ tests/                 regression suites run by `npm test`
    bumps `rev` and records a snapshot in `history` (runtime list state is
    excluded from the comparison). A `PUT /api/config` with an old `baseRev`
    receives **409** and the current state.
-7. When an XMLTV URL is configured (manually or inherited from an M3U), the
-   addon downloads and caches the guide in `src/epg.js`: channels are matched
+7. When an XMLTV URL is configured per list, globally, or inherited from an
+   M3U (in this priority order), the addon downloads and caches the guide in
+   `src/epg.js`: channels are matched
    by `tvg-id`, `tvg-name` or normalized name, `/meta` exposes Now/Next and
    programme videos, and the catalog `date` extra returns `metasDetailed`.
 

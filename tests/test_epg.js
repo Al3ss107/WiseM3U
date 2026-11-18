@@ -80,10 +80,16 @@ function xmltvTime(ms) {
     return { status: res.status, body: type.includes('json') ? await res.json() : await res.text() };
   };
 
+  const overrideXml = guideXml.replace('Test Programme', 'Override Programme');
   const guideServer = http.createServer((req, res) => {
+    if (req.url.startsWith('/override.xml')) {
+      res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+      res.end(overrideXml);
+      return;
+    }
     if (req.url.startsWith('/epg.xml')) {
       res.setHeader('Content-Type', 'application/xml; charset=utf-8');
-      res.end(guideXml.replace('canale5.it', 'canale5.it'));
+      res.end(guideXml);
       return;
     }
     res.statusCode = 404;
@@ -139,40 +145,84 @@ function xmltvTime(ms) {
     }
     ok(state && state.body.status === 'ready', 'list downloaded');
 
-    const cfg = (await api('/api/config')).body;
-    const saved = await api('/api/config', {
+    let cfg = (await api('/api/config')).body;
+
+    // 1) No global EPG and no list EPG: the source's x-tvg-url is used.
+    const manifestDetected = await api('/manifest.json');
+    ok(manifestDetected.body.behaviorHints && manifestDetected.body.behaviorHints.epgProvider === true, 'detected EPG opts in to Native EPG');
+    const catalogDetected = manifestDetected.body.catalogs.find((c) => c.id === `wise:${listId}`);
+    ok(catalogDetected && (catalogDetected.extra || []).some((e) => e.name === 'date'), 'detected EPG adds the date extra');
+
+    const preview = await api(`/catalog/tv/wise:${listId}.json`);
+    ok(preview.status === 200 && Array.isArray(preview.body.metas) && preview.body.metas.length === 1, 'channel catalog still returns metas');
+    const metaId = preview.body.metas[0].id;
+
+    let meta = await api(`/meta/tv/${encodeURIComponent(metaId)}.json`);
+    ok(meta.status === 200 && meta.body.meta, 'meta returned');
+    ok(String(meta.body.meta.description || '').includes('Now: Test Programme'), 'detected EPG provides Now');
+
+    // 2) Global EPG is the fallback when the list has none.
+    let saved = await api('/api/config', {
       method: 'PUT',
       body: JSON.stringify({
         baseRev: cfg.rev,
-        settings: { epgUrl },
+        settings: { ...cfg.settings, epgUrl },
         lists: cfg.lists,
-        reason: 'EPG URL',
+        reason: 'global EPG',
       }),
     });
     ok(saved.status === 200 && saved.body.settings.epgUrl === epgUrl, 'EPG URL saved in the general settings');
+    cfg = saved.body;
+    meta = await api(`/meta/tv/${encodeURIComponent(metaId)}.json`);
+    ok(String(meta.body.meta.description || '').includes('Now: Test Programme'), 'global EPG is used when the list has none');
+
+    // 3) The list EPG overrides the global one.
+    const overrideUrl = `http://127.0.0.1:${epgPort}/override.xml`;
+    cfg.lists[0].options.epgUrl = overrideUrl;
+    saved = await api('/api/config', {
+      method: 'PUT',
+      body: JSON.stringify({
+        baseRev: cfg.rev,
+        settings: cfg.settings,
+        lists: cfg.lists,
+        reason: 'list EPG',
+      }),
+    });
+    ok(saved.status === 200 && saved.body.lists[0].options.epgUrl === overrideUrl, 'list EPG saved');
+    cfg = saved.body;
 
     const manifest = await api('/manifest.json');
     ok(manifest.body.behaviorHints && manifest.body.behaviorHints.epgProvider === true, 'manifest opts in to Native EPG');
     const catalog = manifest.body.catalogs.find((c) => c.id === `wise:${listId}`);
     ok(catalog && (catalog.extra || []).some((e) => e.name === 'date'), 'catalog declares the date extra');
 
-    const preview = await api(`/catalog/tv/wise:${listId}.json`);
-    ok(preview.status === 200 && Array.isArray(preview.body.metas) && preview.body.metas.length === 1, 'channel catalog still returns metas');
-    const metaId = preview.body.metas[0].id;
-
-    const meta = await api(`/meta/tv/${encodeURIComponent(metaId)}.json`);
-    ok(meta.status === 200 && meta.body.meta, 'meta returned');
+    meta = await api(`/meta/tv/${encodeURIComponent(metaId)}.json`);
+    ok(meta.status === 200 && meta.body.meta, 'meta returned with the list EPG');
     ok(meta.body.meta.behaviorHints && meta.body.meta.behaviorHints.hasScheduledVideos === true, 'meta advertises scheduled videos');
     ok(Array.isArray(meta.body.meta.videos) && meta.body.meta.videos.length >= 1, 'meta contains programme videos');
     const video = meta.body.meta.videos && meta.body.meta.videos[0];
     ok(video && video.startTime && video.endTime && Date.parse(video.endTime) > Date.parse(video.startTime), 'programme has valid start/end times');
-    ok(String(meta.body.meta.description || '').includes('Now: Test Programme'), 'meta description shows Now');
+    ok(String(meta.body.meta.description || '').includes('Now: Override Programme'), 'list EPG overrides the global one');
+
+    const playlist = await fetch(`${base}/playlist.m3u`).then((res) => res.text());
+    ok(playlist.includes(overrideUrl) && !playlist.includes(epgUrl), 'M3U header carries the list EPG only');
 
     const programmeStream = await api(`/stream/tv/${encodeURIComponent(video.id)}.json`);
     ok(programmeStream.status === 200 && programmeStream.body.streams.length === 1, 'programme id still resolves to the channel stream');
 
     const search = await api(`/catalog/tv/wise:${listId}/search=canale.json`);
-    ok(search.status === 200 && String(search.body.metas[0].description || '').includes('Now:'), 'search result description shows Now');
+    ok(search.status === 200 && String(search.body.metas[0].description || '').includes('Now: Override'), 'search result uses the list EPG');
+
+    // 4) Empty list EPG + empty global: back to the detected EPG.
+    cfg.lists[0].options.epgUrl = '';
+    cfg.settings.epgUrl = '';
+    saved = await api('/api/config', {
+      method: 'PUT',
+      body: JSON.stringify({ baseRev: cfg.rev, settings: cfg.settings, lists: cfg.lists, reason: 'detected EPG' }),
+    });
+    ok(saved.status === 200, 'empty EPGs saved');
+    meta = await api(`/meta/tv/${encodeURIComponent(metaId)}.json`);
+    ok(String(meta.body.meta.description || '').includes('Now: Test Programme'), 'both empty falls back to the detected EPG');
 
     const day = new Date().toISOString().slice(0, 10);
     const dated = await api(`/catalog/tv/wise:${listId}/date=${day}.json`);

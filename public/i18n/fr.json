@@ -72,7 +72,6 @@
  "Caricamento canali…": "Chargement des chaînes…",
  "Caricamento cestino…": "Chargement de la corbeille…",
  "Carico…": "Chargement…",
- "Catalog name": "Nom du catalogue",
  "Cestino": "Corbeille",
  "Cestino svuotato: {n} voci eliminate definitivamente": "Corbeille vidée : {n} éléments supprimés définitivement",
  "Changes: {parts}": "Modifications : {parts}",
@@ -302,7 +301,6 @@
  "No playlist (branch with channels) found in this list.": "Aucune playlist (branche avec chaînes) trouvée dans cette liste.",
  "No playlist in the filter results": "Aucune playlist dans les résultats du filtre",
  "No playlist matches the filter.": "Aucune playlist ne correspond au filtre.",
- "Nome catalogo": "Nom du catalogue",
  "Nome del canale (come lo vedi in playlist e catalogo)": "Nom de la chaîne (tel qu’affiché dans la playlist et le catalogue)",
  "Nome del checkpoint (es. «prima del merge»):": "Nom du point de contrôle (ex. « avant la fusion ») :",
  "Nome del ramo (diventa il genere nel catalogo)": "Nom de la branche (devient le genre dans le catalogue)",
@@ -486,7 +484,7 @@
  "hint.addList": "WiseM3U accepte les chaînes JSON WisePlay (liens courts, gists, php…) et un <b>lien M3U/M3U8</b> classique : les <code>group-title</code> deviennent des branches/genres. Il gère aussi les playlists <b>Xtream Codes M3U_PLUS</b> (<code>get.php?username=…&amp;password=…&type=m3u_plus&amp;output=ts</code>) et celles en <code>type=m3u</code> (<code>#EXTGRP</code>) : les noms et groupes sont lus dans les attributs <code>tvg-*</code> même avec des virgules, et l’<b>EPG</b> déclaré par la source (<code>x-tvg-url</code>/<code>url-tvg</code>) est repris dans la playlist générée. L’addon suit les redirections, télécharge les JSON imbriqués et importe les branches <code>isHost</code> vers des fichiers <code>.m3u</code>. Le téléchargement se fait en arrière-plan.<br>⚠️ <b>Copier/coller :</b> si l’URL vient d’une page web ou d’un message HTML, <code>&amp;</code> peut arriver en <code>&amp;amp;</code> : WiseM3U corrige tout seul.<br>⚠️ <b>Panneaux lents :</b> les playlists Xtream de milliers d’entrées peuvent prendre jusqu’à 60 s ; en cas d’erreur réseau, le téléchargement est retenté une fois.<br>⚠️ Si une liste échoue, le message affiche le <b>début de la réponse du serveur</b> : vous distinguez ainsi immédiatement des identifiants erronés d’une URL invalide.",
  "hint.easyProxy": "Les listes <b>« (dns) »</b> ne fonctionnent souvent pas car le <b>client</b> (TV/téléphone) ne résout pas ces domaines, indépendamment du DNS du serveur. Avec <a class=\"lnk\" href=\"https://github.com/realbestia1/EasyProxy\" target=\"_blank\">EasyProxy</a>, les flux passent par le serveur (avec son DNS/WARP/extracteurs) : renseignez l’URL de votre instance (ex. <code>http://192.168.1.10:7860</code>) et les flux de cette liste seront réécrits. Attention : tout le trafic vidéo passe par le serveur.",
  "hint.easyProxyTest": "Saisissez <b>IP ou domaine</b> : cela fonctionne tel quel, sans configuration spéciale. L’addon se contente de <b>réécrire les flux</b> vers EasyProxy : c’est le <b>client</b> (TV/téléphone) qui se connecte. Le <b>Test</b> n’est qu’indicatif : sur de nombreux réseaux domestiques, le conteneur Docker n’atteint pas son domaine public (NAT hairpin absent) ou ne fait pas confiance au certificat ; il affiche alors un <b>avertissement non bloquant</b> et la lecture fonctionne quand même sur le client.",
- "hint.epg": "Déclaré dans l’en-tête de la playlist générée (<code>url-tvg</code>/<code>x-tvg-url</code>). Il s’ajoute aux EPG hérités des sources m3u_plus/Xtream. Vide = uniquement ceux détectés.",
+ "hint.epg": "EPG par défaut pour les listes sans EPG propre. Déclaré dans l’en-tête de la playlist générée (<code>url-tvg</code>/<code>x-tvg-url</code>). Vide = uniquement ceux détectés dans les listes.",
  "hint.history": "Chaque modification de la configuration est enregistrée automatiquement dans l’historique (sur le volume de données, 60 derniers états ou 30 jours). Choisissez un état et restaurez <b>uniquement les catégories voulues</b> : ordre, noms, exclusions, fusions, corbeille ou paramètres. Une restauration crée un nouvel état, donc elle est toujours annulable. Les listes ajoutées après l’instantané ne sont pas supprimées. Avec <b>★ Point de contrôle</b>, vous enregistrez un état nommé (ex. avant une fusion) : ils n’expirent pas. Si la configuration change ailleurs pendant l’édition, l’enregistrement est bloqué et il vous est demandé de recharger la version du serveur.",
  "hint.import": "Depuis une <b>autre</b> liste, vous importez des chaînes ou <b>— toute la playlist —</b> comme playlists supplémentaires de celle-ci. Depuis la <b>même</b> liste, vous déplacez les chaînes vers une autre playlist ou une <b>playlist personnalisée</b> (créez-la avec <b>+ Nouvelle playlist</b>). Le champ chaîne est <b>modifiable</b> : les suggestions viennent de la playlist choisie.",
  "hint.logPrivacy": "Les lignes contiennent les URL de vos listes et chaînes, qui peuvent inclure identifiants et mots de passe des services IPTV. Avant de partager une capture ou le fichier téléchargé, masquez les identifiants.",
@@ -670,5 +668,8 @@
  "last attempt failed": "dernière tentative échouée",
  "Personal list": "Liste personnelle",
  "Effective: every {n}": "Effectif : toutes les {n}",
- "Next update: {when}": "Prochaine actualisation : {when}"
+ "Next update: {when}": "Prochaine actualisation : {when}",
+ "Choose an interval": "Choisir un intervalle",
+ "EPG della lista": "EPG de la liste",
+ "hint.listEpg": "Vide = EPG des réglages généraux ; si celui-ci est aussi vide, celui détecté dans la liste est utilisé."
 }

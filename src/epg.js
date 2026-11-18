@@ -21,11 +21,13 @@ const { normalizeSourceUrl } = require('./urls');
 
 const TTL_MS = 15 * 60 * 1000;
 const MAX_URLS = 4;
+const MAX_GUIDES = 4;
 const MAX_PROGRAMMES = 100000;
 const FETCH_TIMEOUT_MS = 30000;
 
-let current = null; // { key, guide, fetchedAt, error }
-let inflight = null; // { key, promise }
+// One cached guide per effective URL set: lists can use different EPGs.
+const guides = new Map(); // key -> { guide, fetchedAt, error }
+const inflight = new Map(); // key -> promise
 
 /** Accepts only http(s), and rewrites GitHub "blob" links to the raw file. */
 function cleanUrl(value) {
@@ -40,29 +42,44 @@ function cleanUrl(value) {
   }
 }
 
-/** XMLTV URLs configured manually plus those inherited from downloaded lists. */
-function sourceUrls(config) {
+/**
+ * Effective XMLTV URLs for one list, in priority order:
+ *   1. the list's own EPG;
+ *   2. the general setting;
+ *   3. the EPGs declared by the source (detected while downloading it).
+ * `detected` lets callers pass the URLs already in hand and avoid touching
+ * the cache; otherwise they are read from the memory-only cache accessor.
+ */
+function effectiveUrls(config, list, detected = null) {
+  const own = cleanUrl(list && list.options && list.options.epgUrl);
+  if (own) return [own];
+  const fallback = cleanUrl(config && config.settings && config.settings.epgUrl);
+  if (fallback) return [fallback];
+  const inherited = detected || (list ? cache.epgUrls(list.id) : []);
   const out = [];
-  const add = (u) => {
-    const clean = cleanUrl(u);
+  for (const value of inherited) {
+    const clean = cleanUrl(value);
     if (clean && !out.includes(clean)) out.push(clean);
-  };
-  add(config && config.settings && config.settings.epgUrl);
-  for (const list of (config && config.lists) || []) {
-    if (out.length >= MAX_URLS) break;
-    if (!list.options || !list.options.enabled) continue;
-    // memory-only accessor: loading every snapshot here would defeat the
-    // cache's RAM diet (setup.cache keeps only gzip for cold lists)
-    for (const u of cache.epgUrls(list.id)) {
-      if (out.length >= MAX_URLS) break;
-      add(u);
-    }
   }
   return out.slice(0, MAX_URLS);
 }
 
-function hasEpg(config) {
-  return sourceUrls(config).length > 0;
+/** All effective URLs of the enabled lists (union, no duplicates). */
+function sourceUrls(config, list, detected = null) {
+  if (list) return effectiveUrls(config, list, detected);
+  const out = [];
+  for (const item of (config && config.lists) || []) {
+    if (!item.options || !item.options.enabled) continue;
+    for (const url of effectiveUrls(config, item)) {
+      if (!out.includes(url)) out.push(url);
+    }
+  }
+  return out;
+}
+
+/** With a list, tells whether that list has a usable guide. */
+function hasEpg(config, list) {
+  return (list ? effectiveUrls(config, list) : sourceUrls(config)).length > 0;
 }
 
 function codePoint(value) {
@@ -306,73 +323,89 @@ async function downloadGuide(urls) {
   return { guide: buildGuide(merged), errors };
 }
 
-/**
- * Returns the merged guide, cached in RAM. Never throws: a broken EPG must not
- * break channels, catalogs or playback.
- */
-async function getGuide(config, opts = {}) {
-  const urls = sourceUrls(config);
+/** Cached guide for the effective URL set of one list (or of all lists). */
+async function getGuide(config, list = null) {
+  const urls = sourceUrls(config, list);
   if (!urls.length) return null;
   const key = urls.join('\n');
   const now = Date.now();
 
-  if (!opts.force && current && current.key === key && now - current.fetchedAt < TTL_MS) {
-    return current.guide;
-  }
-  if (inflight && inflight.key === key) return inflight.promise;
+  const cached = guides.get(key);
+  if (cached && now - cached.fetchedAt < TTL_MS) return cached.guide;
+  if (inflight.has(key)) return inflight.get(key);
 
   const promise = (async () => {
     const { guide, errors } = await downloadGuide(urls);
     if (!guide) {
       // keep the previous guide (if any) and retry after a minute instead of
       // downloading a broken URL on every channel request
-      current = {
-        key,
-        guide: current && current.key === key ? current.guide : null,
+      const previous = guides.get(key);
+      guides.delete(key);
+      guides.set(key, {
+        guide: previous ? previous.guide : null,
         fetchedAt: Date.now() - TTL_MS + 60 * 1000,
         error: errors.join('; '),
-      };
-      if (current.error) console.warn('[epg] guide unavailable:', current.error.slice(0, 400));
-      return current.guide;
+      });
+      if (errors.length) console.warn('[epg] guide unavailable:', errors.join('; ').slice(0, 400));
+      return previous ? previous.guide : null;
     }
-    current = { key, guide, fetchedAt: Date.now(), error: '' };
+    guides.delete(key);
+    guides.set(key, { guide, fetchedAt: Date.now(), error: '' });
     if (errors.length) console.warn('[epg] partial guide:', errors.join('; ').slice(0, 400));
+    // Keep only the most recently used guides: each one can be several MB.
+    while (guides.size > MAX_GUIDES) guides.delete(guides.keys().next().value);
     return guide;
   })();
 
-  inflight = { key, promise };
+  inflight.set(key, promise);
   try {
     return await promise;
   } finally {
-    if (inflight && inflight.promise === promise) inflight = null;
+    inflight.delete(key);
   }
 }
 
 /** Non-blocking cache read for catalogs (never starts a download). */
-function peekGuide(config) {
-  const urls = sourceUrls(config);
-  if (!urls.length || !current) return null;
-  if (current.key !== urls.join('\n')) return null;
-  if (Date.now() - current.fetchedAt >= TTL_MS) return null;
-  return current.guide;
+function peekGuide(config, list = null) {
+  const urls = sourceUrls(config, list);
+  if (!urls.length) return null;
+  const cached = guides.get(urls.join('\n'));
+  if (!cached || Date.now() - cached.fetchedAt >= TTL_MS) return null;
+  return cached.guide;
 }
 
-/** Starts a background download when none is cached (used after boot). */
-function warmGuide(config) {
-  if (peekGuide(config)) return;
-  getGuide(config).catch((err) => {
-    console.warn('[epg] warm-up failed:', err && err.message ? err.message : err);
-  });
+/** Starts background downloads when none are cached (boot, refresh, save). */
+function warmGuide(config, list = null) {
+  if (list) {
+    if (peekGuide(config, list)) return;
+    getGuide(config, list).catch((err) => {
+      console.warn('[epg] warm-up failed:', err && err.message ? err.message : err);
+    });
+    return;
+  }
+  const keys = new Set();
+  for (const item of (config && config.lists) || []) {
+    if (!item.options || !item.options.enabled) continue;
+    const urls = sourceUrls(config, item);
+    const key = urls.join('\n');
+    if (!key || keys.has(key)) continue;
+    keys.add(key);
+    if (peekGuide(config, item)) continue;
+    getGuide(config, item).catch((err) => {
+      console.warn('[epg] warm-up failed:', err && err.message ? err.message : err);
+    });
+  }
 }
 
 /** Drops the cache (used by tests; configuration changes use a new key). */
 function invalidate() {
-  current = null;
-  inflight = null;
+  guides.clear();
+  inflight.clear();
 }
 
 module.exports = {
   sourceUrls,
+  effectiveUrls,
   hasEpg,
   getGuide,
   peekGuide,

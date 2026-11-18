@@ -72,7 +72,6 @@
  "Caricamento canali…": "Sender werden geladen…",
  "Caricamento cestino…": "Papierkorb wird geladen…",
  "Carico…": "Laden…",
- "Catalog name": "Katalogname",
  "Cestino": "Papierkorb",
  "Cestino svuotato: {n} voci eliminate definitivamente": "Papierkorb geleert: {n} Einträge endgültig gelöscht",
  "Changes: {parts}": "Änderungen: {parts}",
@@ -302,7 +301,6 @@
  "No playlist (branch with channels) found in this list.": "Keine Playlist (Zweig mit Sendern) in dieser Liste gefunden.",
  "No playlist in the filter results": "Keine Playlist in den Filterergebnissen",
  "No playlist matches the filter.": "Keine Playlist entspricht dem Filter.",
- "Nome catalogo": "Katalogname",
  "Nome del canale (come lo vedi in playlist e catalogo)": "Sendername (wie in Playlist und Katalog)",
  "Nome del checkpoint (es. «prima del merge»):": "Prüfpunktname (z. B. „vor dem Zusammenführen“):",
  "Nome del ramo (diventa il genere nel catalogo)": "Zweigname (wird zum Genre im Katalog)",
@@ -486,7 +484,7 @@
  "hint.addList": "WiseM3U akzeptiert sowohl WisePlay-JSON-Ketten (Kurzlinks, Gists, php…) als auch einen normalen <b>M3U/M3U8-Link</b>: Die <code>group-title</code> werden zu Zweigen/Genres. Auch <b>Xtream Codes M3U_PLUS</b> (<code>get.php?username=…&amp;password=…&type=m3u_plus&amp;output=ts</code>) und <code>type=m3u</code>-Listen (<code>#EXTGRP</code>) funktionieren: Namen und Gruppen werden aus den <code>tvg-*</code>-Attributen gelesen, auch mit Kommas, und der von der Quelle angegebene <b>EPG</b> (<code>x-tvg-url</code>/<code>url-tvg</code>) wird in die erzeugte Playlist übernommen. Der Addon folgt Weiterleitungen, lädt verschachtelte JSONs und importiert <code>isHost</code>-Zweige zu <code>.m3u</code>-Dateien. Downloads laufen im Hintergrund.<br>⚠️ <b>Kopieren/Einfügen:</b> Kommt die URL aus einer Webseite oder HTML-Nachricht, kann <code>&amp;</code> als <code>&amp;amp;</code> ankommen: WiseM3U korrigiert das selbst.<br>⚠️ <b>Langsame Panels:</b> Xtream-Playlists mit Tausenden Einträgen können bis zu 60 s dauern; bei Netzwerkfehlern wird einmal erneut versucht.<br>⚠️ Schlägt eine Liste fehl, zeigt die Meldung den <b>Beginn der Serverantwort</b>: so erkennst du falsche Zugangsdaten sofort von einer ungültigen URL.",
  "hint.easyProxy": "<b>„(dns)“</b>-Listen funktionieren oft nicht, weil der <b>Client</b> (TV/Telefon) diese Domains nicht auflöst, unabhängig vom Server-DNS. Mit <a class=\"lnk\" href=\"https://github.com/realbestia1/EasyProxy\" target=\"_blank\">EasyProxy</a> laufen die Streams über den Server (mit DNS/WARP/Extraktoren): URL deiner Instanz eintragen (z. B. <code>http://192.168.1.10:7860</code>), dann werden die Streams dieser Liste umgeschrieben. Achtung: Der gesamte Videoverkehr läuft über den Server.",
  "hint.easyProxyTest": "<b>IP oder Domain</b> eingeben: funktioniert so, ohne besondere Konfiguration. Der Addon <b>schreibt nur die Streams</b> auf EasyProxy um: Die Verbindung stellt der <b>Client</b> (TV/Telefon) her. Der <b>Test</b> ist nur ein Hinweis: In vielen Heimnetzen erreicht der Docker-Container die eigene öffentliche Domain nicht (kein NAT-Hairpin) oder vertraut dem Zertifikat nicht; dann erscheint eine <b>nicht blockierende Warnung</b> und die Wiedergabe am Client funktioniert trotzdem.",
- "hint.epg": "Wird im Header der erzeugten Playlist angegeben (<code>url-tvg</code>/<code>x-tvg-url</code>). Er ergänzt die von m3u_plus/Xtream geerbten EPGs. Leer = nur die erkannten.",
+ "hint.epg": "Standard-EPG für Listen ohne eigenen EPG. Wird im Header der erzeugten Playlist angegeben (<code>url-tvg</code>/<code>x-tvg-url</code>). Leer = nur die in den Listen erkannten EPGs.",
  "hint.history": "Jede Konfigurationsänderung wird automatisch im Verlauf gespeichert (auf dem Datenvolume, letzte 60 Zustände oder 30 Tage). Wähle einen Zustand und stelle <b>nur die gewünschten Kategorien</b> wieder her: Reihenfolge, Namen, Ausschlüsse, Zusammenführungen, Papierkorb oder Einstellungen. Eine Wiederherstellung erzeugt einen neuen Zustand und ist daher immer rückgängig zu machen. Nach dem Snapshot hinzugefügte Listen werden nicht gelöscht. Mit <b>★ Prüfpunkt</b> speicherst du einen benannten Zustand (z. B. vor einem Merge): Sie laufen nicht ab. Ändert sich die Konfiguration während der Bearbeitung anderswo, wird das Speichern blockiert und du wirst gefragt, ob die Serverversion neu geladen werden soll.",
  "hint.import": "Aus einer <b>anderen</b> Liste importierst du Sender oder <b>— die ganze Playlist —</b> als zusätzliche Playlists dieser Liste. Aus der <b>gleichen</b> Liste verschiebst du Sender in eine andere Playlist oder eine <b>eigene Playlist</b> (mit <b>+ Neue Playlist</b> erstellen). Das Senderfeld ist <b>beschreibbar</b>: Vorschläge kommen aus der gewählten Playlist.",
  "hint.logPrivacy": "Die Zeilen enthalten die URLs deiner Listen und Sender, die Benutzernamen und Passwörter von IPTV-Diensten enthalten können. Vor dem Teilen eines Screenshots oder der Datei die Zugangsdaten unkenntlich machen.",
@@ -670,5 +668,8 @@
  "last attempt failed": "letzter Versuch fehlgeschlagen",
  "Personal list": "Persönliche Liste",
  "Effective: every {n}": "Effektiv: alle {n}",
- "Next update: {when}": "Nächste Aktualisierung: {when}"
+ "Next update: {when}": "Nächste Aktualisierung: {when}",
+ "Choose an interval": "Intervall wählen",
+ "EPG della lista": "EPG der Liste",
+ "hint.listEpg": "Leer = EPG aus den allgemeinen Einstellungen; ist auch dieser leer, wird der in der Liste erkannte EPG verwendet."
 }

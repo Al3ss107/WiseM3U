@@ -72,7 +72,6 @@
  "Caricamento canali…": "Caricamento canali…",
  "Caricamento cestino…": "Caricamento cestino…",
  "Carico…": "Carico…",
- "Catalog name": "Nome catalogo",
  "Cestino": "Cestino",
  "Cestino svuotato: {n} voci eliminate definitivamente": "Cestino svuotato: {n} voci eliminate definitivamente",
  "Changes: {parts}": "Cambia: {parts}",
@@ -302,7 +301,6 @@
  "No playlist (branch with channels) found in this list.": "Nessuna playlist (ramo con canali) trovata nella lista.",
  "No playlist in the filter results": "Nessuna playlist nei risultati del filtro",
  "No playlist matches the filter.": "Nessuna playlist corrisponde al filtro.",
- "Nome catalogo": "Nome catalogo",
  "Nome del canale (come lo vedi in playlist e catalogo)": "Nome del canale (come lo vedi in playlist e catalogo)",
  "Nome del checkpoint (es. «prima del merge»):": "Nome del checkpoint (es. «prima del merge»):",
  "Nome del ramo (diventa il genere nel catalogo)": "Nome del ramo (diventa il genere nel catalogo)",
@@ -486,7 +484,7 @@
  "hint.addList": "WiseM3U accetta sia le catene JSON WisePlay (link brevi, gist, php…) sia un normale <b>link M3U/M3U8</b>: i <code>group-title</code> diventano rami/generi. Funziona anche con playlist <b>Xtream Codes M3U_PLUS</b> (<code>get.php?username=…&amp;password=…&type=m3u_plus&amp;output=ts</code>) e con quelle <code>type=m3u</code> (<code>#EXTGRP</code>): nomi e gruppi sono letti dagli attributi <code>tvg-*</code> anche con virgole, e l’<b>EPG</b> dichiarato dalla sorgente (<code>x-tvg-url</code>/<code>url-tvg</code>) viene riportato nella playlist generata. L’addon segue i redirect, scarica JSON annidati e importa rami <code>isHost</code> verso file <code>.m3u</code>. Lo scaricamento avviene in background.<br>⚠️ <b>Copia/incolla:</b> se l’URL arriva da una pagina web o da un messaggio HTML, <code>&amp;</code> può diventare <code>&amp;amp;</code>: WiseM3U lo corregge da solo.<br>⚠️ <b>Pannelli lenti:</b> playlist Xtream con migliaia di voci possono richiedere fino a 60 s; in caso di errore di rete il download viene ritentato una volta.<br>⚠️ Se una lista fallisce, il messaggio mostra l’<b>inizio della risposta del server</b>: così distingui subito credenziali errate da un URL non valido.",
  "hint.easyProxy": "Le liste <b>“(dns)”</b> spesso non funzionano perché il <b>client</b> (TV/telefono) non risolve quei domini, indipendentemente dal DNS del server. Con <a class=\"lnk\" href=\"https://github.com/realbestia1/EasyProxy\" target=\"_blank\">EasyProxy</a> i flussi passano dal server (con il suo DNS/WARP/estrattori): compila l’URL della tua istanza (es. <code>http://192.168.1.10:7860</code>) e gli stream di questa lista verranno riscritti. Attenzione: tutto il traffico video passa dal server.",
  "hint.easyProxyTest": "Scrivi <b>IP oppure dominio</b>: funziona così com’è, senza configurazioni speciali. L’addon si limita a <b>riscrivere gli stream</b> verso EasyProxy: sarà il <b>client</b> (TV/telefono) a connettersi. Il <b>Test</b> è solo indicativo: su molte reti di casa il container Docker non raggiunge il proprio dominio pubblico (manca il NAT hairpin) o non si fida del certificato; in quei casi mostra un <b>avviso non bloccante</b> e la riproduzione funziona comunque sul client.",
- "hint.epg": "Dichiarato nell’intestazione della playlist generata (<code>url-tvg</code>/<code>x-tvg-url</code>). Si aggiunge agli EPG ereditati dalle sorgenti m3u_plus/Xtream. Vuoto = solo quelli rilevati.",
+ "hint.epg": "EPG predefinito per le liste che non hanno un proprio EPG. Dichiarato nell’intestazione della playlist generata (<code>url-tvg</code>/<code>x-tvg-url</code>). Vuoto = solo quelli rilevati nelle liste.",
  "hint.history": "Ogni modifica alla configurazione viene salvata automaticamente nella cronologia (sul volume dati, ultimi 60 stati o 30 giorni). Scegli uno stato e ripristina <b>solo le categorie che vuoi</b>: ordine, nomi, esclusioni, unioni, cestino o impostazioni. Un ripristino crea un nuovo stato, quindi è sempre annullabile. Le liste aggiunte dopo lo snapshot non vengono cancellate. Con <b>★ Checkpoint</b> salvi uno stato con un nome (es. prima di un merge): i checkpoint non scadono. Se la configurazione cambia altrove mentre stai modificando, il salvataggio viene bloccato e ti viene chiesto se ricaricare la versione del server.",
  "hint.import": "Da un’<b>altra</b> lista importi canali o <b>— tutta la playlist —</b> come playlist aggiuntive di questa lista. Dalla <b>stessa</b> lista sposti i canali in un’altra playlist o in una <b>playlist personalizzata</b> (creala con <b>+ Nuova playlist</b>). Il campo canale è <b>scrivibile</b>: i suggerimenti arrivano dalla playlist scelta.",
  "hint.logPrivacy": "Le righe contengono gli URL delle tue liste e dei tuoi canali, che possono includere nomi utente e password dei servizi IPTV. Prima di condividere uno screenshot o il file scaricato, oscura le credenziali.",
@@ -670,5 +668,8 @@
  "last attempt failed": "ultimo tentativo fallito",
  "Personal list": "Lista personale",
  "Effective: every {n}": "Effettivo: ogni {n}",
- "Next update: {when}": "Prossimo aggiornamento: {when}"
+ "Next update: {when}": "Prossimo aggiornamento: {when}",
+ "Choose an interval": "Scegli un intervallo",
+ "EPG della lista": "EPG della lista",
+ "hint.listEpg": "Vuoto = EPG delle impostazioni generali; se anche quello è vuoto, usa quello rilevato nella lista."
 }

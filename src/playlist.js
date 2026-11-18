@@ -102,7 +102,8 @@ async function collectChannels(config, opts = {}) {
       });
     }
 
-    for (const u of value.epgUrls || []) {
+    // Per-list priority: own EPG, global setting, then the source's EPG.
+    for (const u of epg.effectiveUrls(config, list, value.epgUrls || [])) {
       if (!epgUrls.includes(u)) epgUrls.push(u);
     }
 
@@ -273,17 +274,15 @@ async function entryFor(config, list, force = false, chain = []) {
   return { ...entry, tree };
 }
 
-/** EPG header for the generated playlist: manual setting + EPG inherited
- *  from m3u/m3u_plus sources. Writes both common forms
- *  (x-tvg-url for Kodi/Xtream, url-tvg for TiviMate and IPTV apps). */
-function epgHeader(config, inherited = []) {
+/** EPG header for the generated playlist: the effective URLs already resolved
+ *  for the included lists. Writes both common forms (x-tvg-url for
+ *  Kodi/Xtream, url-tvg for TiviMate and IPTV apps). */
+function epgHeader(urls = []) {
   const all = [];
-  const add = (value) => {
+  for (const value of urls) {
     const url = epg.cleanUrl(value);
     if (url && !all.includes(url)) all.push(url);
-  };
-  add(config.settings.epgUrl);
-  for (const u of inherited) add(u);
+  }
   if (!all.length) return {};
   const joined = all.join(',');
   return { 'x-tvg-url': joined, 'url-tvg': joined };
@@ -295,7 +294,7 @@ async function buildPlaylist(config, opts = {}) {
   const out = typeof opts.rewrite === 'function' ? channels.map((c) => opts.rewrite(c) || c) : channels;
   const m3u = buildM3U(out, {
     name: `${config.settings.addonName} (${out.length} channels)`,
-    header: epgHeader(config, epgUrls),
+    header: epgHeader(epgUrls),
   });
   return { m3u, channels, lists, errors, epgUrls };
 }
@@ -352,10 +351,6 @@ function parseMetaId(id) {
 
 function catalogId(listId) {
   return `wise:${listId}`;
-}
-
-function catalogDisplayName(list) {
-  return list.options.catalogName || list.name || 'WisePlay';
 }
 
 /* Catalogs show CHANNELS; groups become genres (dropdown).
@@ -586,7 +581,6 @@ function buildBranches(entry, list) {
 /** Catalogs to expose in the manifest: cached data only, never network. */
 async function buildCatalogs(config) {
   const out = [];
-  const withEpg = epg.hasEpg(config);
   for (const l of config.lists.filter((x) => x.options.enabled && x.options.inCatalog)) {
     let entry = cache.getEntry(l.id);
     if (!entry && l.kind === 'personal') {
@@ -601,12 +595,12 @@ async function buildCatalogs(config) {
     out.push({
       id: catalogId(l.id),
       type: TYPE,
-      name: catalogDisplayName(l),
+      name: l.name || 'WisePlay',
       extra: [
         { name: 'genre', isRequired: false, options, optionsLimit: 300 },
         { name: 'search', isRequired: false },
         { name: 'skip', isRequired: false },
-        ...(withEpg ? [{ name: 'date', isRequired: false }] : []),
+        ...(epg.hasEpg(config, l) ? [{ name: 'date', isRequired: false }] : []),
       ],
     });
   }
@@ -632,14 +626,14 @@ async function buildCatalog(config, catId, extras = {}) {
   const skip = Math.max(0, Number(extras.skip) || 0);
   const page = filtered.slice(skip, skip + PAGE_SIZE);
 
-  const hasEpg = epg.hasEpg(config);
+  const hasEpg = epg.hasEpg(config, list);
   const date = /^\d{4}-\d{2}-\d{2}$/.test(String(extras.date || '')) ? String(extras.date) : '';
   // The channel list must stay fast: use only a warm guide. A dated guide
   // request or a search (where the user expects Now/Next) may wait for it.
-  let guide = hasEpg ? epg.peekGuide(config) : null;
+  let guide = hasEpg ? epg.peekGuide(config, list) : null;
   if (hasEpg && !guide) {
-    if (date || extras.search) guide = await epg.getGuide(config);
-    else epg.warmGuide(config);
+    if (date || extras.search) guide = await epg.getGuide(config, list);
+    else epg.warmGuide(config, list);
   }
 
   const metaOf = (r) => {
@@ -703,7 +697,7 @@ async function buildMeta(config, id) {
     const names = pathNames(entry.tree, parsed.path);
     const genre = (list.options.renames || {})[parsed.path] || node.name;
     const url = normalizeStreamUrl(st.url, list.options);
-    const guide = await epg.getGuide(config);
+    const guide = await epg.getGuide(config, list);
     const now = Date.now();
     const epgLine = guide ? epg.descriptionLine(guide, st, now) : '';
     const videos = guide
@@ -824,7 +818,6 @@ module.exports = {
   buildPersonalTree,
   entryFor,
   catalogId,
-  catalogDisplayName,
   epgHeader,
   proxyStreamUrl,
   metaId,

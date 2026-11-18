@@ -130,12 +130,13 @@ http://SERVER-IP:7300/playlist.m3u
   it into any IPTV app;
 * `group-title` = `ListName › Group › Subgroup` (configurable levels)
 * logo, name and deduplication configurable per list
-* **integrated EPG**: if an m3u_plus/Xtream source declares the guide
-  (`x-tvg-url`/`url-tvg`) or you set an **EPG URL** in the general settings, the
-  generated playlist carries it in the `#EXTM3U` header — IPTV apps load the
-  program guide by themselves. The addon also matches the XMLTV channels and
-  exposes **Now/Next** in channel details, plus native EPG programme rows for
-  clients that support the Stremio guide (Nuvio, Stremio)
+* **integrated EPG**: each list can set its own **EPG URL**; when empty, the
+  default EPG from the general settings is used, and when both are empty the
+  guide declared by the source (`x-tvg-url`/`url-tvg`) is used. The generated
+  playlist carries the effective EPGs in the `#EXTM3U` header — IPTV apps load
+  the program guide by themselves. The addon also matches the XMLTV channels
+  and exposes **Now/Next** in channel details, plus native EPG programme rows
+  for clients that support the Stremio guide (Nuvio, Stremio)
 * an `.m3u8` version is available at the same path with the `.m3u8` extension
 
 > **Typical Xtream errors** — `invalid list` is almost always a URL copied from
@@ -204,7 +205,7 @@ APIs used by the configuration page (also useful for scripts/automation):
   them quickly.
 * **Personal lists** — the **⭐ Create custom list** button (next to *Add*)
   creates a list **exactly like normal lists** (same fields: name, group-title
-  prefixes, protocols, AceStream, EasyProxy, catalog name…) but without a
+  prefixes, protocols, AceStream, EasyProxy, EPG…) but without a
   remote URL: you choose its content from *Add content from your lists* (list →
   playlist/branch → channel, or **— the whole playlist —** to mirror all
   channels of that branch, always in sync with the source). Added items appear
@@ -270,8 +271,8 @@ APIs used by the configuration page (also useful for scripts/automation):
   Engine (`http://IP:6878`), or exclude it entirely.
 * **Words to exclude** — filter channels by name/group (e.g. `test`, `backup`).
 * **Remove duplicates** (off by default), **group icon as logo**,
-  **catalog in Stremio/Nuvio**,
-  **catalog name**, **refresh policy** (global, custom, manual), **custom User-Agent** (any
+  **catalog in Stremio/Nuvio**, **refresh policy** (global, custom, manual),
+  **list EPG** (empty = general setting, then the source's EPG), **custom User-Agent** (any
   string used to download that list and its branches, read its Xtream panel and
   fetch its channel logos; empty = default. Useful when a panel or CDN returns
   `403` because it recognizes WiseM3U: choose one of the recommended presets
@@ -289,7 +290,7 @@ APIs used by the configuration page (also useful for scripts/automation):
   channel count — not the file size — that weighs on RAM;
 * addon name and ID, **refresh lists every** (global default for lists that
   inherit it: **360 minutes = every 6 hours**; 0 = manual only), maximum parse
-  depth, global
+  depth (how many nested group/URL levels the importer follows), global
   deduplication (off by default), **proportional logos in catalogs** (channel
   posters go through `/imgfit`: contain on a dark canvas already at the card proportions — 16:9
   landscape — so clients that crop "cover" do not cut them. Decoding via
@@ -430,7 +431,7 @@ WiseM3U:
    in every respect; `tvg-*` attributes are read even when they contain commas,
    the `#EXTGRP` directive (simple `type=m3u` Xtream lists) is honored, and the
    EPG declared by the source (`x-tvg-url`/`url-tvg`) is inherited by the final
-   playlist;
+   playlist when neither the list nor the general settings define one;
 4. recurses into nested `groups` and downloads external references **in
    parallel**;
 5. detects on the fly whether a URL returns WisePlay JSON or an `.m3u` (`isHost`

@@ -342,7 +342,7 @@ app.get('/channels.json', async (req, res) => {
       count: result.channels.length,
       lists: result.lists,
       errors: result.errors,
-      epg: Object.keys(playlist.epgHeader(cfg, result.epgUrls)).length ? result.epgUrls : undefined,
+      epg: Object.keys(playlist.epgHeader(result.epgUrls)).length ? result.epgUrls : undefined,
       channels: req.query.full === '1' ? result.channels : undefined,
     });
   } catch (err) {

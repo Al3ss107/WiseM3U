@@ -42,7 +42,7 @@ function defaultListOptions() {
     channelOrder: {}, // branch path -> [original channel names, in the chosen order]
     channelMoves: {}, // "path::originalName" -> destination: another branch path or "@Name" for custom groups
     inCatalog: true,
-    catalogName: '',
+    epgUrl: '', // XMLTV guide for this list; empty = global setting, then the source's own EPG
     refreshMode: 'inherit', // inherit | custom | manual
     refreshMinutes: 60, // used only when refreshMode = 'custom'
     userAgent: '', // custom UA used to download this list (empty = default)
@@ -115,6 +115,10 @@ function normalizeList(list) {
   const options = { ...def, ...rawOptions };
   options.protocols = { ...def.protocols, ...(rawOptions.protocols) };
   options.userAgent = sanitizeUserAgent(options.userAgent);
+  // Catalog name was removed: the catalog always uses the list name.
+  delete options.catalogName;
+  options.epgUrl = normalizeSourceUrl(options.epgUrl).trim();
+  if (options.epgUrl && !/^https?:\/\//i.test(options.epgUrl)) options.epgUrl = '';
   // Migration from the old cache-TTL model: an explicit per-list value was a
   // real setting; the old default (1440) and 0 both meant "use the global one".
   const validModes = new Set(['inherit', 'custom', 'manual']);
@@ -264,7 +268,7 @@ function normalizeConfig(raw) {
   delete settings.token;
   delete settings.publicBaseUrl;
   // manual EPG accepts only http(s), otherwise it is cleared
-  settings.epgUrl = String(settings.epgUrl || '').trim();
+  settings.epgUrl = normalizeSourceUrl(settings.epgUrl).trim();
   if (settings.epgUrl && !/^https?:\/\//i.test(settings.epgUrl)) settings.epgUrl = '';
   settings.personalLists = Array.isArray(settings.personalLists)
     ? settings.personalLists
@@ -307,7 +311,6 @@ function normalizeConfig(raw) {
       options: {
         enabled: pl.includeInMain !== false,
         inCatalog: false,
-        catalogName: pl.name,
         personalEntries: entries,
       },
     });

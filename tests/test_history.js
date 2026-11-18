@@ -98,7 +98,8 @@ const mkList = (id, name, opts={}) => ({
   const jsRes = await fetch(`${BASE}/configure.js`);
   const jsText = await jsRes.text();
   ok(jsRes.status === 200 && /javascript/.test(jsRes.headers.get('content-type') || ''), 'configure.js served');
-  ok(jsText.includes('data-refresh-custom-box') && jsText.includes('data-sdhandle'), 'custom interval and list drag handle rendered by the UI');
+  ok(jsText.includes('data-refresh-custom-box') && jsText.includes('data-refresh-preset') && jsText.includes('data-sdhandle'), 'custom interval dropdown and list drag handle rendered by the UI');
+  ok(jsText.includes('options.epgUrl') && !jsText.includes('catalogName'), 'per-list EPG replaces the catalog name field');
   ok(jsText.includes('Copiato manifest') && jsText.includes('Copiato m3u'), 'header links copy their URL');
   ok(jsText.includes('data-active-count') && jsText.includes('openActiveModal'), 'active playlist count opens a preview modal');
   ok(jsText.includes('data-copyurl'), 'list URL lines copy their link');

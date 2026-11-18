@@ -72,7 +72,6 @@
  "Caricamento canali…": "Cargando canales…",
  "Caricamento cestino…": "Cargando papelera…",
  "Carico…": "Cargando…",
- "Catalog name": "Nombre del catálogo",
  "Cestino": "Papelera",
  "Cestino svuotato: {n} voci eliminate definitivamente": "Papelera vaciada: {n} elementos eliminados definitivamente",
  "Changes: {parts}": "Cambios: {parts}",
@@ -302,7 +301,6 @@
  "No playlist (branch with channels) found in this list.": "No se encontró ninguna lista (rama con canales) en esta lista.",
  "No playlist in the filter results": "Ninguna lista en los resultados del filtro",
  "No playlist matches the filter.": "Ninguna lista coincide con el filtro.",
- "Nome catalogo": "Nombre del catálogo",
  "Nome del canale (come lo vedi in playlist e catalogo)": "Nombre del canal (como se ve en la lista y el catálogo)",
  "Nome del checkpoint (es. «prima del merge»):": "Nombre del punto de control (p. ej. «antes de la fusión»):",
  "Nome del ramo (diventa il genere nel catalogo)": "Nombre de la rama (será el género en el catálogo)",
@@ -486,7 +484,7 @@
  "hint.addList": "WiseM3U acepta tanto cadenas JSON de WisePlay (enlaces cortos, gists, php…) como un <b>enlace M3U/M3U8</b> normal: los <code>group-title</code> se convierten en ramas/géneros. También funciona con listas <b>Xtream Codes M3U_PLUS</b> (<code>get.php?username=…&amp;password=…&type=m3u_plus&amp;output=ts</code>) y con las de <code>type=m3u</code> (<code>#EXTGRP</code>): los nombres y grupos se leen de los atributos <code>tvg-*</code> aunque contengan comas, y el <b>EPG</b> declarado por la fuente (<code>x-tvg-url</code>/<code>url-tvg</code>) se traslada a la lista generada. El complemento sigue redirecciones, descarga JSON anidados e importa ramas <code>isHost</code> hacia archivos <code>.m3u</code>. La descarga se hace en segundo plano.<br>⚠️ <b>Copiar/pegar:</b> si la URL viene de una página web o un mensaje HTML, <code>&amp;</code> puede llegar como <code>&amp;amp;</code>: WiseM3U lo corrige solo.<br>⚠️ <b>Paneles lentos:</b> las listas Xtream con miles de entradas pueden tardar hasta 60 s; ante errores de red la descarga se reintenta una vez.<br>⚠️ Si una lista falla, el mensaje muestra el <b>inicio de la respuesta del servidor</b>: así distingues credenciales incorrectas de una URL inválida.",
  "hint.easyProxy": "Las listas <b>“(dns)”</b> a menudo no funcionan porque el <b>cliente</b> (TV/móvil) no resuelve esos dominios, independientemente del DNS del servidor. Con <a class=\"lnk\" href=\"https://github.com/realbestia1/EasyProxy\" target=\"_blank\">EasyProxy</a> los flujos pasan por el servidor (con su DNS/WARP/extractores): rellena la URL de tu instancia (p. ej. <code>http://192.168.1.10:7860</code>) y los streams de esta lista se reescribirán. Atención: todo el tráfico de vídeo pasa por el servidor.",
  "hint.easyProxyTest": "Escribe <b>IP o dominio</b>: funciona tal cual, sin configuraciones especiales. El complemento solo <b>reescribe los streams</b> hacia EasyProxy: será el <b>cliente</b> (TV/móvil) quien se conecte. La <b>Prueba</b> es solo orientativa: en muchas redes domésticas el contenedor Docker no alcanza su dominio público (falta NAT hairpin) o no confía en el certificado; en esos casos muestra un <b>aviso no bloqueante</b> y la reproducción funciona igualmente en el cliente.",
- "hint.epg": "Se declara en la cabecera de la lista generada (<code>url-tvg</code>/<code>x-tvg-url</code>). Se suma a los EPG heredados de las fuentes m3u_plus/Xtream. Vacío = solo los detectados.",
+ "hint.epg": "EPG predeterminado para las listas sin EPG propio. Se declara en la cabecera de la lista generada (<code>url-tvg</code>/<code>x-tvg-url</code>). Vacío = solo los detectados en las listas.",
  "hint.history": "Cada cambio de configuración se guarda automáticamente en el historial (en el volumen de datos, últimos 60 estados o 30 días). Elige un estado y restaura <b>solo las categorías que quieras</b>: orden, nombres, exclusiones, fusiones, papelera o ajustes. Una restauración crea un nuevo estado, así que siempre se puede deshacer. Las listas añadidas después de la instantánea no se eliminan. Con <b>★ Punto de control</b> guardas un estado con nombre (p. ej. antes de una fusión): no caducan. Si la configuración cambia en otro sitio mientras editas, se bloquea el guardado y se te pregunta si recargar la versión del servidor.",
  "hint.import": "Desde <b>otra</b> lista importas canales o <b>— toda la lista —</b> como listas adicionales de esta. Desde la <b>misma</b> lista mueves canales a otra lista o a una <b>lista personalizada</b> (créala con <b>+ Nueva lista</b>). El campo de canal es <b>editable</b>: las sugerencias vienen de la lista elegida.",
  "hint.logPrivacy": "Las líneas contienen las URL de tus listas y canales, que pueden incluir usuarios y contraseñas de servicios IPTV. Antes de compartir una captura o el archivo descargado, oculta las credenciales.",
@@ -670,5 +668,8 @@
  "last attempt failed": "último intento fallido",
  "Personal list": "Lista personal",
  "Effective: every {n}": "Efectivo: cada {n}",
- "Next update: {when}": "Próxima actualización: {when}"
+ "Next update: {when}": "Próxima actualización: {when}",
+ "Choose an interval": "Elegir un intervalo",
+ "EPG della lista": "EPG de la lista",
+ "hint.listEpg": "Vacío = EPG de los ajustes generales; si también está vacío, se usa el detectado en la lista."
 }

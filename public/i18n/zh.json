@@ -72,7 +72,6 @@
  "Caricamento canali…": "正在加载频道…",
  "Caricamento cestino…": "正在加载回收站…",
  "Carico…": "加载中…",
- "Catalog name": "目录名称",
  "Cestino": "回收站",
  "Cestino svuotato: {n} voci eliminate definitivamente": "回收站已清空：永久删除了 {n} 个项目",
  "Changes: {parts}": "更改：{parts}",
@@ -302,7 +301,6 @@
  "No playlist (branch with channels) found in this list.": "此列表中未找到播放列表（含频道的分支）。",
  "No playlist in the filter results": "筛选结果中没有播放列表",
  "No playlist matches the filter.": "没有播放列表符合筛选条件。",
- "Nome catalogo": "目录名称",
  "Nome del canale (come lo vedi in playlist e catalogo)": "频道名称（显示在播放列表和目录中）",
  "Nome del checkpoint (es. «prima del merge»):": "检查点名称（例如“合并前”）：",
  "Nome del ramo (diventa il genere nel catalogo)": "分支名称（将成为目录中的类型）",
@@ -486,7 +484,7 @@
  "hint.addList": "WiseM3U 支持 WisePlay JSON 链（短链接、gist、php…）以及普通 <b>M3U/M3U8 链接</b>：<code>group-title</code> 会成为分支/类型。也支持 <b>Xtream Codes M3U_PLUS</b>（<code>get.php?username=…&amp;password=…&type=m3u_plus&amp;output=ts</code>）和 <code>type=m3u</code>（<code>#EXTGRP</code>）：即使名称含逗号也会从 <code>tvg-*</code> 属性读取，源声明的 <b>EPG</b>（<code>x-tvg-url</code>/<code>url-tvg</code>）会带入生成的播放列表。插件会跟随重定向、下载嵌套 JSON，并导入指向 <code>.m3u</code> 的 <code>isHost</code> 分支。下载在后台进行。<br>⚠️ <b>复制/粘贴：</b> 如果 URL 来自网页或 HTML 消息，<code>&amp;</code> 可能变成 <code>&amp;amp;</code>：WiseM3U 会自动修正。<br>⚠️ <b>慢面板：</b> 包含数千条目的 Xtream 列表可能需要 60 秒；网络错误时会重试一次。<br>⚠️ 列表失败时会显示 <b>服务器响应的开头</b>：可立即区分凭据错误与无效 URL。",
  "hint.easyProxy": "<b>“(dns)”</b> 列表常常无法使用，因为<b>客户端</b>（电视/手机）无法解析这些域名，与服务器 DNS 无关。使用 <a class=\"lnk\" href=\"https://github.com/realbestia1/EasyProxy\" target=\"_blank\">EasyProxy</a> 后，流会经过服务器（使用其 DNS/WARP/提取器）：填写你的实例 URL（例如 <code>http://192.168.1.10:7860</code>），此列表的流将被重写。注意：所有视频流量都会经过服务器。",
  "hint.easyProxyTest": "输入 <b>IP 或域名</b>：可直接使用，无需特殊配置。插件只负责<b>将流重写到 EasyProxy</b>：由<b>客户端</b>（电视/手机）连接。<b>测试</b>仅供参考：在许多家庭网络中，Docker 容器无法访问自己的公共域名（缺少 NAT 回环）或不信任证书；此时会显示<b>非阻塞警告</b>，客户端播放仍然正常。",
- "hint.epg": "在生成的播放列表头中声明（<code>url-tvg</code>/<code>x-tvg-url</code>）。会追加到从 m3u_plus/Xtream 源继承的 EPG。留空 = 仅使用检测到的。",
+ "hint.epg": "用于没有独立 EPG 的列表的默认 EPG。在生成的播放列表头中声明（<code>url-tvg</code>/<code>x-tvg-url</code>）。留空 = 仅使用各列表中检测到的 EPG。",
  "hint.history": "每次配置更改都会自动保存到历史记录（数据卷上，最近 60 个状态或 30 天）。选择状态并<b>只恢复需要的类别</b>：顺序、名称、排除、合并、回收站或设置。恢复会创建新状态，因此始终可以撤销。快照之后添加的列表不会被删除。使用 <b>★ 检查点</b> 可保存命名状态（例如合并前）：不会过期。如果编辑期间配置在别处更改，保存会被阻止，并询问是否重新加载服务器版本。",
  "hint.import": "从<b>其他</b>列表导入频道或<b>— 整个播放列表 —</b>作为此列表的附加播放列表。从<b>同一</b>列表可将频道移到其他播放列表或<b>自定义播放列表</b>（用 <b>+ 新建播放列表</b> 创建）。频道字段<b>可输入</b>：建议来自所选播放列表。",
  "hint.logPrivacy": "日志行包含列表和频道 URL，可能包括 IPTV 服务的用户名和密码。分享截图或下载文件前，请遮盖凭据。",
@@ -670,5 +668,8 @@
  "last attempt failed": "上次尝试失败",
  "Personal list": "个人列表",
  "Effective: every {n}": "实际：每 {n}",
- "Next update: {when}": "下次更新：{when}"
+ "Next update: {when}": "下次更新：{when}",
+ "Choose an interval": "选择间隔",
+ "EPG della lista": "列表 EPG",
+ "hint.listEpg": "留空 = 使用通用设置中的 EPG；若该项也为空，则使用列表中检测到的 EPG。"
 }

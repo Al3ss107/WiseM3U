@@ -380,6 +380,23 @@ function humanMinutes(min){
   }
 }
 
+const REFRESH_PRESETS = [5, 15, 30, 60, 180, 360, 720, 1440];
+
+/** Preset values shown in the per-list dropdown: the current custom value is
+ *  appended when it is not one of the presets, so the number field can hold
+ *  any interval (minimum 5 minutes). */
+function refreshPresetValues(minutes){
+  const n = Math.max(5, Math.round(Number(minutes) || 60));
+  return [...new Set([...REFRESH_PRESETS, n])].sort((a, b) => a - b);
+}
+
+function refreshPresetOptions(minutes){
+  const n = Math.max(5, Math.round(Number(minutes) || 60));
+  return refreshPresetValues(n)
+    .map((v) => `<option value="${v}" ${v === n ? 'selected' : ''}>${esc(humanMinutes(v))}</option>`)
+    .join('');
+}
+
 function relativeMinutes(minutes, future = false){
   const n = Math.max(0, Number(minutes) || 0);
   const sign = future ? 1 : -1;
@@ -447,9 +464,16 @@ function updateRefreshHints(){
     hint.textContent = `${refreshLabel(l)} · ${tr('minimum 5 minutes')}`;
     const box = card.querySelector('[data-refresh-custom-box]');
     const custom = card.querySelector('[data-refresh-custom]');
+    const preset = card.querySelector('[data-refresh-preset]');
     const wantCustom = l.options && l.options.refreshMode === 'custom';
     if (box) box.hidden = !wantCustom;
     if (custom) custom.disabled = !wantCustom;
+    if (preset) {
+      preset.disabled = !wantCustom;
+      const minutes = Math.max(5, Math.round(Number(l.options.refreshMinutes) || 60));
+      preset.innerHTML = refreshPresetOptions(minutes);
+      preset.value = String(minutes);
+    }
   }
 }
 
@@ -654,15 +678,27 @@ function renderListCard(l){
             <div class="hint" data-info data-refresh-hint>${refreshLabel(l)} · ${tr('minimum 5 minutes')}</div>
           </div>
           <div class="refreshCustom" data-refresh-custom-box ${o.refreshMode==='custom'?'':'hidden'}>
-            <label>${tr('Custom interval (minutes)')}</label>
-            <input type="number" min="5" max="525600" data-f="options.refreshMinutes" data-refresh-custom
-              value="${esc(o.refreshMinutes)}" ${o.refreshMode==='custom'?'':'disabled'}>
-            <div class="hint">${tr('minimum 5 minutes')}</div>
+            <div class="grid2">
+              <div>
+                <label>${tr('Choose an interval')}</label>
+                <select data-refresh-preset ${o.refreshMode==='custom'?'':'disabled'}>
+                  ${refreshPresetOptions(o.refreshMinutes)}
+                </select>
+              </div>
+              <div>
+                <label>${tr('Custom interval (minutes)')}</label>
+                <input type="number" min="5" max="525600" data-f="options.refreshMinutes" data-refresh-custom
+                  value="${esc(o.refreshMinutes)}" ${o.refreshMode==='custom'?'':'disabled'}>
+                <div class="hint">${tr('minimum 5 minutes')}</div>
+              </div>
+            </div>
           </div>`}
           ${uaField}
           <div>
-            <label>Nome catalogo</label>
-            <input type="text" data-f="options.catalogName" value="${esc(o.catalogName||'')}">
+            <label>EPG della lista</label>
+            <input type="url" data-f="options.epgUrl" value="${esc(o.epgUrl||'')}" placeholder="https://example.com/guide.xml">
+            <div class="hint" data-info data-i18n-html="hint.listEpg">Vuoto = EPG delle impostazioni generali;
+              se anche quello è vuoto, usa quello rilevato nella lista.</div>
           </div>
         </div>
 
@@ -1059,13 +1095,23 @@ function bindListEvents(){
         el.classList.toggle('renamed', branchDisplayName(list, {path:row.dataset.path, name:row.dataset.name}) !== row.dataset.name);
         return;
       }
+      if (el.dataset && el.dataset.refreshPreset !== undefined){
+        const custom = card.querySelector('[data-refresh-custom]');
+        const n = Math.max(5, Math.min(525600, Math.round(Number(el.value) || 5)));
+        if (custom) custom.value = String(n);
+        setPath(list, 'options.refreshMinutes', n);
+        updateRefreshHints();
+        return;
+      }
       if (el.dataset && el.dataset.f){
         if (el.dataset.f === 'options.refreshMode'){
           const box = card.querySelector('[data-refresh-custom-box]');
           const custom = card.querySelector('[data-refresh-custom]');
+          const preset = card.querySelector('[data-refresh-preset]');
           const wantCustom = el.value === 'custom';
           if (box) box.hidden = !wantCustom;
           if (custom) custom.disabled = !wantCustom;
+          if (preset) preset.disabled = !wantCustom;
           const info = card.querySelector('[data-refresh-hint]');
           if (info) info.textContent = `${refreshLabel({ ...list, options: { ...list.options, refreshMode: el.value } })} · ${tr('minimum 5 minutes')}`;
           if (wantCustom && custom) requestAnimationFrame(()=>custom.focus());

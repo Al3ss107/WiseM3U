@@ -1,6 +1,7 @@
 'use strict';
 
 const playlist = require('../playlist');
+const epg = require('../epg');
 const { flattenStations } = require('../wiseplay');
 const { makeBranchSelector } = require('../selection');
 const { normalizeStreamUrl } = require('../protocols');
@@ -49,11 +50,12 @@ async function buildListM3U(cfg, list, onlyPath = '') {
       group: channel.group || prefix,
     }));
 
-  // Preview/dedicated lists also declare the EPG (manual + inherited from m3u).
+  // Preview/dedicated lists declare the list's effective EPG (own, global,
+  // then the one detected in the source).
   const listEpg = (entry.tree && entry.tree.meta && entry.tree.meta.epgUrls) || [];
   return buildM3U(channels, {
     name: `${prefix} (${channels.length} channels)`,
-    header: playlist.epgHeader(cfg, listEpg),
+    header: playlist.epgHeader(epg.effectiveUrls(cfg, list, listEpg)),
   });
 }
 

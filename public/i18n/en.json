@@ -135,7 +135,6 @@
  "Nessuna playlist nei risultati del filtro": "No playlist in the filter results",
  "Nessuna playlist spuntata da eliminare": "No checked playlist to delete",
  "Nessuno": "None",
- "Nome catalogo": "Catalog name",
  "Nome del canale (come lo vedi in playlist e catalogo)": "Channel name (as shown in playlist and catalog)",
  "Nome del checkpoint (es. «prima del merge»):": "Checkpoint name (e.g. “before the merge”):",
  "Nome del ramo (diventa il genere nel catalogo)": "Branch name (becomes the genre in the catalog)",
@@ -287,5 +286,9 @@
  "🗑 Svuota cestino": "🗑 Empty trash",
  "🧪 Protocolli, AceStream ed esclusioni": "🧪 Protocols, AceStream and exclusions",
  "hint.userAgent": "Used to <b>download this list</b> and its branches, the Xtream panel and channel logos. Useful when a panel or CDN returns <code>403</code> because it recognizes WiseM3U: paste the UA of a browser, VLC or the app you normally use. One line only; empty = default behavior.",
- "Custom User-Agent (opzionale)": "Custom User-Agent (optional)"
+ "Custom User-Agent (opzionale)": "Custom User-Agent (optional)",
+ "Choose an interval": "Choose an interval",
+ "EPG della lista": "List EPG",
+ "hint.listEpg": "Empty = EPG from the general settings; if that is empty too, the one detected in the list is used.",
+ "hint.epg": "Default EPG for lists without their own EPG. Declared in the generated playlist header (<code>url-tvg</code>/<code>x-tvg-url</code>). Empty = only the EPGs detected in the lists."
 }

@@ -70,6 +70,16 @@ const ok = (c, m) => { if (c) { pass++; console.log('PASS ' + m); } else { fail+
   ok(effectiveRefreshMinutes(explicit.lists[2], explicit.settings) === 0, 'manual disables automatic refresh');
   ok(normalizeList({ id: 'x', url: 'http://example.com/x.m3u', options: { refreshMode: 'custom', refreshMinutes: 1 } }).options.refreshMinutes === 5, 'custom interval has a 5-minute minimum');
 
+  // Per-list options: catalog name was removed, EPG accepts http(s) only.
+  const oldCatalog = normalizeList({ id: 'c', url: 'http://example.com/c.m3u', options: { catalogName: 'Old name' } });
+  ok(!('catalogName' in oldCatalog.options), 'legacy catalog name is dropped');
+  const epgList = normalizeList({
+    id: 'e', url: 'http://example.com/e.m3u',
+    options: { epgUrl: 'https://github.com/o/r/blob/main/guide.xml' },
+  });
+  ok(epgList.options.epgUrl === 'https://raw.githubusercontent.com/o/r/main/guide.xml', 'list EPG URL is normalized (GitHub blob -> raw)');
+  ok(normalizeList({ id: 'f', url: 'http://example.com/f.m3u', options: { epgUrl: 'ftp://example.com/guide.xml' } }).options.epgUrl === '', 'non-http list EPG is discarded');
+
   // ---- stale-while-revalidate ----
   let body = '#EXTM3U\n#EXTINF:-1 tvg-id="one" group-title="News",One\nhttp://example.com/one.m3u8\n';
   let hits = 0;
