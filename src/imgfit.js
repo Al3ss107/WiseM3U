@@ -1,36 +1,40 @@
 'use strict';
 
 /**
- * Riformatta i loghi dei canali in poster proporzionati (contain su tela
- * scura), cosi' i client che ritagliano "cover" non li mostrano zoomati.
+ * Reformats channel logos into proportional posters (contain on a dark
+ * canvas), so clients that crop "cover" do not cut them.
  *
- * Solo JS puro (pngjs + jpeg-js), niente native: adatto ad ARM lenti.
- * - on-demand: elabora solo i loghi effettivamente richiesti dai client;
- * - cache su disco (data/imgcache) con Cache-Control lungo;
- * - single-flight + concurrency limitata;
- * - qualsiasi problema (formato non PNG/JPEG, timeout, decode) -> 302
- *   all'URL originale: nessuna regressione rispetto a prima.
+ * Decoding and composition with sharp/libvips (prebuilt binaries, including
+ * musl/ARM): handles PNG, JPEG, WebP, SVG, GIF, TIFF, and — with minimal
+ * parsing — modern .ICO FAVICONS (embedded PNG): Pluto TV / Rakuten CDNs
+ * serve exactly those formats, and with "PNG/JPEG only" decoders the
+ * channels were passed through raw and cropped by the client (cut posters).
+ *
+ * - on-demand: processes only the logos actually requested by clients;
+ * - disk cache (data/imgcache) with a long Cache-Control;
+ * - single-flight + limited concurrency;
+ * - any problem (unknown format, network, timeout) -> 302 to the original
+ *   URL: no regression compared to before.
  */
 
 const crypto = require('crypto');
 const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
-const { PNG } = require('pngjs');
-const jpeg = require('jpeg-js');
-const { USER_AGENT } = require('./constants');
+const sharp = require('sharp');
+const { getImgUserAgent } = require('./constants');
 
 const CACHE_DIR = process.env.IMGFIT_DIR || path.join(__dirname, '..', 'data', 'imgcache');
-const MAX_BYTES = 4 * 1024 * 1024;
+const MAX_BYTES = 8 * 1024 * 1024; // brand webp/svg files can be large
 const MAX_PIXELS = 4096 * 4096;
 const FETCH_TIMEOUT_MS = 6000;
 const CONCURRENCY = 4;
-const MAX_QUEUE = 12;
-const BG = [16, 20, 24]; // #101418, tono scuro da app TV
+const MAX_QUEUE = 24;
+const BG = { r: 16, g: 20, b: 24, alpha: 1 }; // #101418, dark tone matching the TV app
 
 const SHAPES = {
-  square: [512, 512],     // poster canali (posterShape square)
-  landscape: [640, 360],  // poster gruppi/landing (posterShape landscape)
+  square: [512, 512],     // fallback preset (posterShape square)
+  landscape: [640, 360],  // channel and group posters (posterShape landscape)
 };
 
 let active = 0;
@@ -45,82 +49,71 @@ function cachePath(key) {
   return path.join(CACHE_DIR, `${key}.jpg`);
 }
 
-async function fetchBuf(url) {
+async function fetchBuf(url, userAgent = '') {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
   try {
     const res = await fetch(url, {
       redirect: 'follow',
       signal: ctrl.signal,
-      headers: { 'User-Agent': USER_AGENT },
+      headers: {
+        // no WiseM3U suffix (see getImgUserAgent) + browser Accept header:
+        // several logo CDNs otherwise answer with 403/i-frame challenges
+        'User-Agent': getImgUserAgent(userAgent),
+        Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        'Accept-Language': 'it-IT,it;q=0.9,en;q=0.8',
+      },
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const buf = Buffer.from(await res.arrayBuffer());
-    if (buf.length > MAX_BYTES) throw new Error('immagine troppo grande');
+    if (!buf.length) throw new Error('empty image');
+    if (buf.length > MAX_BYTES) throw new Error('image too large');
     return buf;
   } finally {
     clearTimeout(t);
   }
 }
 
-/** Decodifica PNG o JPEG; altro formato -> null (il chiamante fa redirect). */
-function decode(buf) {
-  try {
-    if (buf.length > 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) {
-      const png = PNG.sync.read(buf);
-      if (png.width * png.height > MAX_PIXELS) return null;
-      return { width: png.width, height: png.height, rgba: png.data, hasAlpha: true };
+/**
+ * ICO: modern favicons (e.g. Rakuten's) embed a PNG directly: we extract it
+ * and pass it to sharp. Classic BMP-in-ICO -> null (the caller redirects,
+ * it is a niche format).
+ */
+function icoToPng(buf) {
+  // ICO header: reserved(2)=0, type(2)=1, count(2); entry: w,h,pal,res,planes,bitcount,size,offset
+  if (buf.length < 6 || buf[0] !== 0 || buf[1] !== 0 || buf[2] !== 1 || buf[3] !== 0) return null;
+  const count = buf.readUInt16LE(4);
+  let best = null;
+  for (let i = 0; i < count; i++) {
+    const off = 6 + i * 16;
+    if (off + 16 > buf.length) break;
+    const size = buf.readUInt32LE(off + 8);
+    const dataOff = buf.readUInt32LE(off + 12);
+    if (dataOff + size > buf.length) continue;
+    // is there a PNG inside?
+    if (buf[dataOff] === 0x89 && buf[dataOff + 1] === 0x50 && buf[dataOff + 2] === 0x4e && buf[dataOff + 3] === 0x47) {
+      const w = buf[off] || 256;
+      if (!best || w > best.w) best = { w: dataOff, data: buf.subarray(dataOff, dataOff + size) };
     }
-    if (buf.length > 3 && buf[0] === 0xff && buf[1] === 0xd8) {
-      const img = jpeg.decode(buf, { maxMemoryUsageInMB: 256, useTArray: true });
-      if (img.width * img.height > MAX_PIXELS) return null;
-      return { width: img.width, height: img.height, rgba: img.data, hasAlpha: false };
-    }
-  } catch (_) {
-    return null;
   }
-  return null;
+  return best ? best.data : null;
 }
 
-/** Disegna l'immagine in contain con padding, su fondo scuro opaco. */
-function fitOnCanvas(img, W, H) {
-  const out = Buffer.alloc(W * H * 4);
-  for (let i = 0; i < W * H; i++) {
-    out[i * 4] = BG[0]; out[i * 4 + 1] = BG[1]; out[i * 4 + 2] = BG[2]; out[i * 4 + 3] = 255;
-  }
-  const pad = 0.10;
-  const s = Math.min((W * (1 - 2 * pad)) / img.width, (H * (1 - 2 * pad)) / img.height);
-  const dw = Math.max(1, Math.round(img.width * s));
-  const dh = Math.max(1, Math.round(img.height * s));
-  const ox = Math.round((W - dw) / 2);
-  const oy = Math.round((H - dh) / 2);
-  // nearest-neighbor: veloce su ARM; la tela 512px viene poi ridotta
-  // dolcemente dal client nella griglia
-  for (let y = 0; y < dh; y++) {
-    const sy = Math.min(img.height - 1, Math.floor(y / s));
-    const rowS = sy * img.width;
-    const rowD = (oy + y) * W + ox;
-    for (let x = 0; x < dw; x++) {
-      const sx = Math.min(img.width - 1, Math.floor(x / s));
-      const si = (rowS + sx) * 4;
-      const di = (rowD + x) * 4;
-      const a = img.hasAlpha ? img.rgba[si + 3] / 255 : 1;
-      out[di] = Math.round(img.rgba[si] * a + BG[0] * (1 - a));
-      out[di + 1] = Math.round(img.rgba[si + 1] * a + BG[1] * (1 - a));
-      out[di + 2] = Math.round(img.rgba[si + 2] * a + BG[2] * (1 - a));
-      out[di + 3] = 255;
-    }
-  }
-  return out;
-}
-
-async function produce(url, shape) {
-  const [W, H] = SHAPES[shape] || SHAPES.square;
-  const buf = await fetchBuf(url);
-  const img = decode(buf);
-  if (!img) return null;
-  const rgba = fitOnCanvas(img, W, H);
-  return jpeg.encode({ data: rgba, width: W, height: H }, 82).data;
+async function produce(url, shape, userAgent = '') {
+  const [W, H] = SHAPES[shape] || SHAPES.landscape;
+  let buf = await fetchBuf(url, userAgent);
+  const png = icoToPng(buf);
+  if (png) buf = png;
+  // padding ~10%: logo contained in a (W-2p)x(H-2p) canvas, then extended to
+  // the final size — the client shows the canvas already at its proportions
+  const padX = Math.round(W * 0.10);
+  const padY = Math.round(H * 0.10);
+  return sharp(buf, { limitInputPixels: MAX_PIXELS, density: 150, animated: false })
+    .flatten({ background: BG }) // transparency -> dark background (JPEG has no alpha)
+    .resize(W - 2 * padX, H - 2 * padY, { fit: 'contain', background: BG })
+    .extend({ top: padY, bottom: padY, left: padX, right: padX, background: BG })
+    .jpeg({ quality: 82 })
+    .toBuffer();
 }
 
 function runQueued(fn) {
@@ -138,46 +131,78 @@ function runQueued(fn) {
   });
 }
 
-/** Handler express: GET /imgfit?shape=square&url=https://… */
+/** Fallback: passes the RAW image to the client. Short cache so the client
+ *  does not hammer the same URLs, but the poster can fix itself later. */
+function fallbackRedirect(res, url) {
+  res.setHeader('Cache-Control', 'public, max-age=300');
+  return res.redirect(302, url);
+}
+
+// one warning per failed poster (diagnostics from docker logs; host-only = no URL)
+const WARNED = new Set();
+function warnFailed(key, url, err) {
+  if (WARNED.has(key)) return;
+  WARNED.add(key);
+  if (WARNED.size > 200) WARNED.clear();
+  let host = 'sconosciuto';
+  try { host = new URL(url).hostname; } catch (_) { /* url grezza */ }
+  console.warn(`[imgfit] logo not processed from ${host}: ${(err && err.message) || 'unknown format'} — falling back to the original`);
+}
+
+/** Handler express: GET /imgfit?shape=landscape&url=https://… */
 async function handle(req, res) {
   const url = String(req.query.url || '');
-  const shape = String(req.query.shape || 'square');
+  const shape = String(req.query.shape || 'landscape');
+  const listId = String(req.query.list || '');
   if (!/^https?:\/\//i.test(url)) return res.status(400).end();
 
-  const key = crypto.createHash('sha1').update(`${shape}|${url}`).digest('hex');
+  // The logo belongs to a list: use that list's custom UA (empty = default).
+  let userAgent = '';
+  if (listId) {
+    try {
+      const cfg = require('./config').loadConfig();
+      const list = (cfg.lists || []).find((l) => l.id === listId);
+      if (list) userAgent = list.options.userAgent || '';
+    } catch (_) { /* config unreadable: default UA */ }
+  }
+
+  const key = crypto.createHash('sha1').update(`${shape}|${url}|${userAgent}`).digest('hex');
   const file = cachePath(key);
 
   try {
-    const cached = await fsp.readFile(file); // async: non blocca l'event loop
+    const cached = await fsp.readFile(file); // async: does not block the event loop
     res.setHeader('Cache-Control', 'public, max-age=604800');
     res.setHeader('Content-Type', 'image/jpeg');
     return res.send(cached);
-  } catch (_) { /* non in cache: si elabora */ }
+  } catch (_) { /* not cached: process it */ }
 
-  if (queue.length >= MAX_QUEUE) return res.redirect(302, url);
+  if (queue.length >= MAX_QUEUE) return fallbackRedirect(res, url);
 
   try {
     let p = inflight.get(key);
     if (!p) {
-      p = runQueued(() => produce(url, shape).catch(() => null));
+      p = runQueued(() => produce(url, shape, userAgent).catch((err) => {
+        warnFailed(key, url, err);
+        return null;
+      }));
       inflight.set(key, p);
       p.finally(() => inflight.delete(key));
     }
     const out = await p;
-    if (!out) return res.redirect(302, url);
+    if (!out) return fallbackRedirect(res, url);
     ensureDir();
-    fsp.writeFile(file, out).catch(() => { /* disco pieno: risponde comunque */ });
+    fsp.writeFile(file, out).catch(() => { /* disk full: still respond */ });
     res.setHeader('Cache-Control', 'public, max-age=604800');
     res.setHeader('Content-Type', 'image/jpeg');
     return res.send(Buffer.from(out));
   } catch (_) {
-    return res.redirect(302, url);
+    return fallbackRedirect(res, url);
   }
 }
 
-/** Svuota la cache su disco (chiamato da /api/cache/clear). */
+/** Clears the disk cache (called by /api/cache/clear). */
 function purge() {
   try { fs.rmSync(CACHE_DIR, { recursive: true, force: true }); } catch (_) { /* ignora */ }
 }
 
-module.exports = { handle, purge, CACHE_DIR };
+module.exports = { handle, purge, CACHE_DIR, produce, icoToPng };

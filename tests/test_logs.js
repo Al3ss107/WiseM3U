@@ -1,0 +1,212 @@
+#!/usr/bin/env node
+'use strict';
+/**
+ * Live log + targeted retry test
+ * A) https on an HTTP-only server -> downgrade to http (ERR_SSL_WRONG_VERSION_NUMBER)
+ * B) empty 0-byte response -> "empty content" message
+ * C) HTML page -> direct link suggestion
+ * D) HTTP 403 -> access denied explanation
+ * E) /api/logs + download/stream lines with channel, list, url, ua
+ */
+const http = require('http');
+const path = require('path');
+const fs = require('fs');
+const os = require('os');
+const { spawn } = require('child_process');
+
+const REPO = path.resolve(__dirname, '..');
+const { buildTree } = require(path.join(REPO, 'src', 'wiseplay'));
+const MOCK_PORT = 9846;
+const APP_PORT = 7337;
+const TOKEN = 't0k3n';
+const BASE = `http://127.0.0.1:${APP_PORT}`;
+
+const CHAN_URL = `http://127.0.0.1:${MOCK_PORT}/live/NewTestHD/ch1.ts`;
+const CHAN_NAME = 'New Test HD';
+const LIST_NAME = 'Mock Logs List';
+const M3U = ['#EXTM3U', `#EXTINF:-1 tvg-id="newtest",${CHAN_NAME}`, CHAN_URL, ''].join('\n');
+
+function mockServer() {
+  return http.createServer((req, res) => {
+    if (req.url === '/list.m3u') { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end(M3U); }
+    else if (req.url === '/empty.m3u') { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end(''); }
+    else if (req.url === '/websignin.jsp') { res.writeHead(200, { 'Content-Type': 'text/html' }); res.end('<!DOCTYPE html><html><head><title>Google</title></head><body>sorry</body></html>'); }
+    else if (req.url === '/negato.m3u') { res.writeHead(403); res.end('Forbidden'); }
+    else { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end(''); }
+  });
+}
+
+async function run(name, fn) {
+  try { await fn(); console.log(`PASS  ${name}`); return true; }
+  catch (err) { console.log(`FAIL  ${name} — ${err.message}`); return false; }
+}
+const assert = (c, m) => { if (!c) throw new Error(m); };
+
+async function apiJ(pathname, opts = {}) {
+  const res = await fetch(`${BASE}${pathname}${pathname.includes('?') ? '&' : '?'}token=${TOKEN}`, {
+    headers: { 'Content-Type': 'application/json' },
+    ...opts,
+  });
+  const ct = res.headers.get('content-type') || '';
+  const body = ct.includes('json') ? await res.json() : await res.text();
+  return { status: res.status, body };
+}
+
+async function waitFor(pred, ms, step = 400) {
+  const t0 = Date.now();
+  for (;;) {
+    const v = await pred();
+    if (v) return v;
+    if (Date.now() - t0 > ms) throw new Error('timeout wait');
+    await new Promise((r) => setTimeout(r, step));
+  }
+}
+
+(async () => {
+  const mock = mockServer();
+  await new Promise((r) => mock.listen(MOCK_PORT, '127.0.0.1', r));
+
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wisem3u-logs-'));
+  const app = spawn('node', [path.join(REPO, 'src', 'server.js')], {
+    env: {
+      ...process.env,
+      PORT: String(APP_PORT),
+      HOST: '127.0.0.1',
+      CONFIG_FILE: path.join(dataDir, 'config.json'),
+      CACHE_DIR: path.join(dataDir, 'cache'),
+      ADMIN_TOKEN: TOKEN,
+      LOG_LEVEL: 'error',
+    },
+    stdio: ['ignore', 'ignore', 'pipe'],
+  });
+  app.stderr.on('data', () => {});
+  await waitFor(async () => {
+    try { return (await fetch(`${BASE}/healthz`)).ok; } catch { return false; }
+  }, 15000, 300);
+
+  let ok = true;
+
+  ok = await run('A: https→http (ERR_SSL_WRONG_VERSION_NUMBER)', async () => {
+    const r = await buildTree(`https://127.0.0.1:${MOCK_PORT}/list.m3u`, { maxDepth: 5 });
+    assert(r.stats && r.stats.stations >= 1, `stats: ${JSON.stringify(r.stats)}`);
+    assert(JSON.stringify(r.children).includes('Test'), `channel missing`);
+  }) && ok;
+
+  ok = await run('B: empty 0-byte response → explicit message', async () => {
+    let err = null;
+    try { await buildTree(`http://127.0.0.1:${MOCK_PORT}/empty.m3u`, { maxDepth: 5 }); }
+    catch (e) { err = e; }
+    assert(err && /vuot|0 byte/i.test(err.message), `message: ${err && err.message}`);
+  }) && ok;
+
+  ok = await run('C: HTML page → direct link suggestion', async () => {
+    let err = null;
+    try { await buildTree(`http://127.0.0.1:${MOCK_PORT}/websignin.jsp`, { maxDepth: 5 }); }
+    catch (e) { err = e; }
+    assert(err && /HTML WEB PAGE|DIRECT LINK/i.test(err.message), `message: ${err && err.message}`);
+  }) && ok;
+
+  ok = await run('D: HTTP 403 → access denied explanation', async () => {
+    let err = null;
+    try { await buildTree(`http://127.0.0.1:${MOCK_PORT}/negato.m3u`, { maxDepth: 5 }); }
+    catch (e) { err = e; }
+    assert(err && /403/.test(err.message) && /access denied/i.test(err.message), `message: ${err && err.message}`);
+  }) && ok;
+
+  ok = await run('E: live log (endpoint, download, stream ▶)', async () => {
+    const boot = await apiJ('/api/logs');
+    assert(boot.status === 200 && Array.isArray(boot.body.entries), `api/logs -> ${boot.status}`);
+    const unauth = await fetch(`${BASE}/api/logs`);
+    assert(unauth.status === 401, `without token -> ${unauth.status}`);
+
+    const add = await apiJ('/api/lists', {
+      method: 'POST',
+      body: JSON.stringify({ url: `http://127.0.0.1:${MOCK_PORT}/list.m3u`, name: LIST_NAME }),
+    });
+    assert(add.status === 200, `POST /api/lists -> ${add.status}`);
+    const listId = add.body.id || (add.body.list && add.body.list.id);
+    await waitFor(async () => {
+      const st = await apiJ(`/api/lists/${listId}/state`);
+      return st.body && (st.body.status === 'ready' || (st.body.state && st.body.state.status === 'ready'));
+    }, 20000);
+
+    const dl = await apiJ('/api/logs?scope=download&limit=200');
+    const dlMsgs = dl.body.entries.map((e) => e.msg).join('\n');
+    assert(dlMsgs.includes(LIST_NAME) && /✔|ready/i.test(dlMsgs), `download log:\n${dlMsgs}`);
+
+    const treeR = await apiJ(`/api/lists/${listId}/tree`);
+    const brPath = (treeR.body.branches || [])[0];
+    assert(brPath, `branches: ${JSON.stringify(treeR.body).slice(0, 200)}`);
+    const chans = await apiJ(`/api/lists/${listId}/channels?path=${encodeURIComponent(brPath.path)}`);
+    assert((chans.body.channels || []).length === 1, `channels: ${JSON.stringify(chans.body).slice(0, 200)}`);
+    // stream URLs (which contain panel credentials) are not
+    // exposed to the UI anymore: the "Source URL" line was removed
+    assert(chans.body.channels[0].url === undefined,
+      `url not exposed in channels API: ${JSON.stringify(chans.body.channels)}`);
+
+    const cat = await apiJ(`/catalog/tv/wise%3A${encodeURIComponent(listId)}.json?skip=0`);
+    const metas = (cat.body && cat.body.metas) || [];
+    const meta = metas.find((m) => (m.name || '').includes('Test'));
+    assert(meta, `catalog: ${JSON.stringify(metas).slice(0, 200)}`);
+    // TV channels must come out as landscape cards (horizontal logos):
+    // if 'square' comes back, clients start cropping logos again
+    assert(meta.posterShape === 'landscape',
+      `catalog posterShape: ${meta.posterShape}`);
+    const metaDet = await apiJ(`/meta/tv/${encodeURIComponent(meta.id)}.json`);
+    assert(metaDet.body && metaDet.body.meta && metaDet.body.meta.posterShape === 'landscape',
+      `posterShape meta: ${JSON.stringify(metaDet.body).slice(0, 200)}`);
+
+    const stream = await apiJ(`/stream/tv/${encodeURIComponent(meta.id)}.json`);
+    assert(stream.status === 200 && (stream.body.streams || []).some((s) => s.url === CHAN_URL),
+      `stream: ${JSON.stringify(stream.body).slice(0, 200)}`);
+
+    // BULK deletion ("Delete selected" button): {paths:[...]}
+    // — new count, idempotency, restore via /restore
+    const bulk1 = await apiJ(`/api/lists/${listId}/delete`, {
+      method: 'POST', body: JSON.stringify({ paths: [brPath.path] }),
+    });
+    assert(bulk1.status === 200 && bulk1.body.deleted === 1,
+      `bulk delete: ${JSON.stringify(bulk1.body)}`);
+    const bulk2 = await apiJ(`/api/lists/${listId}/delete`, {
+      method: 'POST', body: JSON.stringify({ paths: [brPath.path] }),
+    });
+    assert(bulk2.body.deleted === 0, `bulk delete idempotent: ${JSON.stringify(bulk2.body)}`);
+    const treeDel = await apiJ(`/api/lists/${listId}/tree`);
+    assert(!(treeDel.body.branches || []).some((b) => b.path === brPath.path),
+      'branch gone from tree after bulk');
+    const rest = await apiJ(`/api/lists/${listId}/restore`, {
+      method: 'POST', body: JSON.stringify({ path: brPath.path }),
+    });
+    assert(rest.status === 200, `restore: ${JSON.stringify(rest.body)}`);
+    const treeBack = await apiJ(`/api/lists/${listId}/tree`);
+    assert((treeBack.body.branches || []).some((b) => b.path === brPath.path),
+      'branch restored after /restore');
+
+    const st = await apiJ('/api/logs?scope=stream&limit=200');
+    const stMsgs = st.body.entries.map((e) => e.msg).join('\n');
+    assert(/▶/.test(stMsgs) && stMsgs.includes(CHAN_NAME) && stMsgs.includes(LIST_NAME) && stMsgs.includes(CHAN_URL),
+      `stream log incompleto:\n${stMsgs}`);
+    const entry = st.body.entries.find((e) => e.msg.includes('▶'));
+    assert(entry.data && entry.data.ua != null && entry.data.ms != null, `data: ${JSON.stringify(entry.data)}`);
+
+    const clr = await apiJ('/api/logs/clear', { method: 'POST', body: '{}' });
+    assert(clr.status === 200 && clr.body.ok, `clear: ${JSON.stringify(clr.body)}`);
+    const after = await apiJ('/api/logs');
+    assert(after.body.entries.length === 0, `buffer: ${after.body.entries.length}`);
+
+    // regression: the UI version in the page MUST be
+    // injected by the server = same version as the backend (otherwise the
+    // "old page" warning stays forever even after updating)
+    const page = await fetch(`${BASE}/configure`);
+    const html = await page.text();
+    const pkgV = JSON.parse(fs.readFileSync(path.join(REPO, 'package.json'), 'utf8')).version;
+    assert(html.includes(`name="wm-ui-version" content="${pkgV}"`),
+      `page marker differs from package.json (${pkgV})`);
+    assert(!html.includes('__WM_UI_VERSION__'), 'placeholder not replaced in page');
+  }) && ok;
+
+  app.kill('SIGTERM');
+  mock.close();
+  console.log(ok ? '\nALL TESTS PASSED ✔' : '\nSOME TESTS FAILED ✖');
+  process.exit(ok ? 0 : 1);
+})().catch((e) => { console.error(e); process.exit(1); });

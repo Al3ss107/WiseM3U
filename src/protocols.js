@@ -1,16 +1,16 @@
 'use strict';
 
 /**
- * Gestione protocolli degli stream trovati nelle liste WisePlay.
+ * Protocol handling for streams found in WisePlay lists.
  *
- * Nei file reali analizzati compaiono:
+ * In the real files analyzed we see:
  *   acestream://<hash>                                   -> AceStream P2P
- *   http://127.0.0.1:6878/ace/getstream?id=<hash>        -> AceStream Engine locale
- *   http/https (m3u8, ts, php proxy, pluto, ...)         -> HTTP diretto
+ *   http://127.0.0.1:6878/ace/getstream?id=<hash>        -> local AceStream Engine
+ *   http/https (m3u8, ts, php proxy, pluto, ...)         -> direct HTTP
  *   rtmp / rtsp / mms / udp / rtp                        -> legacy
  */
 
-const DEFAULT_ENABLED = { http: true, ace: true, rtmp: false, rtsp: false, other: false };
+const DEFAULT_ENABLED = { http: true, ace: false, rtmp: false, rtsp: false, other: false };
 
 function schemeOf(url) {
   if (typeof url !== 'string') return '';
@@ -18,7 +18,7 @@ function schemeOf(url) {
   return m ? m[1].toLowerCase() : '';
 }
 
-/** Famiglia di protocollo usata per i filtri della UI. */
+/** Protocol family used by the UI filters. */
 function familyOf(url) {
   const s = schemeOf(url);
   if (s === 'http' || s === 'https') return 'http';
@@ -33,7 +33,7 @@ function isAceEngineUrl(url) {
   return /\/ace\/getstream/i.test(url) || /webui\/ace\/getstream/i.test(url);
 }
 
-/** acestream://hash oppure http://127.0.0.1:6878/ace/getstream?id=hash */
+/** acestream://hash or http://127.0.0.1:6878/ace/getstream?id=hash */
 function aceHash(url) {
   if (typeof url !== 'string') return null;
   let m = url.trim().match(/^acestream:\/\/([0-9a-fA-F]{20,64})/);
@@ -44,7 +44,7 @@ function aceHash(url) {
 }
 
 /**
- * Normalizza l'URL in base alle opzioni della lista.
+ * Normalizes the URL based on the list options.
  * aceMode: 'off' (scarta) | 'keep' (acestream://) | 'engine' (http://host/ace/getstream?id=)
  */
 function normalizeStreamUrl(rawUrl, options = {}) {
@@ -76,7 +76,7 @@ function normalizeEngineHost(host) {
   return h.replace(/\/+$/, '');
 }
 
-/** Etichetta leggibile per la UI / per i badge negli stream. */
+/** Human-readable label for the UI / stream badges. */
 function protocolBadge(url) {
   const fam = familyOf(url);
   if (fam === 'ace') return 'ACE';
@@ -86,11 +86,7 @@ function protocolBadge(url) {
 
 module.exports = {
   DEFAULT_ENABLED,
-  schemeOf,
   familyOf,
-  isAceEngineUrl,
-  aceHash,
   normalizeStreamUrl,
-  normalizeEngineHost,
   protocolBadge,
 };
