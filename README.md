@@ -82,12 +82,9 @@ http://SERVER-IP:7300/manifest.json
   paste the URL → *Install Addon*.
 
 On the `/configure` page, click **manifest.json** (or **playlist.m3u**) in
-the header to copy the complete URL, including any access token. If the addon
-sits behind **nginx with a personal domain and certificate**, set *"Public URL"*
-in the general settings (e.g.
-`https://tv.mydomain.com`): the links shown (manifest and playlist) will use
-that base instead of the address you opened the page with. Minimal nginx config
-(domain + Let's Encrypt):
+the header to copy the URL. Open the page through the domain you use for the
+addon (nginx with certificate): the copied links are built from the current
+origin. Minimal nginx config (domain + Let's Encrypt):
 
 ```nginx
 server {
@@ -129,9 +126,8 @@ http://SERVER-IP:7300/playlist.m3u
 ```
 
 * works in VLC, TiviMate, IPTV Smarters, Kodi, Perfect Player…
-* on the configuration page the playlist URL has a **⧉ copy** button (next to
-  the manifest one): paste it into any IPTV app; if you set `publicBaseUrl`
-  and/or the token, the copied URL already includes them;
+* click **playlist.m3u** in the configuration header to copy the URL and paste
+  it into any IPTV app;
 * `group-title` = `ListName › Group › Subgroup` (configurable levels)
 * logo, name and deduplication configurable per list
 * **integrated EPG**: if an m3u_plus/Xtream source declares the guide
@@ -298,8 +294,7 @@ APIs used by the configuration page (also useful for scripts/automation):
   posters go through `/imgfit`: contain on a dark canvas already at the card proportions — 16:9
   landscape — so clients that crop "cover" do not cut them. Decoding via
   **libvips/sharp**: PNG, JPEG, **WebP, SVG, GIF and ICO** (channel CDNs often
-  serve modern formats), 302 fallback to the original; can be disabled),
-  **access token** (if set, manifest/playlist/catalogs require `?token=...`).
+  serve modern formats), 302 fallback to the original; can be disabled).
   The scheduler checks every minute and downloads only the lists whose
   interval has elapsed, in the background, without blocking playback. Failed
   downloads use an exponential backoff (5 minutes up to 6 hours).
@@ -359,8 +354,10 @@ When enabled, playlists and catalogs deliver "diagnostic" URLs
   error **on screen** (channel, list and reason), and the exact cause also goes
   to the **Live logs** as a `⛔` line.
 
-If you use an HTTPS proxy (nginx/domain), set *Public URL* first. The probe
-user-agent is `vlc` by default, variable `STREAM_DIAG_UA`. If FFmpeg is missing
+If you use an HTTPS proxy (nginx/domain), make sure it forwards
+`Host`/`X-Forwarded-Proto`, so generated diagnostic links keep the public
+address. The probe user-agent is `vlc` by default, variable `STREAM_DIAG_UA`.
+If FFmpeg is missing
 it falls back to a 502 text response. Turn it back to OFF when not needed — URLs
 return to the originals directly.
 * **Test** — checks *from the container* reachability, password and test proxy
@@ -541,6 +538,6 @@ immediately.
 
 * The addon does not host content: it converts public lists provided by the
   user. Make sure you have the rights to use the lists you import.
-* If you expose the port on the Internet, set `ADMIN_TOKEN` and/or the *access
-  token* on the configuration page.
+* If you expose the port on the Internet, set `ADMIN_TOKEN` to protect the
+  configuration page and the APIs.
 * WisePlay lists change often: if a group disappears, use *Refresh* on its card.

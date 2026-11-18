@@ -78,7 +78,6 @@ function showUndo(msg, undo){
   }}});
 }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-function tokenQs(){ const t = CFG && CFG.settings.token; return t ? `?token=${encodeURIComponent(t)}` : ''; }
 function apiUrl(p){
   const a = localStorage.getItem('wisem3u_admin') || '';
   const parts = [];
@@ -567,7 +566,7 @@ function renderListCard(l){
   const activeLabel = bs ? `${activeN}/${bs.length} attive` : 'playlist…';
   const personal = l.kind === 'personal';
   const purl = personal
-    ? (CFG.settings.publicBaseUrl || location.origin).replace(/\/+$/, '') + '/personal/' + l.id + '.m3u' + tokenQs()
+    ? location.origin.replace(/\/+$/, '') + '/personal/' + l.id + '.m3u'
     : '';
   const collapsed = !OPEN_LISTS.has(l.id);
   // A personal list has no remote source: the custom UA would do nothing.
@@ -1343,8 +1342,8 @@ function bindListEvents(){
       }
       if (act === 'eptest') await testEasyProxy(card, list, btn);
       if (act === 'copypl'){
-        const base = (CFG.settings.publicBaseUrl || location.origin).replace(/\/+$/, '');
-        copyText(base + '/personal/' + id + '.m3u' + tokenQs()).then(
+        const base = location.origin.replace(/\/+$/, '');
+        copyText(base + '/personal/' + id + '.m3u').then(
           () => toast('Link M3U della lista personale copiato ✔'),
           (e) => toast('Copia non riuscita: ' + e.message, 4000)
         );
@@ -1807,8 +1806,6 @@ function renderAll(){
   }
   refreshSel.value = String(globalMinutes);
   $('#s_maxDepth').value = CFG.settings.maxDepth;
-  $('#s_token').value = CFG.settings.token || '';
-  $('#s_publicBaseUrl').value = CFG.settings.publicBaseUrl || '';
   $('#s_epgUrl').value = CFG.settings.epgUrl || '';
   const globalChecks = [
     ['#s_dedupeGlobal', !!CFG.settings.dedupeGlobal],
@@ -1821,9 +1818,9 @@ function renderAll(){
     const box = el.closest('.chk');
     if (box) box.classList.toggle('on', on);
   }
-  const base = (CFG.settings.publicBaseUrl || location.origin).replace(/\/+$/, '');
-  $('#manifestLink').href = base + '/manifest.json' + tokenQs();
-  $('#m3uLink').href = base + '/playlist.m3u' + tokenQs();
+  const base = location.origin.replace(/\/+$/, '');
+  $('#manifestLink').href = base + '/manifest.json';
+  $('#m3uLink').href = base + '/playlist.m3u';
   renderLists();
   $('#status').textContent = `${CFG.lists.length} liste · ${CFG.lists.filter(l=>l.options.enabled).length} attive`;
   if (CFG.version && String(CFG.version) !== WM_UI_VERSION){
@@ -1842,8 +1839,6 @@ function readSettings(){
   CFG.settings.addonId = $('#s_addonId').value.trim() || 'community.wisem3u';
   CFG.settings.refreshMinutes = Number($('#s_refreshMinutes').value) || 0;
   CFG.settings.maxDepth = Number($('#s_maxDepth').value) || 8;
-  CFG.settings.token = $('#s_token').value.trim();
-  CFG.settings.publicBaseUrl = $('#s_publicBaseUrl').value.trim();
   CFG.settings.epgUrl = $('#s_epgUrl').value.trim();
   CFG.settings.dedupeGlobal = $('#s_dedupeGlobal').checked;
   CFG.settings.fitLogos = $('#s_fitLogos').checked;

@@ -65,8 +65,6 @@ function defaultConfig() {
       fitLogos: true, // rescale channel logos into "contain" posters (endpoint /imgfit)
       streamDiag: false, // stream diagnostics: on-screen error (video) instead of silent buffering
       personalLists: [], // personal lists: channels pulled from all lists [{id,name,includeInMain,channels:["listId::path::name"]}]
-      token: '',
-      publicBaseUrl: '', // public URL (e.g. https://my.domain with nginx+cert): base for displayed links
       epgUrl: '', // manual XMLTV URL declared in the generated playlist (added to EPGs inherited from m3u_plus sources)
     },
     lists: [],
@@ -261,9 +259,11 @@ function normalizeConfig(raw) {
   delete settings.configPassword;
   // the UA is per list: the old global field must never be restored
   delete settings.userAgent;
-  settings.publicBaseUrl = String(settings.publicBaseUrl || '').trim().replace(/\/+$/, '');
-  if (settings.publicBaseUrl && !/^https?:\/\//i.test(settings.publicBaseUrl)) settings.publicBaseUrl = '';
-  // manual EPG: like the public URL, accepts only http(s), otherwise it is cleared
+  // removed fields: access token (replaced by ADMIN_TOKEN for the UI/API) and
+  // public base URL (the request origin is now always used)
+  delete settings.token;
+  delete settings.publicBaseUrl;
+  // manual EPG accepts only http(s), otherwise it is cleared
   settings.epgUrl = String(settings.epgUrl || '').trim();
   if (settings.epgUrl && !/^https?:\/\//i.test(settings.epgUrl)) settings.epgUrl = '';
   settings.personalLists = Array.isArray(settings.personalLists)

@@ -19,9 +19,7 @@ const streamdiag = require('./streamdiag');
 const C = require('./constants');
 const {
   clientInfo,
-  requireToken,
   createRequireAdmin,
-  withToken,
   baseUrl,
   diagStreamUrl,
   sanitizeListUrl,
@@ -163,18 +161,18 @@ app.get('/manifest.json', async (req, res) => {
 /* altrimenti mostrano i loghi zoomati)                                */
 /* ------------------------------------------------------------------ */
 
-app.get('/imgfit', requireToken, (req, res) => { imgfit.handle(req, res); });
+app.get('/imgfit', (req, res) => { imgfit.handle(req, res); });
 
 /** Rewrites remote meta posters with the /imgfit endpoint, when enabled. */
 function fitPosters(result, req, list) {
   const cfg = store.loadConfig();
   if (!result || !cfg.settings.fitLogos) return result;
-  const base = (cfg.settings.publicBaseUrl || baseUrl(req)).replace(/\/+$/, '');
+  const base = baseUrl(req).replace(/\/+$/, '');
   const rewrite = (m) => {
     if (!m || !m.poster || !/^https?:/i.test(m.poster)) return;
     const shape = m.posterShape === 'landscape' ? 'landscape' : 'square';
     const listParam = list ? `&list=${encodeURIComponent(list.id)}` : '';
-    const u = withToken(`${base}/imgfit?shape=${shape}${listParam}&url=${encodeURIComponent(m.poster)}`, req);
+    const u = `${base}/imgfit?shape=${shape}${listParam}&url=${encodeURIComponent(m.poster)}`;
     m.poster = u;
     if (m.background && /^https?:/i.test(m.background)) m.background = u;
     if (m.logo && /^https?:/i.test(m.logo)) m.logo = u;
@@ -191,7 +189,7 @@ function fitPosters(result, req, list) {
 
 // extras arrive as path segments: /genre=X, /search=Y, /skip=N,
 // also combined (/genre=X/skip=100) or joined with & (SDK format)
-app.get(/^\/catalog\/([^/]+)\/(.+)\.json$/, requireToken, async (req, res) => {
+app.get(/^\/catalog\/([^/]+)\/(.+)\.json$/, async (req, res) => {
   try {
     // params[0] = type (tv), params[1] = id catalogo + eventuali extra
     const parts = req.params[1].split('/');
@@ -228,7 +226,7 @@ app.get(/^\/catalog\/([^/]+)\/(.+)\.json$/, requireToken, async (req, res) => {
   }
 });
 
-app.get('/meta/:type/:id.json', requireToken, async (req, res) => {
+app.get('/meta/:type/:id.json', async (req, res) => {
   try {
     const cfg = store.loadConfig();
     const result = await playlist.buildMeta(cfg, req.params.id);
@@ -242,7 +240,7 @@ app.get('/meta/:type/:id.json', requireToken, async (req, res) => {
   }
 });
 
-app.get('/stream/:type/:id.json', requireToken, async (req, res) => {
+app.get('/stream/:type/:id.json', async (req, res) => {
   const t0 = Date.now();
   try {
     const cfg = store.loadConfig();
@@ -288,7 +286,7 @@ app.get('/stream/:type/:id.json', requireToken, async (req, res) => {
 /* playlist M3U / JSON                                                 */
 /* ------------------------------------------------------------------ */
 
-app.get('/playlist.m3u', requireToken, async (req, res) => {
+app.get('/playlist.m3u', async (req, res) => {
   const t0 = Date.now();
   try {
     const cfg = store.loadConfig();
@@ -323,7 +321,7 @@ app.get('/playlist.m3u', requireToken, async (req, res) => {
 });
 
 /** Stream diagnostics: OK -> 302 to the source; KO -> video/error on screen. */
-app.get('/proxy/play', requireToken, (req, res) => {
+app.get('/proxy/play', (req, res) => {
   const t0 = Date.now();
   streamdiag.handlePlay(req, res, { t0, client: clientInfo(req) }).catch((err) => {
     live.add('stream', 'error', `diagnostic proxy error: ${err.message}`, clientInfo(req));
@@ -336,7 +334,7 @@ app.get('/playlist.m3u8', (req, res) => {
   res.redirect(307, `/playlist.m3u${qs ? `?${qs}` : ''}`);
 });
 
-app.get('/channels.json', requireToken, async (req, res) => {
+app.get('/channels.json', async (req, res) => {
   try {
     const cfg = store.loadConfig();
     const result = await playlist.collectChannels(cfg, { force: req.query.refresh === '1' });
@@ -379,7 +377,6 @@ app.put('/api/config', requireAdmin, (req, res) => {
       });
     }
     const nextSettings = { ...current.settings, ...(incoming.settings || {}) };
-    if (typeof nextSettings.token !== 'string') nextSettings.token = '';
 
     const nextLists = Array.isArray(incoming.lists) ? incoming.lists : current.lists;
     const saved = store.saveConfig(
@@ -477,7 +474,7 @@ app.post('/api/logs/clear', requireAdmin, (req, res) => {
 });
 
 /* Dedicated M3U playlist of a personal list. */
-app.get(/^\/personal\/([^/]+)\.m3u$/, requireToken, async (req, res) => {
+app.get(/^\/personal\/([^/]+)\.m3u$/, async (req, res) => {
   const list = store.findList(req.params[0]);
   if (!list || list.kind !== 'personal') return res.status(404).json({ error: 'personal list not found' });
   try {

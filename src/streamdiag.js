@@ -272,7 +272,7 @@ function actuallyRender(key, title, bodyLines) {
 
 /**
  * /proxy/play route — registered only when the setting is enabled.
- * Parameters: u (original url), n (channel name), l (list name), token.
+ * Parameters: u (original url), n (channel name), l (list name).
  */
 async function handlePlay(req, res, ctx = {}) {
   const u = String(req.query.u || '');
@@ -322,9 +322,8 @@ async function handlePlay(req, res, ctx = {}) {
 }
 
 /** Builds the diagnostic URL for a list stream. */
-function diagUrl(base, token, origUrl, name, listName) {
+function diagUrl(base, origUrl, name, listName) {
   const qs = new URLSearchParams({ u: origUrl, n: name, l: listName });
-  if (token) qs.set('token', token);
   return `${base.replace(/\/+$/, '')}/proxy/play?${qs.toString()}`;
 }
 

@@ -13,14 +13,14 @@ Reference version: **v1.11.0** (branch `arena/7045a7cd-wisem3u`)
 
 | Endpoint | What it does | Protection |
 | --- | --- | --- |
-| `GET /manifest.json` | Stremio/Nuvio manifest | token (if set) |
-| `GET /catalog/tv/<id>.json` | catalog of a list (paginated, search) | token |
-| `GET /meta/tv/<id>.json` · `GET /stream/tv/<id>.json` | channel details and streams | token |
-| `GET /playlist.m3u` (and `/playlist.m3u8`) | unified playlist of all enabled lists | token |
-| `GET /personal/<id>.m3u` | M3U playlist of a single personal list | token |
-| `GET /imgfit?shape=&url=` | logo poster as JPEG on a 16:9 (or 1:1) canvas, disk cache | token |
-| `GET /channels.json` | channel summary/statistics per list | token |
-| `GET /proxy/play` | only with stream diagnostics enabled: redirect or error video | token |
+| `GET /manifest.json` | Stremio/Nuvio manifest | public |
+| `GET /catalog/tv/<id>.json` | catalog of a list (paginated, search) | public |
+| `GET /meta/tv/<id>.json` · `GET /stream/tv/<id>.json` | channel details and streams | public |
+| `GET /playlist.m3u` (and `/playlist.m3u8`) | unified playlist of all enabled lists | public |
+| `GET /personal/<id>.m3u` | M3U playlist of a single personal list | public |
+| `GET /imgfit?shape=&url=` | logo poster as JPEG on a 16:9 (or 1:1) canvas, disk cache | public |
+| `GET /channels.json` | channel summary/statistics per list | public |
+| `GET /proxy/play` | only with stream diagnostics enabled: redirect or error video | public |
 | `GET /healthz` | Docker healthcheck | public |
 | `GET /configure` | configuration page | `ADMIN_TOKEN` (if set) |
 
@@ -89,7 +89,7 @@ background download with state and statistics.
   lists" box, managed exactly like normal lists.
 
 **Global** — addon name/ID, default list refresh interval (6 hours by
-default; 0 = manual), maximum depth, access token, public URL, EPG URL, global
+default; 0 = manual), maximum depth, EPG URL, global
 deduplication (off by default), proportional logos, stream diagnostics, clear
 cache, **interface language**.
 
@@ -188,7 +188,7 @@ with the selected locale.
 | **EasyProxy** | stream rewriting to an external instance (HLS/DASH proxy with WARP), with public DNS resolution + connection by IP |
 | **Stream diagnostics** | "diagnostic" URLs: if the stream responds → direct 302 (no container transit); if it fails → explanatory video generated with **FFmpeg** + `⛔` line in the logs |
 | **Xtream** | reads `/player_api.php` for expiry/connection limit (30 min cache) |
-| **Token** | `?token=` on manifest/playlist/catalogs; `ADMIN_TOKEN` for configuration and APIs |
+| **Admin token** | `ADMIN_TOKEN` protects the configuration page and the APIs; client endpoints stay public |
 | **Compression** | compressed m3u responses (bandwidth saving) |
 
 ---

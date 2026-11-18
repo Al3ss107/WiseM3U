@@ -48,8 +48,8 @@ tests/                 regression suites run by `npm test`
 1. `src/server.js` mounts `express.json` (4 MB limit), compression and the
    static files in `public/`.
 2. Public routes (`/manifest.json`, `/catalog`, `/playlist.m3u`, streams,
-   images) use `requireToken`; `/api/*` routes use `requireAdmin`. Both
-   middlewares and the URL/token helpers live in `src/http/request.js`.
+   images) are open; `/configure` and `/api/*` use `requireAdmin`. The admin
+   middleware and the URL helpers live in `src/http/request.js`.
 3. API routes are `express.Router()` modules under `src/routes/`, mounted on
    `/api/history` and `/api/lists`. The lists router receives the `admin`
    middleware and the shared `refresher`; dependencies (config, cache, history,

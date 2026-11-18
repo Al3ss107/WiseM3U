@@ -108,7 +108,7 @@ const mkList = (id, name, opts={}) => ({
   const listA = mkList('l_a', 'List A', { order: ['X', 'Y'], renames: { X: 'Old name' } });
   const listB = mkList('l_b', 'List B');
   let r = await api('/api/config', { method:'PUT', body: JSON.stringify({
-    settings: { addonName: 'WiseM3U-test', token: TOKEN }, lists: [listA, listB], reason: 'first version',
+    settings: { addonName: 'WiseM3U-test', token: 'legacy', publicBaseUrl: 'https://old.example' }, lists: [listA, listB], reason: 'first version',
   }) });
   ok(r.status === 200, 'v1 saved');
 
@@ -123,7 +123,7 @@ const mkList = (id, name, opts={}) => ({
   const listA2 = mkList('l_a', 'List A', { order: ['Y', 'X'], renames: { X: 'New name' } });
   const listB2 = mkList('l_b', 'List B renamed');
   r = await api('/api/config', { method:'PUT', body: JSON.stringify({
-    settings: { addonName: 'WiseM3U-due', token: TOKEN }, lists: [listA2, listB2], reason: 'second version',
+    settings: { addonName: 'WiseM3U-due' }, lists: [listA2, listB2], reason: 'second version',
   }) });
   ok(r.status === 200, 'v2 saved');
   await sleep(15);
@@ -174,7 +174,7 @@ const mkList = (id, name, opts={}) => ({
   ok(r.status === 200, 'settings+lists restore ok');
   cfg = (await api('/api/config')).body;
   ok(cfg.settings.addonName === 'WiseM3U-test', 'general settings restored');
-  ok(cfg.settings.token === TOKEN, 'admin token is NOT restored (the current one stays)');
+  ok(!('token' in cfg.settings) && !('publicBaseUrl' in cfg.settings), 'legacy token/public URL are dropped');
   ok(cfg.lists.find(l=>l.id==='l_b').name === 'List B', 'list name restored');
 
   // categorie vuote / id inesistente

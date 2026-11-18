@@ -55,9 +55,7 @@ module.exports = function createHistoryRouter({ admin }) {
       const restored = { settings: false, lists: false, options: {} };
 
       if (body.settings) {
-        // the token is not restored: an old snapshot could lock you out
         const settings = { ...(snap.config.settings || {}) };
-        delete settings.token;
         cfg.settings = { ...cfg.settings, ...settings };
         restored.settings = true;
       }

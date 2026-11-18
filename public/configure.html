@@ -101,18 +101,8 @@
         <input id="s_maxDepth" type="number" min="1" max="12">
       </div>
       <div>
-        <label>Access token (empty = public)</label>
-        <input id="s_token" type="text" placeholder="e.g. m1o2n3d4">
-      </div>
-      <div>
-        <label>Public URL (nginx / personal domain)</label>
-        <input id="s_publicBaseUrl" type="text" placeholder="https://my.domain">
-        <div class="hint" data-info data-i18n-html="hint.publicUrl">If the addon sits behind nginx with a domain + certificate, enter the public
-          base here (e.g. <code>https://tv.mydomain.com</code>): the links shown will use it.</div>
-      </div>
-      <div>
         <label>EPG XMLTV URL (optional)</label>
-        <input id="s_epgUrl" type="text" placeholder="https://my.domain/guide.xml">
+        <input id="s_epgUrl" type="text" placeholder="https://example.com/guide.xml">
         <div class="hint" data-info data-i18n-html="hint.epg">Declared in the generated playlist header (<code>url-tvg</code>/<code>x-tvg-url</code>).
           It is added to the EPGs inherited from m3u_plus/Xtream sources. Empty = only the detected ones.</div>
       </div>
@@ -124,9 +114,6 @@
       <div class="spacer"></div>
       <button class="ghost small" id="btnClearCache" style="flex:0 0 auto">Clear cache</button>
     </div>
-    <div class="hint" data-info data-i18n-html="hint.token">If you set a <b>token</b>, manifest/playlist/catalogs will require
-      <code>?token=...</code>: the configuration page already shows the complete URLs to paste into
-      Nuvio and Stremio.</div>
     <div class="hint" data-info data-i18n-html="hint.streamDiag"><b>Stream diagnostics</b>: enable it to understand WHY a channel does not play.
       Playlists and catalogs will deliver "diagnostic" URLs: if the stream responds correctly, the
       player is redirected to the source (video does NOT pass through the container, no wasted bandwidth);

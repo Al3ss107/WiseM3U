@@ -3,7 +3,7 @@
 /**
  * Stream diagnostics test (v1.4.0)
  * A) diag OFF: playlist and JSON streams have the original URLs
- * B) diag ON: playlist.m3u and /stream contain /proxy/play URLs (+ propagated token)
+ * B) diag ON: playlist.m3u and /stream contain /proxy/play URLs
  * C) /proxy/play on a working channel -> 302 to the source
  * D) /proxy/play on 403 -> on-screen error video (ffmpeg) or textual 502
  * E) live log: ⛔ line with channel and reason
@@ -70,9 +70,8 @@ async function apiJ(pathname, opts = {}) {
   return { status: res.status, body, headers: res.headers };
 }
 
-const PUBLIC_TOKEN = 'pub1';
 async function pubJ(pathname, opts = {}) {
-  const res = await fetch(`${BASE}${pathname}${pathname.includes('?') ? '&' : '?'}token=${PUBLIC_TOKEN}`, {
+  const res = await fetch(`${BASE}${pathname}`, {
     redirect: 'manual',
     ...opts,
   });
@@ -135,7 +134,6 @@ async function waitFor(pred, ms, step = 400) {
     const cfgGet = await apiJ('/api/config');
     const cfg = cfgGet.body.config || cfgGet.body;
     cfg.settings.streamDiag = true;
-    cfg.settings.token = PUBLIC_TOKEN;
     const put = await apiJ('/api/config', { method: 'PUT', body: JSON.stringify({ settings: cfg.settings, lists: cfg.lists }) });
     assert(put.status === 200, `PUT /api/config -> ${put.status}`);
 
@@ -144,13 +142,12 @@ async function waitFor(pred, ms, step = 400) {
     assert(m3u.body.includes('/proxy/play?'), `missing diagnostic URL:\n${m3u.body.slice(0, 500)}`);
     const line = m3u.body.split('\n').find((l) => l.includes('/proxy/play'));
     assert(decodeURIComponent(line).includes(OK_URL), `different u parameter: ${line}`);
-    assert(line.includes(`token=${PUBLIC_TOKEN}`), `missing propagated token: ${line}`);
 
     const cat = await pubJ(`/catalog/tv/wise%3A${encodeURIComponent(listId)}.json`);
     const metas = (cat.body && cat.body.metas) || [];
     const st = await pubJ(`/stream/tv/${encodeURIComponent(metas.find((m) => m.name.includes('OK')).id)}.json`);
     const s0 = (st.body.streams || [])[0];
-    assert(s0 && s0.url.includes('/proxy/play') && s0.url.includes(`token=${PUBLIC_TOKEN}`), `stream not rewritten`);
+    assert(s0 && s0.url.includes('/proxy/play'), `stream not rewritten`);
   }) && ok;
 
   /* C) OK -> 302 */
@@ -164,7 +161,7 @@ async function waitFor(pred, ms, step = 400) {
   /* D) 403 -> video/error */
   ok = await run('D: stream 403 -> on-screen message', async () => {
     const u = `/proxy/play?u=${encodeURIComponent(BAD_URL)}&n=${encodeURIComponent(CH_BAD)}&l=${encodeURIComponent(LIST_NAME)}`;
-    const res = await fetch(`${BASE}${u}&token=${PUBLIC_TOKEN}`, { redirect: 'manual' });
+    const res = await fetch(`${BASE}${u}`, { redirect: 'manual' });
     const ct = res.headers.get('content-type') || '';
     const buf = Buffer.from(await res.arrayBuffer());
     if (HAS_FFMPEG) {
