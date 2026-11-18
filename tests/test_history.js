@@ -81,6 +81,7 @@ const mkList = (id, name, opts={}) => ({
   ok(/name="wm-ui-version" content="\d+\.\d+\.\d+"/.test(pageHtml), 'version injected into meta');
   ok(!pageHtml.includes('__WM_UI_VERSION__'), 'no residual version placeholder');
   ok(pageHtml.includes('/configure.css') && pageHtml.includes('/configure.js'), 'page linked to external CSS and JS');
+  ok(pageHtml.includes('id="s_refreshMinutes"') && !pageHtml.includes('s_cacheTtlMinutes') && !pageHtml.includes('s_autoRefreshMinutes'), 'settings expose one refresh interval only');
   ok(!pageHtml.includes('<style>') && !pageHtml.includes('<script>'), 'page without inline CSS/JS');
   const cssRes = await fetch(`${BASE}/configure.css`);
   ok(cssRes.status === 200 && /text\/css/.test(cssRes.headers.get('content-type') || ''), 'configure.css served');

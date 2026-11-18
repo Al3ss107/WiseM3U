@@ -55,9 +55,12 @@ tests/                 regression suites run by `npm test`
    middleware and the shared `refresher`; dependencies (config, cache, history,
    playlist) are imported directly, so the modules stay testable.
 4. Downloads are owned by `src/services/refresher.js`: HTTP routes only start a
-   background job and return, the UI polls list state, and the scheduler
-   re-downloads enabled lists after their per-list TTL. The same module resumes
-   downloads interrupted by a restart.
+   background job and return, the UI polls list state, and an internal
+   one-minute scheduler re-downloads enabled lists when their effective
+   interval (global default, custom override, or manual) has elapsed. Reads use
+   stale-while-revalidate, downloads are capped at two concurrent jobs, and
+   failures back off exponentially. The same module resumes downloads
+   interrupted by a restart.
 5. `/configure` is served by `configPageHtml()`: the server replaces the only
    `__WM_UI_VERSION__` placeholder in the `wm-ui-version` meta tag. CSS and JS
    are separate static files and `configure.js` reads the version from the meta

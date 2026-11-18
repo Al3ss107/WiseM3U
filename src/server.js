@@ -566,11 +566,10 @@ if (require.main === module) {
     // Warm the XMLTV guide in the background: channel details then open instantly
     playlist.warmEpg(cfg);
 
-    const minutes = Number(cfg.settings.autoRefreshMinutes || 0);
-    if (minutes > 0) {
-      console.log(`  Auto-refresh every ${minutes} minutes (only expired lists are refreshed)`);
-      refresher.scheduleAutoRefresh();
-    }
+    // The scheduler is internal and cheap (it only compares timestamps).
+    // Each list uses its own interval, or the global default.
+    console.log('  Automatic list check: every minute (per-list or global interval; 0 = manual)');
+    refresher.scheduleAutoRefresh();
   });
 }
 

@@ -11,6 +11,7 @@ const { normalizeStreamUrl, protocolBadge } = require('./protocols');
 const { buildM3U } = require('./m3u');
 const cache = require('./cache');
 const epg = require('./epg');
+const { effectiveRefreshMinutes } = require('./config');
 
 /**
  * If the list has EasyProxy configured, rewrites the stream URL as
@@ -243,10 +244,17 @@ async function entryFor(config, list, force = false, chain = []) {
   if (list.kind === 'personal') {
     return cache.getTree({ id: list.id, url: '', builder: () => buildPersonalTree(config, list) });
   }
+  const ttl = effectiveRefreshMinutes(list, config.settings);
+  // A refresh started by the scheduler/manual button is already in flight:
+  // serve the existing copy without starting a second download.
+  const alreadyRefreshing = !!(list.state && list.state.status === 'fetching');
   const entry = await cache.getTree({
     id: list.id,
     url: list.url,
-    ttlMinutes: list.options.refreshMinutes,
+    // 0 = manual only: never refresh just because a client asked; an explicit
+    // /refresh (or the first download) still goes through the refresher.
+    ttlMinutes: alreadyRefreshing || ttl <= 0 ? Infinity : ttl,
+    staleWhileRevalidate: !alreadyRefreshing,
     maxDepth: config.settings.maxDepth,
     userAgent: list.options.userAgent || '',
     force,

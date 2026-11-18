@@ -1,6 +1,6 @@
 # WiseM3U — complete feature inventory
 
-Reference version: **v1.10.1** (branch `arena/7045a7cd-wisem3u`)
+Reference version: **v1.11.0** (branch `arena/7045a7cd-wisem3u`)
 
 > One line: it imports **WisePlay / M3U / Xtream** lists, normalizes them into a
 > tree of groups and channels, applies user customizations and exposes them as a
@@ -74,8 +74,8 @@ background download with state and statistics.
 - **Xtream account expiry** badge (from `player_api.php`, 30 min cache);
 - settings: group-title prefix/levels, protocols (AceStream off by default),
   AceStream mode, deduplication (off by default), excluded words, group icon,
-  catalog yes/no + name, refresh frequency, EasyProxy (IP/DNS, password,
-  parameters) + Test;
+  catalog yes/no + name, refresh policy (inherit the global interval, custom
+  interval or manual only), EasyProxy (IP/DNS, password, parameters) + Test;
 - **List playlists**: check, rename, drag to reorder (the order is kept across
   other drags until you save), filter, **Show enabled**, **All/None** (limited
   to filter results), **Delete selected**, trash; dragging one playlist onto
@@ -88,13 +88,14 @@ background download with state and statistics.
 - **Personal lists**: creation, composition from the "Add content from your
   lists" box, managed exactly like normal lists.
 
-**Global** — addon name/ID, auto-refresh, cache TTL, maximum depth, access
-token, public URL, EPG URL, global deduplication (off by default), proportional
-logos, stream diagnostics, clear cache, **interface language**.
+**Global** — addon name/ID, default list refresh interval (6 hours by
+default; 0 = manual), maximum depth, access token, public URL, EPG URL, global
+deduplication (off by default), proportional logos, stream diagnostics, clear
+cache, **interface language**.
 
 **Per list** — name, group-title prefix and depth, catalog name, refresh
-frequency, **custom User-Agent**, allowed protocols, AceStream mode, exclusions,
-renames/order, EasyProxy.
+policy (global / custom / manual), **custom User-Agent**, allowed protocols,
+AceStream mode, exclusions, renames/order, EasyProxy.
 
 **Configuration history** — every "stable" change (settings, lists, options)
 automatically creates a JSON snapshot in `/data/history`, at most 60 states or
@@ -194,7 +195,8 @@ with the selected locale.
 ## 6. Reliability, cache and runtime
 
 - **Disk cache** of trees: `.json.gz` snapshot per list; "hot" tree in memory
-  (`WM_HOT_TREES`); automatic refresh only of expired lists.
+  (`WM_HOT_TREES`); stale-while-revalidate reads; automatic refresh only of due
+  lists, checked every minute with backoff after failures.
 - **Image cache** separate (`data/imgcache/*.jpg`).
 - **Entrypoint** that fixes the two typical bind-mount problems
   (`config.json` created as a directory, root ownership) and switches to the

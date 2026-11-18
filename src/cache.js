@@ -29,9 +29,14 @@ const MAX_PARSED = Math.max(1, Number(process.env.WM_HOT_TREES || 1));
 //         error:string, lastUsed:number }
 const memory = new Map();
 let onEvictRowCb = null; // hook: list flatten rows for submission (playlist.rowsMemo)
+let onRefreshCb = null; // hook: keep persisted list state in sync after any refresh
 
 /** Calls `cb` every time a list's parsed tree is evicted (RAM diet). */
 function setEvictHook(cb) { onEvictRowCb = typeof cb === 'function' ? cb : null; }
+
+/** Calls `cb` after a successful download triggered by any caller (scheduler,
+ *  manual refresh or stale-while-revalidate). */
+function setRefreshHook(cb) { onRefreshCb = typeof cb === 'function' ? cb : null; }
 
 function touch(id) {
   const e = memory.get(id);
@@ -155,6 +160,11 @@ function ageMinutes(entry) {
   return (Date.now() - new Date(entry.fetchedAt).getTime()) / 60000;
 }
 
+function notifyRefresh(id, fetchedAt, tree) {
+  if (!onRefreshCb) return;
+  try { onRefreshCb({ id, fetchedAt, tree }); } catch (_) { /* state sync is best-effort */ }
+}
+
 /**
  * Returns a list's tree, downloading it when needed.
  * @param {{id:string,url:string,ttlMinutes?:number,maxDepth?:number,force?:boolean,userAgent?:string}} req
@@ -189,6 +199,18 @@ async function getTree(req) {
     return pub;
   }
 
+  // Stale-while-revalidate: HTTP reads must never wait for a slow panel when
+  // an old snapshot is available. The background refresh replaces the entry
+  // for the next request; already-open streams are unaffected.
+  if (pub && !req.force && req.staleWhileRevalidate) {
+    if (!meta.refreshing && !meta.promise) {
+      getTree({ ...req, force: true, staleWhileRevalidate: false }).catch(() => {
+        /* the stale copy remains available; the next request retries */
+      });
+    }
+    return pub;
+  }
+
   if (meta.refreshing || meta.promise) {
     if (pub && pub.tree && !req.force) return pub;
     await meta.promise.catch(() => {});
@@ -214,6 +236,7 @@ async function getTree(req) {
     touch(id);
     evictParsedIfNeeded(id);
     persistAsync(id, { gz });
+    notifyRefresh(id, fetchedAt, tree);
     return { tree, ui: treeForUi(tree), fetchedAt, refreshing: false, promise: null, error: '' };
   })();
 
@@ -227,7 +250,11 @@ async function getTree(req) {
     cur.promise = null;
     cur.error = err.message || String(err);
     const stale = getEntry(id);
-    if (stale) return stale; // dati stale meglio di niente
+    if (stale) {
+      // keep the fatal flag so the scheduler does not retry an invalid URL
+      stale.fatal = !!(err && err.fatal);
+      return stale; // dati stale meglio di niente
+    }
     throw err;
   }
 }
@@ -286,6 +313,11 @@ function epgUrls(id) {
 }
 
 /** Diagnostica memoria (debug/test): quante entry e quante parseate. */
+function isRefreshing(id) {
+  const e = memory.get(id);
+  return !!(e && (e.refreshing || e.promise));
+}
+
 function stats() {
   let parsed = 0, gzBytes = 0;
   for (const e of memory.values()) {
@@ -295,4 +327,4 @@ function stats() {
   return { entries: memory.size, parsedEntries: parsed, gzBytes, maxParsed: MAX_PARSED };
 }
 
-module.exports = { getTree, getEntry, invalidate, invalidateAll, refreshAll, ageMinutes, saveSnapshot, setEvictHook, stats, epgUrls };
+module.exports = { getTree, getEntry, invalidate, invalidateAll, refreshAll, ageMinutes, saveSnapshot, setEvictHook, setRefreshHook, isRefreshing, stats, epgUrls };

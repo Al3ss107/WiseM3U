@@ -14,6 +14,13 @@ const history = require('./history');
 
 const CONFIG_FILE = process.env.CONFIG_FILE || path.join(__dirname, '..', 'data', 'config.json');
 
+// Refresh policy: one user-facing interval per list (or a global default).
+// The scheduler itself checks every minute; MIN_REFRESH_MINUTES protects
+// sources from accidental request storms.
+const MIN_REFRESH_MINUTES = 5;
+const DEFAULT_REFRESH_MINUTES = 360;
+const MAX_REFRESH_MINUTES = 525600;
+
 function defaultListOptions() {
   return {
     enabled: true,
@@ -36,7 +43,8 @@ function defaultListOptions() {
     channelMoves: {}, // "path::originalName" -> destination: another branch path or "@Name" for custom groups
     inCatalog: true,
     catalogName: '',
-    refreshMinutes: 1440, // list refresh: daily by default
+    refreshMode: 'inherit', // inherit | custom | manual
+    refreshMinutes: 60, // used only when refreshMode = 'custom'
     userAgent: '', // custom UA used to download this list (empty = default)
     easyProxy: '', // EasyProxy IP/DNS (e.g. 192.168.10.10:7860 or proxy.mydomain.com); empty = disabled
     easyProxyPassword: '', // EasyProxy API_PASSWORD (if set)
@@ -51,8 +59,7 @@ function defaultConfig() {
     settings: {
       addonName: 'WiseM3U',
       addonId: 'community.wisem3u',
-      cacheTtlMinutes: 1440,
-      autoRefreshMinutes: 1440, // default: daily refresh
+      refreshMinutes: DEFAULT_REFRESH_MINUTES, // global default: every 6 hours; 0 = manual only
       maxDepth: 8,
       dedupeGlobal: false,
       fitLogos: true, // rescale channel logos into "contain" posters (endpoint /imgfit)
@@ -77,16 +84,51 @@ function newList(url, name) {
       status: 'idle', // idle | fetching | ready | error
       error: '',
       fetchedAt: '',
+      lastAttemptAt: '',
+      failures: 0,
+      nextRetryAt: '',
       stats: null,
     },
   };
 }
 
+/** Clamps a user-visible refresh interval. 0 means "manual only" for the
+ *  global setting; custom per-list intervals always have a safe minimum. */
+function normalizeRefreshMinutes(value, { allowZero = false } = {}) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return allowZero ? 0 : 60;
+  if (n <= 0) return allowZero ? 0 : MIN_REFRESH_MINUTES;
+  return Math.max(MIN_REFRESH_MINUTES, Math.min(MAX_REFRESH_MINUTES, Math.round(n)));
+}
+
+/** Effective interval for a list: custom override or the global default.
+ *  Returns 0 when the list is manual-only. */
+function effectiveRefreshMinutes(list, settings) {
+  const options = (list && list.options) || {};
+  const mode = options.refreshMode || 'inherit';
+  if (mode === 'manual') return 0;
+  if (mode === 'custom') return normalizeRefreshMinutes(options.refreshMinutes);
+  return normalizeRefreshMinutes(settings && settings.refreshMinutes, { allowZero: true });
+}
+
 function normalizeList(list) {
   const def = defaultListOptions();
-  const options = { ...def, ...(list.options || {}) };
-  options.protocols = { ...def.protocols, ...(list.options && list.options.protocols) };
+  const rawOptions = list.options && typeof list.options === 'object' ? list.options : {};
+  const options = { ...def, ...rawOptions };
+  options.protocols = { ...def.protocols, ...(rawOptions.protocols) };
   options.userAgent = sanitizeUserAgent(options.userAgent);
+  // Migration from the old cache-TTL model: an explicit per-list value was a
+  // real setting; the old default (1440) and 0 both meant "use the global one".
+  const validModes = new Set(['inherit', 'custom', 'manual']);
+  if (validModes.has(rawOptions.refreshMode)) {
+    options.refreshMode = rawOptions.refreshMode;
+  } else {
+    const legacyMinutes = Number(rawOptions.refreshMinutes);
+    options.refreshMode = rawOptions.refreshMinutes != null && legacyMinutes > 0 && legacyMinutes !== 1440
+      ? 'custom'
+      : 'inherit';
+  }
+  options.refreshMinutes = normalizeRefreshMinutes(options.refreshMinutes);
   // migration: previous builds used excludePaths for tree selection
   const legacyExcluded = Array.isArray(options.excludePaths) ? options.excludePaths.map(String) : [];
   delete options.excludePaths;
@@ -182,6 +224,9 @@ function normalizeList(list) {
       // the UI shows "check the link" instead of "retry with Refresh"
       fatal: !!(list.state && list.state.fatal),
       fetchedAt: (list.state && list.state.fetchedAt) || '',
+      lastAttemptAt: (list.state && list.state.lastAttemptAt) || '',
+      failures: Math.max(0, Number(list.state && list.state.failures) || 0),
+      nextRetryAt: (list.state && list.state.nextRetryAt) || '',
       stats: (list.state && list.state.stats) || null,
       kind: (list.state && list.state.kind) || '',
       // Xtream account info (expiry): 30 min cache for the configuration badge
@@ -194,7 +239,23 @@ function normalizeConfig(raw) {
   const base = defaultConfig();
   const cfg = raw && typeof raw === 'object' ? raw : {};
   const fromVersion = Math.max(0, Number(cfg.version) || 0);
-  const settings = { ...base.settings, ...(cfg.settings || {}) };
+  const rawSettings = cfg.settings && typeof cfg.settings === 'object' ? cfg.settings : {};
+  const settings = { ...base.settings, ...rawSettings };
+  // Refresh policy migration: old builds exposed a scheduler interval and a
+  // separate cache TTL. They collapse into one global interval (0 = manual).
+  if (Object.prototype.hasOwnProperty.call(rawSettings, 'refreshMinutes')) {
+    settings.refreshMinutes = normalizeRefreshMinutes(rawSettings.refreshMinutes, { allowZero: true });
+  } else if (Object.prototype.hasOwnProperty.call(rawSettings, 'autoRefreshMinutes')
+    && Number(rawSettings.autoRefreshMinutes) <= 0) {
+    settings.refreshMinutes = 0;
+  } else {
+    const legacyCacheTtl = Number(rawSettings.cacheTtlMinutes);
+    settings.refreshMinutes = Number.isFinite(legacyCacheTtl) && legacyCacheTtl > 0 && legacyCacheTtl !== 1440
+      ? normalizeRefreshMinutes(legacyCacheTtl, { allowZero: true })
+      : DEFAULT_REFRESH_MINUTES;
+  }
+  delete settings.cacheTtlMinutes;
+  delete settings.autoRefreshMinutes;
   // removed field (never checked by any route): it must not remain in
   // old configs after saving
   delete settings.configPassword;
@@ -374,6 +435,10 @@ module.exports = {
   CONFIG_FILE,
   defaultConfig,
   defaultListOptions,
+  effectiveRefreshMinutes,
+  normalizeRefreshMinutes,
+  MIN_REFRESH_MINUTES,
+  DEFAULT_REFRESH_MINUTES,
   newList,
   normalizeList,
   normalizeConfig,

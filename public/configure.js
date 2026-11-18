@@ -345,6 +345,117 @@ function fmtItDate(iso){
   catch(_) { return iso; }
 }
 
+/** Same policy as src/config.js: custom override, or the global default.
+ *  0 means manual only. */
+function effectiveListRefresh(l){
+  const o = (l && l.options) || {};
+  if (o.refreshMode === 'manual') return 0;
+  if (o.refreshMode === 'custom'){
+    const n = Math.round(Number(o.refreshMinutes));
+    return Number.isFinite(n) && n > 0 ? Math.max(5, n) : 5;
+  }
+  const g = Math.round(Number(CFG.settings && CFG.settings.refreshMinutes));
+  return Number.isFinite(g) && g > 0 ? Math.max(5, g) : 0;
+}
+
+function uiLang(){
+  return (window.WM_I18N && WM_I18N.locale()) || 'en';
+}
+
+function tr(text){
+  return window.WM_I18N ? WM_I18N.translate(text) : text;
+}
+
+function humanMinutes(min){
+  const n = Math.max(0, Math.round(Number(min) || 0));
+  try {
+    const unit = (value, u) => new Intl.NumberFormat(uiLang(), { style: 'unit', unit: u, unitDisplay: 'short' }).format(value);
+    if (n < 60) return unit(n, 'minute');
+    const h = Math.floor(n / 60);
+    const m = n % 60;
+    return m ? `${unit(h, 'hour')} ${unit(m, 'minute')}` : unit(h, 'hour');
+  } catch (_) {
+    if (n < 60) return `${n} min`;
+    const h = Math.floor(n / 60);
+    const m = n % 60;
+    return m ? `${h} h ${m} min` : `${h} h`;
+  }
+}
+
+function relativeMinutes(minutes, future = false){
+  const n = Math.max(0, Number(minutes) || 0);
+  const sign = future ? 1 : -1;
+  try {
+    const rtf = new Intl.RelativeTimeFormat(uiLang(), { numeric: 'auto' });
+    if (n < 60) return rtf.format(sign * Math.round(n), 'minute');
+    return rtf.format(sign * Math.round(n / 60), 'hour');
+  } catch (_) {
+    const txt = humanMinutes(n);
+    return future ? `in ${txt}` : `${txt} ago`;
+  }
+}
+
+function refreshLabel(l){
+  const eff = effectiveListRefresh(l);
+  return eff > 0 ? tr(`Effective: every ${humanMinutes(eff)}`) : tr('Effective: manual only');
+}
+
+function refreshMeta(l){
+  if (l.kind === 'personal') return tr('Personal list');
+  const s = l.state || {};
+  if (!s.fetchedAt) {
+    const suffix = s.status === 'fetching' ? tr('refresh in progress…') : s.error ? tr('last attempt failed') : '';
+    return `${tr('Never updated')}${suffix ? ' · ' + suffix : ''}`;
+  }
+  const t = new Date(s.fetchedAt);
+  if (Number.isNaN(t.getTime())) return tr('Never updated');
+  const age = Math.max(0, (Date.now() - t.getTime()) / 60000);
+  let out = `${tr('Last update:')} <b>${esc(t.toLocaleString(uiLang()))}</b> · ${relativeMinutes(age)}`;
+  if (s.status === 'fetching') out += ` · ${tr('refresh in progress…')}`;
+  else {
+    const every = effectiveListRefresh(l);
+    if (every > 0) out += ` · ${tr(`Next update: ${relativeMinutes(Math.max(0, every - age), true)}`)}`;
+    else out += ` · ${tr('manual refresh')}`;
+  }
+  if (s.error) out += ` · ${tr('last attempt failed')}`;
+  return out;
+}
+
+function updateRefreshMeta(){
+  for (const el of $$('[data-refreshmeta]')){
+    const l = (CFG.lists || []).find(x => x.id === el.dataset.refreshmeta);
+    if (l) el.innerHTML = refreshMeta(l);
+  }
+}
+
+/** Refreshes only the runtime state: the configuration being edited is not
+ *  touched, so background downloads show their new timestamp without a reload. */
+async function pollListStates(){
+  if (document.hidden || !CFG || !CFG.lists) return;
+  await Promise.all(CFG.lists.map(async (l) => {
+    try {
+      const s = await api(`/api/lists/${l.id}/state`);
+      if (s && typeof s === 'object') l.state = s;
+    } catch (_) { /* list removed or temporary error: keep the last state */ }
+    const badge = [...document.querySelectorAll('[data-statebadge]')].find(b => b.dataset.statebadge === l.id);
+    if (badge && l.state){
+      const status = l.state.status || 'idle';
+      badge.className = `badge ${status}`;
+      badge.textContent = status;
+    }
+  }));
+  updateRefreshMeta();
+}
+
+function updateRefreshHints(){
+  for (const card of $$('#lists .listcard')){
+    const l = (CFG.lists || []).find(x => x.id === card.dataset.id);
+    const hint = card.querySelector('[data-refresh-hint]');
+    if (!l || !hint) continue;
+    hint.textContent = `${refreshLabel(l)} · ${tr('minimum 5 minutes')}`;
+  }
+}
+
 async function fillXtreamBadge(l, force){
   if (!l || l.kind === 'personal') return;
   if (!/\/get\.php/i.test(l.url || '')) return;
@@ -477,7 +588,7 @@ function renderListCard(l){
       </div>
       ${personal ? '<span class="badge ready" title="Lista personale: composta da canali e playlist delle tue liste">personale</span>' : ''}
       ${s.kind === 'm3u' ? '<span class="badge ready" title="Sorgente playlist M3U">m3u</span>' : ''}
-      <span class="badge ${st}">${st}</span>
+      <span class="badge ${st}" data-statebadge="${esc(l.id)}">${st}</span>
       <span class="xtbadge" id="xt_${esc(l.id)}"></span>
       <div class="spacer" style="flex:1"></div>
       <div class="acts">
@@ -492,7 +603,7 @@ function renderListCard(l){
          Link M3U: <code>${esc(purl)}</code> <button class="ghost small" data-act="copypl" style="margin-left:6px">⧉ copia</button></div>`
       : `<div class="url">${esc(l.url)}</div>`}
     <div class="kv" style="margin-top:6px">
-      ${s.fetchedAt ? `Ultimo aggiornamento: <b>${esc(new Date(s.fetchedAt).toLocaleString((window.WM_I18N && WM_I18N.locale()) || 'en'))}</b>` : 'Mai aggiornata'}
+      <span data-refreshmeta="${esc(l.id)}">${refreshMeta(l)}</span>
       ${stats ? ` · nodi <b>${stats.nodes}</b> · rami esterni <b>${stats.external}</b> · m3u importate <b>${stats.m3u}</b> · stream <b>${stats.stations}</b>${stats.failed?` · errori <b>${stats.failed}</b>`:''}` : ''}
     </div>
     ${stats && stats.truncated ? `<div class="hint" style="margin-top:6px;color:#f5c451">⚠︎ Lista molto grande: importati i primi <b>${stats.stations}</b> canali (limite di sicurezza). Il resto viene saltato per non esaurire la memoria del container.</div>` : ''}
@@ -522,11 +633,20 @@ function renderListCard(l){
             <label>Livelli nel group-title</label>
             <input type="number" min="1" max="6" data-f="options.groupDepth" value="${o.groupDepth}">
           </div>
-          <div>
-            <label>Aggiornamento lista (minuti)</label>
-            <input type="number" min="5" data-f="options.refreshMinutes" value="${o.refreshMinutes}">
-            <div class="hint" data-info>1440 = giornaliero</div>
+          ${personal ? '' : `<div>
+            <label>${tr('Refresh policy')}</label>
+            <select data-f="options.refreshMode">
+              <option value="inherit" ${o.refreshMode==='inherit'?'selected':''}>${tr('Use global setting')}</option>
+              <option value="custom" ${o.refreshMode==='custom'?'selected':''}>${tr('Custom interval')}</option>
+              <option value="manual" ${o.refreshMode==='manual'?'selected':''}>${tr('Manual only')}</option>
+            </select>
           </div>
+          <div>
+            <label>${tr('Custom interval (minutes)')}</label>
+            <input type="number" min="5" max="525600" data-f="options.refreshMinutes" data-refresh-custom
+              value="${esc(o.refreshMinutes)}" ${o.refreshMode==='custom'?'':'disabled'}>
+            <div class="hint" data-info data-refresh-hint>${refreshLabel(l)} · ${tr('minimum 5 minutes')}</div>
+          </div>`}
           ${uaField}
           <div>
             <label>Nome catalogo</label>
@@ -928,6 +1048,12 @@ function bindListEvents(){
         return;
       }
       if (el.dataset && el.dataset.f){
+        if (el.dataset.f === 'options.refreshMode'){
+          const custom = card.querySelector('[data-refresh-custom]');
+          if (custom) custom.disabled = el.value !== 'custom';
+          const info = custom && custom.parentElement && custom.parentElement.querySelector('.hint');
+          if (info) info.textContent = `${refreshLabel({ ...list, options: { ...list.options, refreshMode: el.value } })} · ${tr('minimum 5 minutes')}`;
+        }
         setPath(list, el.dataset.f, el.type==='checkbox' ? el.checked : el.value);
         if (el.dataset.f.startsWith('options.protocols') || ['options.enabled','options.inCatalog','options.dedupe','options.emitLogo'].includes(el.dataset.f)){
           el.closest('.chk').classList.toggle('on', el.checked);
@@ -959,6 +1085,11 @@ function bindListEvents(){
         });
         const brsNone = card.querySelector('.brsnone');
         if (brsNone) brsNone.style.display = anyVisible ? 'none' : '';
+        return;
+      }
+      if (el.dataset && el.dataset.refreshCustom !== undefined){
+        setPath(list, 'options.refreshMinutes', el.value);
+        updateRefreshHints();
         return;
       }
       if (el.dataset && el.dataset.cfilter !== undefined){
@@ -1398,7 +1529,7 @@ function setPath(obj, pathStr, value){
   } else if (key === 'userAgent'){
     // one line only (header injection); the server sanitizes again on save
     cur[key] = String(value).replace(/[\r\n\t]+/g, ' ').replace(/\s{2,}/g, ' ').trim().slice(0, 300);
-  } else if (key === 'groupDepth' || key === 'refreshMinutes' || key === 'maxDepth' || key === 'cacheTtlMinutes' || key === 'autoRefreshMinutes'){
+  } else if (key === 'groupDepth' || key === 'refreshMinutes' || key === 'maxDepth'){
     cur[key] = Number(value) || 0;
   } else {
     cur[key] = value;
@@ -1499,6 +1630,7 @@ $('#logFilter').addEventListener('input', renderLogs);
 $('#logDownload').addEventListener('click', exportLogs);
 setInterval(pollLogs, 1500);
 pollLogs();
+setInterval(pollListStates, 30000);
 
 async function loadBranches(id){
   try {
@@ -1583,8 +1715,15 @@ async function loadConfig(){
 function renderAll(){
   $('#s_addonName').value = CFG.settings.addonName || '';
   $('#s_addonId').value = CFG.settings.addonId || '';
-  $('#s_cacheTtlMinutes').value = CFG.settings.cacheTtlMinutes;
-  $('#s_autoRefreshMinutes').value = CFG.settings.autoRefreshMinutes;
+  const refreshSel = $('#s_refreshMinutes');
+  const globalMinutes = Math.max(0, Math.round(Number(CFG.settings.refreshMinutes) || 0));
+  if (![...refreshSel.options].some(o => Number(o.value) === globalMinutes)){
+    const opt = document.createElement('option');
+    opt.value = String(globalMinutes);
+    opt.textContent = globalMinutes > 0 ? humanMinutes(globalMinutes) : 'Manual only';
+    refreshSel.appendChild(opt);
+  }
+  refreshSel.value = String(globalMinutes);
   $('#s_maxDepth').value = CFG.settings.maxDepth;
   $('#s_token').value = CFG.settings.token || '';
   $('#s_publicBaseUrl').value = CFG.settings.publicBaseUrl || '';
@@ -1621,8 +1760,7 @@ function renderAll(){
 function readSettings(){
   CFG.settings.addonName = $('#s_addonName').value.trim() || 'WiseM3U';
   CFG.settings.addonId = $('#s_addonId').value.trim() || 'community.wisem3u';
-  CFG.settings.cacheTtlMinutes = Number($('#s_cacheTtlMinutes').value) || 1440;
-  CFG.settings.autoRefreshMinutes = Number($('#s_autoRefreshMinutes').value) || 0;
+  CFG.settings.refreshMinutes = Number($('#s_refreshMinutes').value) || 0;
   CFG.settings.maxDepth = Number($('#s_maxDepth').value) || 8;
   CFG.settings.token = $('#s_token').value.trim();
   CFG.settings.publicBaseUrl = $('#s_publicBaseUrl').value.trim();
@@ -2258,6 +2396,12 @@ document.addEventListener('click', (ev) => {
 document.addEventListener('click', (ev) => {
   const badge = ev.target.closest('[data-xtream]');
   if (badge) refreshXtreamBadge(badge.dataset.xtream);
+});
+
+$('#s_refreshMinutes').addEventListener('change', (ev)=>{
+  CFG.settings.refreshMinutes = Number(ev.target.value) || 0;
+  updateRefreshHints();
+  updateRefreshMeta();
 });
 
 loadConfig().then(()=>{ loadHistory(); }).catch(e=>{
