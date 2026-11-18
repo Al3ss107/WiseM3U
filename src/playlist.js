@@ -822,8 +822,6 @@ module.exports = {
   proxyStreamUrl,
   metaId,
   parseMetaId,
-  encodePath,
-  decodePath,
   listPrefix,
   clearRows,
 };

@@ -50,7 +50,6 @@ module.exports = {
   /** Defaults exported as constants (for the "factory" value).
    *  For real requests use getUserAgent()/getImgUserAgent(). */
   USER_AGENT: DEFAULT_USER_AGENT,
-  IMG_USER_AGENT: DEFAULT_IMG_USER_AGENT,
 
   sanitizeUserAgent,
   getUserAgent,

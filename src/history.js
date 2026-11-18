@@ -306,6 +306,4 @@ module.exports = {
   listEntries,
   getEntry,
   mergeOptions,
-  listFiles,
-  validId,
 };

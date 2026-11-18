@@ -1348,9 +1348,6 @@ module.exports = {
   treeForUi,
   parseLenientJson,
   fetchText,
-  isM3uText,
-  guessKind,
-  FetchError,
   // reused by the Xtream probe (account expiry)
   nodeFetchText,
   resolveViaPublicDns,

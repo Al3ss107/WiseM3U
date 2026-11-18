@@ -39,7 +39,7 @@ public/
   configure.js         page logic (vanilla JS, no build step)
   i18n.js              translations engine
   i18n/*.json          dictionaries (en is the source language)
-  manifest.json, logo.svg, ...
+  logo.svg
 tests/                 regression suites run by `npm test`
 ```
 
@@ -91,7 +91,7 @@ tests/                 regression suites run by `npm test`
 
 ## Test
 
-`npm test` runs the Node suites in sequence (logs, diagnostics, Xtream,
-WisePlay, imgfit, history/API, EPG, lists API). The suites start a real server on a
-local port and a temporary data volume, so they also verify routes and
+`npm test` runs the Node suites in sequence (logs, URLs, diagnostics, Xtream,
+WisePlay, imgfit, history, refresh, EPG, lists API). The suites start a real
+server on a local port and a temporary data volume, so they also verify routes and
 configuration page assets.

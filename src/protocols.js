@@ -86,11 +86,7 @@ function protocolBadge(url) {
 
 module.exports = {
   DEFAULT_ENABLED,
-  schemeOf,
   familyOf,
-  isAceEngineUrl,
-  aceHash,
   normalizeStreamUrl,
-  normalizeEngineHost,
   protocolBadge,
 };

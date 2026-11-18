@@ -404,7 +404,6 @@ function invalidate() {
 }
 
 module.exports = {
-  sourceUrls,
   effectiveUrls,
   hasEpg,
   getGuide,
@@ -412,12 +411,9 @@ module.exports = {
   warmGuide,
   match,
   programmesBetween,
-  nowNext,
   descriptionLine,
   toVideo,
   parseXmltv,
-  parseTime,
-  normalizeKey,
   invalidate,
   cleanUrl,
   __test: { cleanUrl, decodeEntities, MAX_URLS },

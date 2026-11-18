@@ -1,6 +1,6 @@
 # WiseM3U — complete feature inventory
 
-Reference version: **v1.11.0** (branch `arena/7045a7cd-wisem3u`)
+Reference version: **v1.1.0**
 
 > One line: it imports **WisePlay / M3U / Xtream** lists, normalizes them into a
 > tree of groups and channels, applies user customizations and exposes them as a
@@ -74,8 +74,9 @@ background download with state and statistics.
 - **Xtream account expiry** badge (from `player_api.php`, 30 min cache);
 - settings: group-title prefix/levels, protocols (AceStream off by default),
   AceStream mode, deduplication (off by default), excluded words, group icon,
-  catalog yes/no + name, refresh policy (inherit the global interval, custom
-  interval or manual only), EasyProxy (IP/DNS, password, parameters) + Test;
+  catalog yes/no, EPG URL (empty = global setting, then the source EPG),
+  refresh policy (inherit the global interval, custom interval or manual only),
+  EasyProxy (IP/DNS, password, parameters) + Test;
 - **List playlists**: check, rename, drag to reorder (the order is kept across
   other drags until you save), filter, **Show enabled**, **All/None** (limited
   to filter results), **Delete selected**, trash; dragging one playlist onto
@@ -93,11 +94,6 @@ default; 0 = manual), maximum parse depth (nested group/URL levels followed by
 the importer), default EPG URL (used by lists without their own), global
 deduplication (off by default), proportional logos, stream diagnostics, clear
 cache, **interface language**.
-
-**Per list** — name, group-title prefix and depth, EPG URL (empty = global
-setting, then the EPG detected in the source), refresh policy (global / custom /
-manual), **custom User-Agent**, allowed protocols,
-AceStream mode, exclusions, renames/order, EasyProxy.
 
 **Configuration history** — every "stable" change (settings, lists, options)
 automatically creates a JSON snapshot in `/data/history`, at most 60 states or
@@ -229,56 +225,16 @@ with the selected locale.
 
 ---
 
-## 8. Dependencies and size
+## 8. Runtime and dependencies
 
 **Node runtime**: `express`, `compression`, `sharp` (libvips).
 
 **Docker image**: `node:20-alpine` + `su-exec` + `ffmpeg` + `ttf-dejavu`.
-
-**Code** (lines, approximately):
-
-| Module | Lines | Role |
-| --- | --- | --- |
-| `src/server.js` | 1,300 | HTTP composition and main routes |
-| `src/routes/*.js` | 360 | history and trash modules |
-| `src/wiseplay.js` | 1,300 | WisePlay/M3U import, streaming, recovery |
-| `public/configure.html` | 245 | UI markup |
-| `public/configure.css` | 530 | Material 3 styles |
-| `public/configure.js` | 2,100 | UI logic |
-| `public/i18n.js` + `public/i18n/*.json` | — | translations (8 languages) |
-| `src/playlist.js` | 770 | catalogs, streams, M3U, personal lists |
-| `src/config.js` | 370 | persistence, normalization, revisioning |
-| `src/history.js` | 310 | snapshots, checkpoints, retention |
-| `src/streamdiag.js` | 330 | diagnostics + FFmpeg video |
-| `src/cache.js` | 290 | snapshots, TTL, hot trees |
-| `src/imgfit.js` | 200 | posters/logos |
-| `src/xtream.js` | 120 | account info |
-| others (`m3u`, `constants`, `protocols`, `selection`, `liveLog`) | ~380 | support |
-| tests | ~1,400 | suites (not in the image) |
-
-**Indicative image size** (check with `docker images`): Alpine base ~50 MB,
-`ffmpeg` ~80–110 MB, `ttf-dejavu` ~10 MB, `sharp/libvips` ~30–40 MB, Node
-code+deps ~10 MB → **~180–220 MB** total. Without ffmpeg and fonts, about
-90–120 MB less.
+Multi-arch (`amd64`, `arm64`, `armv7`).
 
 ---
 
-## 9. Slimming candidates (historical notes)
-
-The v1.5.8 cleanup already removed `settings.configPassword`, the
-`WISEM3U_MAX_LIST_BYTES`/`_MAX_STREAM_BYTES` overrides and the unused
-`tests/mem_probe.js`. The real levers for smoothness and memory are
-`WM_HOT_TREES` (trees kept in RAM) and `WISEM3U_MAX_STATIONS` (maximum list
-size).
-
-Optional removals with a real image impact: stream diagnostics + FFmpeg/fonts
-(~90–120 MB, but the on-screen error video is lost), proportional logos + sharp
-(~30–40 MB), EasyProxy, the Xtream expiry badge and live logs (no image impact,
-but features are lost). Structural simplifications (per-channel management,
-personal lists, trash, custom groups, `/channels.json`) reduce complexity, not
-image size.
-
-## 10. What it does NOT do
+## 9. What it does NOT do
 
 - **it does not host or transcode** content: no video passes through it, except
   the short diagnostic error videos (optional);

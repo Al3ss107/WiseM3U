@@ -1,0 +1,9 @@
+.git
+.gitignore
+.arena
+node_modules
+data
+tests
+docs
+*.log
+.env

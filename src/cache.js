@@ -284,28 +284,6 @@ function invalidateAll() {
   }
 }
 
-/** Starts background refreshes for all enabled expired lists. */
-async function refreshAll(lists, defaults) {
-  const jobs = lists
-    .filter((l) => l.options.enabled && l.url)
-    .map(async (l) => {
-      try {
-        await getTree({
-          id: l.id,
-          url: l.url,
-          ttlMinutes: 0,
-          maxDepth: defaults.maxDepth,
-          userAgent: l.options.userAgent || '',
-          force: false,
-        });
-        return { id: l.id, ok: true };
-      } catch (err) {
-        return { id: l.id, ok: false, error: err.message };
-      }
-    });
-  return Promise.all(jobs);
-}
-
 /** XMLTV URLs inherited by a list (memory only: no snapshot parsing). */
 function epgUrls(id) {
   const e = memory.get(id);
@@ -327,4 +305,4 @@ function stats() {
   return { entries: memory.size, parsedEntries: parsed, gzBytes, maxParsed: MAX_PARSED };
 }
 
-module.exports = { getTree, getEntry, invalidate, invalidateAll, refreshAll, ageMinutes, saveSnapshot, setEvictHook, setRefreshHook, isRefreshing, stats, epgUrls };
+module.exports = { getTree, getEntry, invalidate, invalidateAll, ageMinutes, setEvictHook, setRefreshHook, isRefreshing, stats, epgUrls };

@@ -30,4 +30,4 @@ function normalizeSourceUrl(value) {
   return githubRawUrl(decodeHtmlAmp(value));
 }
 
-module.exports = { decodeHtmlAmp, githubRawUrl, normalizeSourceUrl };
+module.exports = { decodeHtmlAmp, normalizeSourceUrl };

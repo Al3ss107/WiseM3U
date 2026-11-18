@@ -48,7 +48,6 @@ function sanitizeListUrl(url) {
 }
 
 module.exports = {
-  tokenOf,
   clientInfo,
   createRequireAdmin,
   baseUrl,
